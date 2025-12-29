@@ -1,0 +1,297 @@
+# 统一 SQL LSP 服务器功能点列表
+# 每个功能点包含：ID、名称、描述、依赖的功能点ID、优先级
+
+modules:
+  # 模块1: Wasm 插件系统基础设施
+  - name: "Wasm 插件系统"
+    features:
+      - id: "F001"
+        name: "Go 1.24+ 项目初始化"
+        description: "设置 Go 模块，配置 go.mod，准备 Wasm 编译环境"
+        dependencies: []
+        priority: "P0"
+
+      - id: "F002"
+        name: "wazero 运行时集成"
+        description: "集成 wazero Wasm 运行时，实现 Wasm 模块加载和执行"
+        dependencies: ["F001"]
+        priority: "P0"
+
+      - id: "F003"
+        name: "Wasm Add-on 加载器"
+        description: "实现 manifest.yaml 解析、Wasm 模块编译和缓存、主机函数导出机制"
+        dependencies: ["F002"]
+        priority: "P0"
+        subtasks:
+          - "manifest.yaml schema 定义和解析"
+          - "Wasm 模块预编译和缓存"
+          - "主机函数导出机制（go:wasmimport）"
+          - "模块生命周期管理"
+
+      - id: "F004"
+        name: "Add-on 接口定义"
+        description: "定义 Add-on 标准接口（parse、complete、metadata）"
+        dependencies: ["F003"]
+        priority: "P0"
+
+  # 模块2: 连接管理
+  - name: "连接管理"
+    features:
+      - id: "F005"
+        name: "连接管理器实现"
+        description: "实现多客户端单连接模型，支持安全的连接标识（Fingerprint）"
+        dependencies: ["F003"]
+        priority: "P0"
+        subtasks:
+          - "安全连接标识（Fingerprint 生成）"
+          - "连接池管理"
+          - "健康检查和重连机制"
+          - "客户端隔离"
+
+  # 模块3: LSP 服务器核心
+  - name: "LSP 服务器核心"
+    features:
+      - id: "F006"
+        name: "LSP 服务器框架"
+        description: "实现基本 LSP 服务器，支持 stdio 和 TCP 传输"
+        dependencies: ["F005"]
+        priority: "P0"
+
+      - id: "F007"
+        name: "textDocument/completion 处理"
+        description: "实现 LSP 补全请求处理，包括请求防抖和取消机制"
+        dependencies: ["F006"]
+        priority: "P0"
+        subtasks:
+          - "请求处理流程"
+          - "请求防抖（50ms）"
+          - "请求取消机制"
+          - "多客户端并发支持"
+
+  # 模块4: PostgreSQL Add-on
+  - name: "PostgreSQL Add-on"
+    features:
+      - id: "F008"
+        name: "PostgreSQL 语法文件获取"
+        description: "从官方仓库获取 PostgreSQL gram.y 文件，支持不同版本"
+        dependencies: []
+        priority: "P0"
+        notes: "需要处理版本差异和获取失败的备选方案"
+
+      - id: "F009"
+        name: "Tree-sitter 语法生成"
+        description: "将 PostgreSQL gram.y 转换为 Tree-sitter grammar.js"
+        dependencies: ["F008"]
+        priority: "P0"
+        subtasks:
+          - "研究 gram.y 语法规则"
+          - "编写 grammar.js（手动或转换工具）"
+          - "测试语法正确性（tree-sitter test）"
+
+      - id: "F010"
+        name: "PostgreSQL 解析器实现"
+        description: "基于 Tree-sitter 实现增量解析，编译为 Wasm 模块"
+        dependencies: ["F009", "F004"]
+        priority: "P0"
+        subtasks:
+          - "封装 Tree-sitter API"
+          - "实现增量解析"
+          - "编译为 Wasm 模块"
+
+      - id: "F011"
+        name: "PostgreSQL 补全引擎"
+        description: "实现关键字、表名、列名补全，支持上下文感知"
+        dependencies: ["F010"]
+        priority: "P0"
+        subtasks:
+          - "关键字补全"
+          - "表/列名补全"
+          - "上下文感知（根据光标位置过滤）"
+
+      - id: "F012"
+        name: "PostgreSQL Schema 内省"
+        description: "查询 information_schema，实现 schema 信息缓存"
+        dependencies: ["F005"]
+        priority: "P0"
+        subtasks:
+          - "查询 information_schema"
+          - "缓存 schema 信息"
+          - "按需刷新机制"
+
+      - id: "F013"
+        name: "PostgreSQL 版本检测"
+        description: "检测数据库版本，启用对应的语法特性"
+        dependencies: ["F012"]
+        priority: "P1"
+
+  # 模块5: 解析器集成
+  - name: "解析器集成"
+    features:
+      - id: "F014"
+        name: "增量解析集成"
+        description: "将 Tree-sitter 增量解析集成到 LSP 服务器"
+        dependencies: ["F010", "F007"]
+        priority: "P0"
+        subtasks:
+          - "解析缓存"
+          - "光标移动时复用结果"
+          - "增量更新机制"
+
+  # 模块6: MySQL Add-on
+  - name: "MySQL Add-on"
+    features:
+      - id: "F015"
+        name: "MySQL 语法文件获取"
+        description: "从官方仓库获取 MySQL sql_yacc.yy 文件"
+        dependencies: []
+        priority: "P1"
+
+      - id: "F016"
+        name: "MySQL Tree-sitter 语法生成"
+        description: "将 MySQL sql_yacc.yy 转换为 Tree-sitter grammar.js"
+        dependencies: ["F015"]
+        priority: "P1"
+
+      - id: "F017"
+        name: "MySQL 解析器实现"
+        description: "基于 Tree-sitter 实现增量解析，编译为 Wasm"
+        dependencies: ["F016", "F004"]
+        priority: "P1"
+
+      - id: "F018"
+        name: "MySQL 补全引擎"
+        description: "实现 MySQL 补全功能"
+        dependencies: ["F017"]
+        priority: "P1"
+
+      - id: "F019"
+        name: "MySQL 版本检测"
+        description: "检测 MySQL 版本，处理版本差异"
+        dependencies: ["F013"]
+        priority: "P1"
+
+  # 模块7: 性能优化
+  - name: "性能优化"
+    features:
+      - id: "F020"
+        name: "Wasm 模块预编译"
+        description: "启动时预编译所有 Wasm 模块，维护实例池"
+        dependencies: ["F010", "F007"]
+        priority: "P1"
+
+      - id: "F021"
+        name: "Schema 缓存优化"
+        description: "优化 schema 缓存策略，支持大型数据库"
+        dependencies: ["F012"]
+        priority: "P1"
+
+      - id: "F022"
+        name: "性能测试和调优"
+        description: "实现性能测试，目标 p95 < 100ms"
+        dependencies: ["F014", "F020"]
+        priority: "P1"
+
+  # 模块8: 错误处理和弹性
+  - name: "错误处理和弹性"
+    features:
+      - id: "F023"
+        name: "Wasm 模块错误隔离"
+        description: "隔离 Add-on 错误，防止单个 Add-on 影响整个服务器"
+        dependencies: ["F003"]
+        priority: "P1"
+
+      - id: "F024"
+        name: "连接失败重试"
+        description: "实现数据库连接失败的重试机制"
+        dependencies: ["F005"]
+        priority: "P1"
+
+      - id: "F025"
+        name: "优雅降级"
+        description: "Add-on 失败时降级到基础功能"
+        dependencies: ["F023"]
+        priority: "P2"
+
+  # 模块9: 配置管理
+  - name: "配置管理"
+    features:
+      - id: "F026"
+        name: "服务器配置"
+        description: "服务器端配置管理（日志、Add-on 路径等）"
+        dependencies: []
+        priority: "P1"
+
+      - id: "F027"
+        name: "客户端配置"
+        description: "LSP 初始化参数配置"
+        dependencies: ["F006"]
+        priority: "P1"
+
+  # 模块10: 开发工具
+  - name: "开发工具"
+    features:
+      - id: "F028"
+        name: "Bison → Tree-sitter 转换器"
+        description: "开发 Bison/Yacc 到 Tree-sitter 的转换工具"
+        dependencies: ["F008"]
+        priority: "P2"
+
+      - id: "F029"
+        name: "Wasm 编译脚本"
+        description: "自动化 Wasm 模块编译和测试脚本"
+        dependencies: ["F010"]
+        priority: "P2"
+
+      - id: "F030"
+        name: "Add-on 测试框架"
+        description: "Add-on 单元测试和集成测试框架"
+        dependencies: ["F004"]
+        priority: "P2"
+
+  # 模块11: 文档
+  - name: "文档"
+    features:
+      - id: "F031"
+        name: "开发指南"
+        description: "Add-on 开发完整指南"
+        dependencies: ["F011"]
+        priority: "P2"
+
+      - id: "F032"
+        name: "API 参考"
+        description: "Add-on API 详细文档"
+        dependencies: ["F004"]
+        priority: "P2"
+
+      - id: "F033"
+        name: "示例 Add-on"
+        description: "提供完整的示例 Add-on 代码"
+        dependencies: ["F011", "F031"]
+        priority: "P2"
+
+# 功能模块之间的联动关系说明
+linkages:
+  - description: "Wasm 插件系统是所有 Add-on 的基础"
+    from_module: "Wasm 插件系统"
+    to_modules: ["PostgreSQL Add-on", "MySQL Add-on"]
+
+  - description: "连接管理器为 Schema 内省提供数据库连接"
+    from_feature: "F005"
+    to_features: ["F012", "F018"]  # PostgreSQL Schema 内省, MySQL 补全引擎需要 MySQL Schema 内省
+
+  - description: "LSP 服务器调用 Add-on 的补全引擎"
+    from_feature: "F007"
+    to_features: ["F011", "F018"]  # PostgreSQL 补全引擎, MySQL 补全引擎
+
+  - description: "增量解析集成提升补全性能"
+    from_feature: "F014"
+    to_features: ["F011", "F018"]  # PostgreSQL 补全引擎, MySQL 补全引擎
+
+  - description: "版本检测决定启用哪些语法特性"
+    from_features: ["F013", "F019"]  # PostgreSQL 版本检测, MySQL 版本检测
+    to_features: ["F011", "F018"]  # PostgreSQL 补全引擎, MySQL 补全引擎
+
+# 优先级说明
+# P0: 核心功能，MVP 必需
+# P1: 重要功能，生产环境必需
+# P2: 增强功能，提升开发体验
