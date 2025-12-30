@@ -7,8 +7,8 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/vibe-kanban/unified-sql-lsp/internal/config"
-	"github.com/vibe-kanban/unified-sql-lsp/internal/lsp"
+	"github.com/woxQAQ/unified-sql-lsp/internal/config"
+	"github.com/woxQAQ/unified-sql-lsp/internal/lsp"
 	"go.uber.org/zap"
 )
 

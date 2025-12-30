@@ -5,6 +5,10 @@ import (
 	"testing"
 )
 
+// Basic config tests for F001 initialization
+// TODO: F005 (Connection Manager) will add comprehensive tests for config usage
+// including error handling, validation, and environment variable integration
+
 func TestLoadServerConfigDefaults(t *testing.T) {
 	cfg, err := LoadServerConfig("")
 	if err != nil {

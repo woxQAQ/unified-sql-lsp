@@ -1,4 +1,4 @@
-module github.com/vibe-kanban/unified-sql-lsp
+module github.com/woxQAQ/unified-sql-lsp
 
 go 1.24.0
 

@@ -3,7 +3,7 @@ package lsp
 import (
 	"context"
 
-	"github.com/vibe-kanban/unified-sql-lsp/internal/config"
+	"github.com/woxQAQ/unified-sql-lsp/internal/config"
 	"go.uber.org/zap"
 )
 

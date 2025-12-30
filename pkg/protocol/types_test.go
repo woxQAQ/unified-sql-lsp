@@ -10,6 +10,16 @@ func TestCompletionItemKind(t *testing.T) {
 		CompletionItemKindColumn,
 		CompletionItemKindSchema,
 		CompletionItemKindView,
+		CompletionItemKindSequence,
+		CompletionItemKindEnum,
+		CompletionItemKindType,
+		CompletionItemKindOperator,
+		CompletionItemKindParameter,
+		CompletionItemKindSnippet,
+		CompletionItemKindReference,
+		CompletionItemKindNamespace,
+		CompletionItemKindStruct,
+		CompletionItemKindModule,
 	}
 
 	for i, kind := range kinds {
