@@ -29,3 +29,11 @@ completion:
   enable_keyword_completion: true
   enable_schema_completion: true
   debounce_ms: 50
+
+# Wasm runtime configuration
+wasm:
+  memory_pages: 256        # 16MB max per module
+  debug: false             # Enable for development
+  cache_dir: ./build/wasm-cache
+  max_instances: 100       # Max concurrent module instances
+  execution_timeout: 30    # seconds

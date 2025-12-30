@@ -6,6 +6,7 @@ toolchain go1.24.10
 
 require (
 	github.com/spf13/viper v1.21.0
+	github.com/tetratelabs/wazero v1.11.0
 	go.uber.org/zap v1.27.1
 )
 
