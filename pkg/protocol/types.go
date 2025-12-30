@@ -31,17 +31,8 @@ const (
 	CompletionItemKindColumn
 	CompletionItemKindSchema
 	CompletionItemKindView
-	// Additional kinds for comprehensive SQL support
-	CompletionItemKindSequence  // PostgreSQL sequences
-	CompletionItemKindEnum      // PostgreSQL enum types
-	CompletionItemKindType      // Custom/composite types
-	CompletionItemKindOperator  // SQL operators
-	CompletionItemKindParameter // Function parameters
-	CompletionItemKindSnippet   // Code snippets
-	CompletionItemKindReference // Table/column references
-	CompletionItemKindNamespace // Namespaces/packages
-	CompletionItemKindStruct    // Composite types
-	CompletionItemKindModule    // Importable modules
+	// Additional kinds will be added in F007 (completion handler) and F011 (PostgreSQL completion engine)
+	// as needed for comprehensive SQL support including sequences, enums, operators, etc.
 )
 
 // CompletionItem represents a completion item
