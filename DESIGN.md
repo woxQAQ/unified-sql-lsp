@@ -132,81 +132,145 @@ impl GrammarFactory {
 
 #### Grammar 选择策略
 
-**方案 A（推荐）: Fork 多个现有 Grammar + 统一层**
+**方案（推荐）: 自建通用 Grammar + 多方言扩展**
 
-基于现有生态评估，每个方言采用最成熟的专用 Grammar：
+基于现有生态评估，采用自建统一 Grammar 方案：
 
-**现有生态系统**：
+**现有生态参考**：
 
-| Grammar | 方言 | Stars | 状态 | 仓库 |
-|---------|------|-------|------|------|
-| m-novikov/tree-sitter-sql | PostgreSQL | 110 | ✅ 活跃 | [GitHub](https://github.com/m-novikov/tree-sitter-sql) |
-| DerekStride/tree-sitter-sql | General SQL | 180+ | ✅ 活跃 | [GitHub](https://github.com/DerekStride/tree-sitter-sql) |
-| dhcmrlchtdj/tree-sitter-sqlite | SQLite | 50+ | ✅ 活跃 | [GitHub](https://github.com/dhcmrlchtdj/tree-sitter-sqlite) |
-| tree-sitter-sql-bigquery | BigQuery | 30+ | ✅ 活跃 | [crates.io](https://crates.io/crates/tree-sitter-sql-bigquery) |
+| Grammar | 方言 | Stars | 参考价值 |
+|---------|------|-------|----------|
+| m-novikov/tree-sitter-sql | PostgreSQL | 110 | PostgreSQL 语法参考 |
+| DerekStride/tree-sitter-sql | General SQL | 180+ | **主要参考：通用 SQL 设计** |
+| tree-sitter-sql-bigquery | BigQuery | 30+ | 扩展语法参考 |
 
-**重要发现**：
-- ❌ **m-novikov/tree-sitter-sql 是 PostgreSQL 专用**，并非多方言支持
-- ✅ DerekStride/tree-sitter-sql 是通用 SQL，但方言特性覆盖有限
-- ✅ 各方言有独立的专用 Grammar，质量更高
+**设计思路**：
 
-**推荐实施策略**：
+参考 [DerekStride/tree-sitter-sql](https://github.com/DerekStride/tree-sitter-sql) 的通用 SQL 设计，构建一个**可配置的多方言 Grammar**：
 
 ```
-unified-sql-lsp/
-├── grammars/                    # 统一管理多个 Grammar
-│   ├── postgres/               # Fork 自 m-novikov/tree-sitter-sql
-│   │   └── grammar.js
-│   ├── mysql/                  # 需要寻找或实现
-│   │   └── grammar.js
-│   ├── sqlite/                 # Fork 自 dhcmrlchtdj/tree-sitter-sqlite
-│   │   └── grammar.js
-│   └── base/                   # 提取的核心 SQL 语法（可选）
-│       └── common.js
+tree-sitter-unified-sql/
+├── grammar.js                  # 主 Grammar（方言无关的核心语法）
+├── dialect/                    # 方言扩展
+│   ├── base.js               # 基础 SQL 规则
+│   ├── mysql.js              # MySQL 扩展
+│   ├── postgresql.js         # PostgreSQL 扩展
+│   ├── tidb.js               # TiDB 扩展（继承 MySQL）
+│   ├── mariadb.js            # MariaDB 扩展（继承 MySQL）
+│   └── cockroachdb.js        # CockroachDB 扩展（继承 PostgreSQL）
+├── scanner.c                   # 词法分析器（方言无关）
+└── test/                       # 测试用例
+    ├── corpus/
+    │   ├── mysql_test.txt
+    │   ├── postgresql_test.txt
+    │   └── tidb_test.txt
 ```
+
+**核心设计原则**：
+
+1. **配置化方言支持**：通过构建参数选择目标方言
+   ```javascript
+   // grammar.js
+   module.exports = grammar({
+     name: process.env.DIALECT || 'sql',  // 编译时指定方言
+
+     rules: {
+       // 核心语法（所有方言共享）
+       select_statement: $ => seq(
+         'SELECT',
+         field_list,
+         optional('FROM', table_reference),
+         ...
+       ),
+
+       // 方言特定规则（通过配置注入）
+       ...dialect_rules($)
+     }
+   });
+   ```
+
+2. **方言继承机制**：
+   ```javascript
+   // dialect/tidb.js
+   const mysql = require('./mysql.js');
+
+   module.exports = {
+     // 继承 MySQL 所有规则
+     ...mysql,
+
+     // 添加 TiDB 特定扩展
+     keywords: {
+       ...mysql.keywords,
+       'TIDB_SNAPSHOT': /tidb_snapshot/i,
+     }
+   };
+   ```
+
+3. **统一节点命名**：所有方言使用相同的节点类型
+   - ✅ `select_statement`, `from_clause`, `where_clause`
+   - ❌ 避免方言特定的节点名（如 `pg_select`）
 
 **实施步骤**：
 
-1. **Phase 1: 选用现有 Grammar**
-   - PostgreSQL: 直接使用 [m-novikov/tree-sitter-sql](https://github.com/m-novikov/tree-sitter-sql)
-   - SQLite: 直接使用 [dhcmrlchtdj/tree-sitter-sqlite](https://github.com/dhcmrlchtdj/tree-sitter-sqlite)
-   - MySQL: 评估 [DerekStride/tree-sitter-sql](https://github.com/DerekStride/tree-sitter-sql) 或实现专用 Grammar
+1. **Phase 1: 核心语法构建**
+   - 参考 DerekStride/tree-sitter-sql 的设计
+   - 实现核心 SQL 语法（SELECT, INSERT, UPDATE, DELETE）
+   - 支持 MySQL 和 PostgreSQL（主要方言）
 
-2. **Phase 2: 统一接口层**
-   - 为每个 Grammar 实现 `Grammar` trait
-   - 统一节点类型命名（通过映射）
-   - 建立方言特性检测机制
+2. **Phase 2: 方言扩展机制**
+   - 设计方言继承接口
+   - 实现 MySQL 和 PostgreSQL 的方言差异
+   - 编写测试用例覆盖方言特性
 
-3. **Phase 3: 扩展新方言**
-   - 基于 DerekStride/tree-sitter-sql 的通用语法作为起点
-   - 添加方言特定扩展（TiDB, MariaDB, CockroachDB）
+3. **Phase 3: 扩展更多方言**
+   - 基于 MySQL 扩展：TiDB, MariaDB
+   - 基于 PostgreSQL 扩展：CockroachDB, Redshift
    - 参考附录 C 的方言扩展指南
 
 **优势**：
-- ✅ 站在巨人肩膀上，利用已验证的 Grammar
-- ✅ 每个方言获得最佳语法覆盖
-- ✅ 社区维护，及时跟进语法更新
-- ✅ Lowering 层统一方言差异，Grammar 层保持独立
+- ✅ **统一节点类型**：Lowering 层无需处理多个 Grammar 的差异
+- ✅ **易于维护**：单一代码库，统一的更新策略
+- ✅ **方言一致性**：确保所有方言遵循相同的设计模式
+- ✅ **编译时优化**：每个方言编译为独立的 parser，无运行时开销
+- ✅ **完全控制**：不受上游 Grammar 变更影响
 
-**挑战与缓解**：
+**参考资源**：
 
-| 挑战 | 缓解方案 |
-|------|----------|
-| 不同 Grammar 的节点类型不一致 | 在 Lowering 层建立统一的类型映射表 |
-| 某些方言缺少成熟 Grammar | 基于 DerekStride 通用 Grammar 扩展 |
-| 维护多个 Grammar 的成本 | 建立自动化测试，跟踪上游更新 |
-| 节点类型命名不统一 | 定义统一的节点类型枚举，通过适配器转换 |
+**主要参考**：
+- [DerekStride/tree-sitter-sql](https://github.com/DerekStride/tree-sitter-sql) - **通用 SQL 设计**
+  - 提供了方言无关的 SQL 基础语法
+  - 可配置的方言扩展模式
+  - 活跃维护（180+ stars）
 
-**备选方案 B: 自建通用 Grammar**
+**方言参考**（用于语法差异研究）：
+- [m-novikov/tree-sitter-sql](https://github.com/m-novikov/tree-sitter-sql) - PostgreSQL 专用
+  - PostgreSQL 特定语法参考
+  - 错误恢复策略参考
 
-如果现有 Grammar 均不满足需求：
-- 参考 DerekStride/tree-sitter-sql 的设计
-- 从零开始构建多方言统一 Grammar
-- 成本高，但完全可控
+**不支持的方言**：
+- ❌ SQLite（不在需求范围内）
 
-**不推荐的方案**：
-- ❌ 强行使用单一 Grammar 覆盖所有方言（规则复杂爆炸）
-- ❌ 修改上游 Grammar 以适应本项目（难以合并上游更新）
+**实施示例**：
+
+```bash
+# 构建 MySQL 方言
+DIALECT=mysql tree-sitter generate
+
+# 构建 PostgreSQL 方言
+DIALECT=postgresql tree-sitter generate
+
+# 构建 TiDB 方言（基于 MySQL）
+DIALECT=tidb tree-sitter generate
+```
+
+**构建产物**：
+
+```
+target/
+├── mysql.so                   # MySQL parser
+├── postgresql.so              # PostgreSQL parser
+└── tidb.so                    # TiDB parser
+```
 
 #### Grammar 编辑器友好设计
 
@@ -1967,13 +2031,19 @@ async fn initialize(&self, params: InitializeParams) -> Result<ServerCapabilitie
 
 **Tree-sitter 相关**：
 - [Tree-sitter 官方文档](https://tree-sitter.github.io/tree-sitter/)
-- [Tree-sitter SQL Grammar 生态](#grammar-ecosystem)
 
-**Grammar 实现**：
+**Grammar 设计参考**：
+- [DerekStride/tree-sitter-sql](https://github.com/DerekStride/tree-sitter-sql) - **主要参考**
+  - 通用 SQL 设计模式
+  - 方言扩展思路
+  - 活跃维护（180+ stars）
+
 - [m-novikov/tree-sitter-sql](https://github.com/m-novikov/tree-sitter-sql) - PostgreSQL 专用
-- [DerekStride/tree-sitter-sql](https://github.com/DerekStride/tree-sitter-sql) - 通用 SQL
-- [dhcmrlchtdj/tree-sitter-sqlite](https://github.com/dhcmrlchtdj/tree-sitter-sqlite) - SQLite 专用
+  - PostgreSQL 特定语法参考
+  - 错误恢复策略参考
+
 - [tree-sitter-sql-bigquery](https://github.com/m-novikov/tree-sitter-bigquery) - BigQuery 专用
+  - 扩展语法设计参考
 
 **LSP 相关**：
 - [LSP 规范](https://microsoft.github.io/language-server-protocol/)
@@ -2027,60 +2097,101 @@ async fn initialize(&self, params: InitializeParams) -> Result<ServerCapabilitie
 
 #### C.2 实现 Grammar Layer
 
-**步骤 1: 评估现有 Grammar**
+**步骤 1: 创建方言扩展文件**
 
-首先检查是否有可用的 Grammar：
-
-| 方言 | 来源 | 可用性 |
-|------|------|--------|
-| PostgreSQL | m-novikov/tree-sitter-sql | ✅ 可用 |
-| MySQL | (待评估) | ⚠️ 可能需要实现 |
-| SQLite | dhcmrlchtdj/tree-sitter-sqlite | ✅ 可用 |
-| TiDB | (基于 MySQL) | ❌ 需要实现 |
-
-**步骤 2: Fork 最相关的 Grammar**
-
-对于 TiDB（基于 MySQL 的场景）：
+在 `tree-sitter-unified-sql/dialect/` 目录下创建新方言：
 
 ```bash
-# 选项 A: 如果有可用的 MySQL Grammar
-git clone https://github.com/<mysql-grammar-repo>.git
-cd <mysql-grammar-repo>
-git checkout -b dialect/tidb
+cd tree-sitter-unified-sql/dialect
 
-# 选项 B: 如果使用通用 Grammar 作为基础
-git clone https://github.com/DerekStride/tree-sitter-sql.git
-cd tree-sitter-sql
-git checkout -b dialect/tidb
+# 创建 TiDB 方言扩展（基于 MySQL）
+cp mysql.js tidb.js
 ```
 
-**步骤 3: 扩展方言特性**
+**步骤 2: 编写方言扩展**
 
 ```javascript
-// grammar.js (fork 后修改)
+// dialect/tidb.js
 
-// 原始 MySQL/通用 Grammar
-const baseGrammar = require('./base-grammar.js');
+// 继承 MySQL 的所有规则和关键字
+const mysql = require('./mysql.js');
 
-module.exports = grammar(baseGrammar, {
-  name: 'tidb',
+module.exports = {
+  // 继承 MySQL 配置
+  ...mysql,
 
-  // 添加 TiDB 特定关键字
-  keywords: ($, previous) => previous.concat({
+  // TiDB 特定关键字（在 MySQL 基础上添加）
+  keywords: {
+    ...mysql.keywords,
+    // TiDB 特有语法
     'TIDB_BOUNDED_STALENESS': /tidb_bounded_staleness/i,
     'TIDB_SNAPSHOT': /tidb_snapshot/i,
-  }),
+    'TTL': /ttl/i,
+  },
 
-  // 添加 TiDB 特定函数
-  functions: ($, previous) => previous.concat([
+  // TiDB 特定函数
+  functions: [
+    ...mysql.functions,
     'ADDTIME',
     'DATE_ADD',
     'DATE_SUB',
-  ]),
+  ],
 
-  // 扩展规则（如需要）
+  // TiDB 特定语法规则（如需要）
   rules: {
-    // 如果完全兼容基础 Grammar，无需额外规则
+    // 如果完全兼容 MySQL，这里可以为空
+    // 只在 TiDB 有独特语法结构时才添加新规则
+  }
+};
+```
+
+**步骤 3: 注册方言**
+
+在主 Grammar 中注册新方言：
+
+```javascript
+// grammar.js
+
+const dialectBase = require('./dialect/base.js');
+
+// 根据环境变量加载方言
+const dialect = process.env.DIALECT || 'mysql';
+
+let dialectRules;
+switch (dialect) {
+  case 'mysql':
+    dialectRules = require('./dialect/mysql.js');
+    break;
+  case 'postgresql':
+    dialectRules = require('./dialect/postgresql.js');
+    break;
+  case 'tidb':
+    dialectRules = require('./dialect/tidb.js');
+    break;
+  default:
+    dialectRules = dialectBase;
+}
+
+module.exports = grammar({
+  name: dialect,
+
+  // 合并基础规则和方言规则
+  rules: {
+    ...dialectBase.rules,
+    ...dialectRules.rules,
+  },
+
+  // 合并关键字
+  extras: $ => [
+    ...dialectBase.extras($),
+    ...dialectRules.extras($),
+  ],
+
+  // 方言特定配置
+  conflicts: ($, previous) => {
+    const baseConflicts = dialectBase.conflicts ? dialectBase.conflicts($, []) : [];
+    const dialectConflicts = dialectRules.conflicts ? dialectRules.conflicts($, []) : [];
+    return [...baseConflicts, ...dialectConflicts];
   }
 });
 ```
@@ -2109,17 +2220,20 @@ SELECT * FROM users TIDB_SNAPSHOT 435215432154321;
     value: (number)))
 ```
 
-**步骤 5: 构建 Grammar**
+**步骤 5: 构建方言**
 
 ```bash
-# 生成 parser.c
-tree-sitter generate
+# 构建 TiDB 方言
+DIALECT=tidb tree-sitter generate
 
 # 运行测试
-tree-sitter test
+DIALECT=tidb tree-sitter test
 
-# 构建动态库
-cargo build --release
+# 编译为动态库
+cd src/parser
+make
+
+# 产物：parser.so（TiDB 专用 parser）
 ```
 
 **步骤 6: 集成到项目**
@@ -2127,8 +2241,11 @@ cargo build --release
 ```toml
 # crates/grammar/Cargo.toml
 
+[build-dependencies]
+cc = "1.0"
+
 [dependencies]
-tree-sitter-tidb = { path = "../../tree-sitter-sql/grammar/dialect/tidb" }
+tree-sitter = "0.24"
 ```
 
 ```rust
@@ -2136,12 +2253,37 @@ tree-sitter-tidb = { path = "../../tree-sitter-sql/grammar/dialect/tidb" }
 
 use tree_sitter::Language;
 
+// TiDB parser（编译时生成）
 extern "C" {
     fn tree_sitter_tidb() -> Language;
 }
 
 pub fn language() -> Language {
     unsafe { tree_sitter_tidb() }
+}
+```
+
+```rust
+// crates/grammar/src/lib.rs
+
+pub mod dialect;
+
+use dialect::{mysql, postgresql, tidb};
+
+pub enum DialectGrammar {
+    MySQL(Language),
+    PostgreSQL(Language),
+    TiDB(Language),
+}
+
+impl DialectGrammar {
+    pub fn from_dialect(dialect: &Dialect) -> Language {
+        match dialect {
+            Dialect::MySQL { .. } => mysql::language(),
+            Dialect::PostgreSQL { .. } => postgresql::language(),
+            Dialect::TiDB { .. } => tidb::language(),
+        }
+    }
 }
 ```
 
