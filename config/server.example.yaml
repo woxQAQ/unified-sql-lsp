@@ -1,0 +1,31 @@
+# Unified SQL LSP Server Configuration
+
+# Add-on search paths
+addon_paths:
+  - ./addons
+  - /usr/local/lib/unified-sql-lsp/addons
+
+# Logging configuration
+log_level: info  # debug, info, warn, error
+
+# Metrics configuration
+metrics_enabled: true
+metrics_port: 9090
+
+# Connection defaults
+connection:
+  max_connections: 50
+  idle_timeout: 300  # seconds
+  health_check_interval: 30  # seconds
+
+# Schema cache defaults
+schema:
+  cache_ttl: 0  # 0 means no expiration (manual refresh only)
+  max_cache_size: 1000  # MB
+
+# Completion defaults
+completion:
+  max_items: 50
+  enable_keyword_completion: true
+  enable_schema_completion: true
+  debounce_ms: 50
