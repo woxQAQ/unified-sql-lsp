@@ -6,7 +6,22 @@ import (
 	"github.com/tetratelabs/wazero/api"
 )
 
-// Memory provides safe memory operations.
+// Memory provides safe memory operations for Wasm module interaction.
+//
+// Wasm modules have their own isolated memory space that is separate from Go's memory.
+// Direct memory access can lead to:
+// - Out-of-bounds reads/writes (security vulnerabilities)
+// - Type confusion (reading bytes as strings without null termination)
+// - Memory leaks (forgetting to free allocated memory)
+//
+// This Memory helper type wraps wazero's api.Memory interface to provide:
+// 1. Safe string operations with automatic null-termination handling
+// 2. Bounds checking on all read operations
+// 3. Abstraction over raw memory addresses
+// 4. Consistent error handling across all memory operations
+//
+// In F003, write operations will be added with a proper memory allocator
+// that interfaces with the Wasm module's malloc/free functions.
 type Memory struct {
 	mem api.Memory
 }
