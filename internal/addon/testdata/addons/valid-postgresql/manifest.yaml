@@ -1,0 +1,15 @@
+name: postgresql
+version: 1.0.0
+engine: PostgreSQL
+supported_versions:
+  - "14"
+  - "15"
+  - "16"
+wasm:
+  file: postgresql.wasm
+  size: 2048
+capabilities:
+  - completion
+  - diagnostics
+author: "Test Author"
+license: MIT

@@ -1,0 +1,9 @@
+name: postgresql
+version: 1.0.0
+engine: SQLite
+supported_versions:
+  - "3"
+wasm:
+  file: postgresql.wasm
+capabilities:
+  - completion

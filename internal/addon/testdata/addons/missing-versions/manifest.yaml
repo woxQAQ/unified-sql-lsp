@@ -1,0 +1,8 @@
+name: postgresql
+version: 1.0.0
+engine: PostgreSQL
+supported_versions: []
+wasm:
+  file: postgresql.wasm
+capabilities:
+  - completion

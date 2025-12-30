@@ -1,0 +1,10 @@
+name: postgresql
+version: 1.0.0
+engine: PostgreSQL
+supported_versions:
+  - "14"
+wasm:
+  file: postgresql.wasm
+capabilities:
+  - completion
+  - unknown_capability

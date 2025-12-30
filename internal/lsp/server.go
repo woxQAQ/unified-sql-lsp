@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/woxQAQ/unified-sql-lsp/internal/addon"
 	"github.com/woxQAQ/unified-sql-lsp/internal/config"
 	"github.com/woxQAQ/unified-sql-lsp/internal/wasm"
 	"go.uber.org/zap"
@@ -13,6 +14,8 @@ type Server struct {
 	cfg         *config.ServerConfig
 	logger      *zap.Logger
 	wasmRuntime *wasm.Runtime
+	addonMgr    *addon.Manager
+	hostFuncs   *wasm.HostFunctionsImpl
 }
 
 func NewServer(ctx context.Context, cfg *config.ServerConfig, logger *zap.Logger) (*Server, error) {
@@ -29,15 +32,30 @@ func NewServer(ctx context.Context, cfg *config.ServerConfig, logger *zap.Logger
 		return nil, fmt.Errorf("failed to initialize Wasm runtime: %w", err)
 	}
 
+	// Initialize host functions.
+	hostFuncs := wasm.NewHostFunctions(logger)
+
+	// Initialize add-on manager.
+	addonMgr := addon.NewManager(cfg, wasmRuntime, hostFuncs, logger)
+
+	// Load all add-ons.
+	if err := addonMgr.LoadAll(ctx); err != nil {
+		logger.Warn("Failed to load add-ons", zap.Error(err))
+		// Don't fail server startup - add-ons are optional for MVP
+	}
+
 	logger.Info("LSP server initialized",
 		zap.Uint32("wasm_memory_pages", cfg.Wasm.MemoryPages),
 		zap.String("wasm_cache_dir", cfg.Wasm.CacheDir),
+		zap.Int("addons_loaded", addonMgr.Registry().Count()),
 	)
 
 	return &Server{
 		cfg:         cfg,
 		logger:      logger,
 		wasmRuntime: wasmRuntime,
+		addonMgr:    addonMgr,
+		hostFuncs:   hostFuncs,
 	}, nil
 }
 
@@ -45,9 +63,9 @@ func NewServer(ctx context.Context, cfg *config.ServerConfig, logger *zap.Logger
 func (s *Server) Close(ctx context.Context) error {
 	s.logger.Info("Shutting down LSP server")
 
-	// Shutdown Wasm runtime.
-	if err := s.wasmRuntime.Close(ctx); err != nil {
-		s.logger.Error("Failed to shutdown Wasm runtime", zap.Error(err))
+	// Shutdown add-on manager.
+	if err := s.addonMgr.Shutdown(ctx); err != nil {
+		s.logger.Error("Failed to shutdown add-on manager", zap.Error(err))
 		return err
 	}
 

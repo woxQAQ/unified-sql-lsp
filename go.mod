@@ -8,6 +8,7 @@ require (
 	github.com/spf13/viper v1.21.0
 	github.com/tetratelabs/wazero v1.11.0
 	go.uber.org/zap v1.27.1
+	gopkg.in/yaml.v3 v3.0.1
 )
 
 require (
