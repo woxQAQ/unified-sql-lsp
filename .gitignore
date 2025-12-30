@@ -54,3 +54,4 @@ AGENT_LOGGING.yaml
 
 # Test fixtures (except examples)
 test/fixtures/local/
+/target/

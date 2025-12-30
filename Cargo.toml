@@ -1,0 +1,22 @@
+[workspace]
+members = ["crates/*"]
+resolver = "2"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+authors = ["Vibe Kanban Team"]
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/vibe-kanban/unified-sql-lsp"
+
+[workspace.dependencies]
+# Serde for serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# Error handling
+thiserror = "2.0"
+anyhow = "1.0"
+
+# Async support
+async-trait = "0.1"
