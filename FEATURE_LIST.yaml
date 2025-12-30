@@ -10,6 +10,7 @@ modules:
         description: "设置 Go 模块，配置 go.mod，准备 Wasm 编译环境"
         dependencies: []
         priority: "P0"
+        status: "DONE"
 
       - id: "F002"
         name: "wazero 运行时集成"
