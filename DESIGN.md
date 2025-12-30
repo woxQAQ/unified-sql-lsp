@@ -132,27 +132,41 @@ impl GrammarFactory {
 
 #### Grammar 选择策略
 
-**方案 A（推荐）: Base Grammar + Dialect Patch**
+**方案 A（推荐）: Fork tree-sitter-sql + 扩展方言支持**
 
+基于现有生态评估，推荐 fork [tree-sitter-sql](https://github.com/m-novikov/tree-sitter-sql) 作为基础：
+
+**理由**：
+- 已支持多方言（BigQuery, MySQL, PostgreSQL, SQLite）
+- 活跃维护，错误恢复能力强
+- 社区验证，生产可用
+
+**实施策略**：
 ```
-tree-sitter-sql-core/
-  ├── base-grammar.js          # 核心 SQL 语法
-  └── queries/                 # 基础查询模式
+tree-sitter-sql/               # Fork 自 m-novikov/tree-sitter-sql
+  ├── grammar/                 # 现有方言支持
+  │   ├── mysql/
+  │   ├── postgres/
+  │   └── sqlite/
+  ├── grammar-base.js          # 核心 SQL 语法（提取公共部分）
+  └── dialect-template/        # 新方言模板（用于扩展 30+ 引擎）
 
-tree-sitter-sql-mysql/
-  ├── grammar.js               # 继承 core
-  ├── scanner.c                # MySQL 特定词法
-  └── features/                # MySQL 扩展
-
-tree-sitter-sql-postgres/
-  ├── grammar.js               # 继承 core
-  └── features/                # PG 扩展
+新增方言示例：
+tree-sitter-sql/dialect/tidb/
+tree-sitter-sql/dialect/mariadb/
+tree-sitter-sql/dialect/cockroachdb/
 ```
+
+**扩展步骤**（详见附录 C）：
+1. 复制 `dialect-template/` 作为起点
+2. 继承 `grammar-base.js` 的核心语法
+3. 添加方言特定的关键字和函数
+4. 编写单元测试验证语法覆盖
 
 **优势**：
-- 核心语法复用，减少重复
-- 方言差异隔离，易于维护
-- 符合 Tree-sitter 的组合式设计理念
+- 站在巨人肩膀上，减少重复工作
+- 核心语法已验证，降低维护成本
+- 社区贡献机制，便于生态扩展
 
 #### Grammar 编辑器友好设计
 
@@ -236,20 +250,62 @@ impl LoweringFactory {
 }
 ```
 
-#### 版本兼容处理
+#### 错误处理策略
+
+当 Lowering 失败时（不支持语法或转换错误），采用**降级策略**：
 
 ```rust
+pub enum LoweringResult {
+    /// 成功转换为 IR
+    Success(Arc<Stmt>),
+
+    /// 部分成功（某些子句无法转换）
+    Partial {
+        stmt: Arc<Stmt>,
+        unsupported: Vec<Span>,
+    },
+
+    /// 完全失败（返回错误，但提供基础补全）
+    Failed {
+        error: LoweringError,
+        fallback: FallbackCompletion,
+    },
+}
+
+pub enum FallbackCompletion {
+    /// 基于语法的上下文补全（无语义信息）
+    SyntaxBased,
+    /// 仅关键字补全
+    KeywordsOnly,
+    /// 无补全
+    None,
+}
+```
+
+**处理原则**：
+1. **语法错误**：Tree-sitter 已提供 ERROR 节点，Lowering 跳过这些节点
+2. **不支持特性**：标记为 `Partial`，已转换部分仍可提供补全
+3. **严重错误**：降级到 `SyntaxBased` 或 `KeywordsOnly`，保证 LSP 不崩溃
+4. **用户反馈**：通过 Diagnostics 显示降级原因（可选）
+
+#### 版本兼容处理
+
+使用 `semver` crate 进行更健壮的版本比较：
+
+```rust
+use semver::{Version, VersionReq};
+
 impl MySQLLowering {
     fn handle_limit(&self, node: Node) -> Option<(Expr, Option<Expr>)> {
-        match self.version {
-            (8, 0) => {
-                // MySQL 8.0+ 支持 FETCH / OFFSET
-                self.lower_fetch_offset(node)
-            }
-            _ => {
-                // MySQL 5.7 使用 LIMIT offset, count
-                self.lower_limit_comma(node)
-            }
+        let req = VersionReq::parse(">=8.0.0").unwrap();
+        let version = Version::new(self.version.0 as u64, self.version.1 as u64, 0);
+
+        if req.matches(&version) {
+            // MySQL 8.0+ 支持 FETCH / OFFSET
+            self.lower_fetch_offset(node)
+        } else {
+            // MySQL 5.7 使用 LIMIT offset, count
+            self.lower_limit_comma(node)
         }
     }
 }
@@ -267,6 +323,33 @@ impl MySQLLowering {
 - ✅ `Expr`: 表达式
 - ✅ `ObjectName`: 对象名称
 - ✅ `TableRef`, `Join`: 表引用
+
+#### 核心 SQL 子集定义
+
+为明确支持范围，定义**核心 SQL**（Core SQL）：
+
+**所有方言必须支持**：
+- **DML**: SELECT（基础查询）、INSERT、UPDATE、DELETE
+- **子句**: WHERE、ORDER BY、LIMIT、GROUP BY、HAVING
+- **连接**: INNER JOIN、LEFT JOIN、CROSS JOIN
+- **表达式**: 列引用、字面量、二元运算、函数调用、聚合函数
+- **子查询**: EXISTS、IN、标量子查询
+
+**可选支持（版本相关）**：
+- CTE (WITH 子句)
+- 窗口函数
+- LATERAL 连接
+- FULL OUTER JOIN
+- JSON 函数
+- DISTINCT ON
+
+**明确不支持（Phase 1-5）**：
+- DDL（CREATE TABLE、ALTER TABLE 等）- 方言差异太大
+- 事务控制（BEGIN、COMMIT）- 超出 LSP 范围
+- 过程化 SQL（PL/pgSQL、存储过程）- 计划在 Phase 6+
+- 权限管理（GRANT、REVOKE）- 安全考虑
+
+**注意**：不支持的语法仍可被解析（Tree-sitter 层），但语义分析可能不完整。
 
 #### 需要扩展
 
@@ -572,6 +655,37 @@ pub struct FunctionMetadata {
 ```rust
 pub struct LiveCatalog {
     pool: AnyDatabasePool,  // 支持多种数据库连接池
+    max_connections: usize, // 最大连接数
+    query_timeout: Duration, // 查询超时
+}
+
+impl LiveCatalog {
+    pub fn new(connection_string: &str, dialect: Dialect) -> Result<Self> {
+        let pool = match dialect {
+            Dialect::MySQL => mysql_pool(connection_string, max_connections: 10)?,
+            Dialect::PostgreSQL => pg_pool(connection_string, max_connections: 10)?,
+            Dialect::SQLite => sqlite_pool(connection_string)?,
+            _ => return Err(...),
+        };
+
+        Ok(Self {
+            pool,
+            max_connections: 10,
+            query_timeout: Duration::from_secs(5),
+        })
+    }
+
+    /// 连接健康检查
+    async fn health_check(&self) -> Result<()> {
+        match self.pool {
+            AnyDatabasePool::MySQL(pool) => {
+                let mut conn = pool.acquire().await?;
+                sqlx::query("SELECT 1").execute(&mut conn).await?;
+                Ok(())
+            }
+            // 其他方言...
+        }
+    }
 }
 
 #[async_trait]
@@ -585,6 +699,12 @@ impl Catalog for LiveCatalog {
     }
 }
 ```
+
+**连接池配置**：
+- **最大连接数**：每数据库默认 10 个（可通过配置调整）
+- **超时设置**：查询超时 5 秒，连接超时 3 秒
+- **健康检查**：后台定期检查连接可用性，失败自动重连
+- **连接复用**：同一文档的多次 Catalog 查询复用连接
 
 **2. 静态 Catalog（文件定义）**
 
@@ -1072,21 +1192,32 @@ pub struct CacheManager {
     /// Tree-sitter Tree 缓存
     tree_cache: Arc<DashMap<Url, Arc<Tree>>>,
 
-    /// IR 缓存
-    ir_cache: Arc<DashMap<Url, Arc<ArcSwapAny<Arc<Stmt>>>>>,
+    /// IR 缓存（使用 ArcSwap 便于无锁更新）
+    ir_cache: Arc<DashMap<Url, ArcSwap<Option<Arc<Stmt>>>>>,
 
     /// Semantic 缓存
-    semantic_cache: Arc<DashMap<Url, Arc<ArcSwapAny<Arc<SemanticModel>>>>>,
+    semantic_cache: Arc<DashMap<Url, ArcSwap<Option<Arc<SemanticModel>>>>>,
 }
 ```
 
-**缓存失效策略**：
+**缓存失效策略**（分阶段实施）：
 
-1. **文本更改** → 失效 Tree
-2. **Tree 更新** → 失效 IR（受影响的语句）
-3. **IR 更新** → 失效 Semantic（受影响的作用域）
+**Phase 1-3: 粗粒度失效（推荐初始实现）**
+- 任何文本更改 → 失效整个文档的所有缓存
+- 实现简单，安全可靠
+- SQL 语句通常较短，完整重解析开销可接受
 
-**细粒度失效**：
+**Phase 4-5: 细粒度失效（性能优化）**
+- 文本更改 → Tree-sitter 增量解析（内置）
+- Tree 更新 → IR 缓存失效（仅受影响语句）
+- IR 更新 → Semantic 缓存失效（仅受影响作用域）
+
+**实现注意事项**：
+- SQL 作用域复杂（CTE、子查询、嵌套查询），WITH 子句的修改可能影响主查询
+- 细粒度失效需要完整的语义理解，建议先实现粗粒度，通过性能测试决定是否优化
+- 在性能测试前，不要过早优化
+
+**示例代码**（Phase 4+）：
 
 ```rust
 /// 根据文本更改范围，判断需要重新解析的语句
@@ -1436,6 +1567,93 @@ async fn bench_large_file_parsing() {
 }
 ```
 
+### 9.4 测试矩阵（方言特性覆盖）
+
+为确保多方言版本兼容性，建立测试矩阵：
+
+| Dialect | Version | Feature | Expected Result | Test Case |
+|---------|---------|---------|-----------------|-----------|
+| MySQL | 5.7 | Window Functions | Error/Partial | `test_mysql_57_window_functions()` |
+| MySQL | 8.0+ | Window Functions | Success | `test_mysql_80_window_functions()` |
+| PostgreSQL | 12 | CTEs | Success | `test_pg_12_cte()` |
+| PostgreSQL | 9.3 | LATERAL Joins | Success | `test_pg_93_lateral()` |
+| PostgreSQL | 9.2 | LATERAL Joins | Error | `test_pg_92_lateral_fails()` |
+| SQLite | 3.25+ | Window Functions | Success | `test_sqlite_window_functions()` |
+| All | - | Basic SELECT | Success | `test_all_basic_select()` |
+
+**回归测试**：
+- 每个新方言版本必须通过基本功能测试
+- 已知 bug 的测试用例（标记为 `#[ignore]` 或 `should_panic`）
+- 性能基准测试（防止退化）
+
+### 9.5 错误场景测试
+
+```rust
+#[tokio::test]
+async fn test_undefined_table() {
+    let sql = "SELECT * FROM nonexistent_table";
+    let diagnostics = analyze(sql).await;
+
+    assert!(diagnostics.iter().any(|d| d.message.contains("Table 'nonexistent_table' does not exist")));
+}
+
+#[tokio::test]
+async fn test_ambiguous_column() {
+    let sql = "SELECT id FROM users u JOIN orders o";
+    let diagnostics = analyze(sql).await;
+
+    assert!(diagnostics.iter().any(|d| d.message.contains("Ambiguous column 'id'")));
+}
+
+#[tokio::test]
+async fn test_syntax_error_recovery() {
+    let sql = "SELECT FROM * users";  // 语法错误
+    let tree = grammar.parse(sql);
+
+    // Tree-sitter 应该生成 ERROR 节点，但不会崩溃
+    assert!(tree.root_node().to_sexp().contains("ERROR"));
+}
+
+#[tokio::test]
+async fn test_empty_file() {
+    let sql = "";
+    let result = complete(sql, Position::new(0, 0)).await;
+
+    // 应该返回空补全列表，而非崩溃
+    assert_eq!(result.items.len(), 0);
+}
+
+#[tokio::test]
+async fn test_comments_only() {
+    let sql = "-- This is a comment\n/* Another comment */";
+    let result = complete(sql, Position::new(1, 0)).await;
+
+    assert_eq!(result.items.len(), 0);
+}
+```
+
+### 9.6 Edge Cases 测试
+
+```rust
+#[tokio::test]
+async fn test_nested_subqueries() {
+    let sql = "SELECT * FROM (SELECT * FROM (SELECT * FROM users)) t";
+    let semantic = analyze(sql).await;
+
+    // 应该正确解析嵌套层级
+    assert_eq!(semantic.scopes.len(), 3);
+}
+
+#[tokio::test]
+async fn test_cte_scope() {
+    let sql = "WITH cte AS (SELECT * FROM users) SELECT * FROM cte";
+    let semantic = analyze(sql).await;
+
+    // CTE 应该在作用域中可见
+    assert!(semantic.scopes[0].tables.iter().any(|t| t.name == "cte"));
+}
+```
+
 ---
 
 ## 十、配置示例
@@ -1480,6 +1698,62 @@ engines:
   }
 }
 ```
+
+### 10.3 配置验证
+
+提供配置文件验证工具：
+
+```bash
+# 验证配置文件语法
+unified-sql-lsp --validate-config /path/to/config/engines.yaml
+
+# 测试数据库连接
+unified-sql-lsp --test-connection mysql-prod
+
+# 显示当前配置
+unified-sql-lsp --show-config
+```
+
+**JSON Schema**（用于 IDE 自动完成）：
+
+```json
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "engines": {
+      "type": "object",
+      "patternProperties": {
+        ".*": {
+          "type": "object",
+          "properties": {
+            "dialect": { "enum": ["mysql", "postgresql", "sqlite", ...] },
+            "version": { "type": "string" },
+            "connection_string": { "type": "string" },
+            "schema_filter": {
+              "type": "object",
+              "properties": {
+                "allowed_schemas": { "type": "array", "items": { "type": "string" } },
+                "allowed_tables": { "type": "array", "items": { "type": "string" } },
+                "excluded_tables": { "type": "array", "items": { "type": "string" } }
+              }
+            },
+            "max_connections": { "type": "integer", "default": 10 },
+            "query_timeout": { "type": "integer", "default": 5 }
+          },
+          "required": ["dialect", "connection_string"]
+        }
+      }
+    }
+  }
+}
+```
+
+**默认值**：
+- `max_connections`: 10
+- `query_timeout`: 5 秒
+- `cache_ttl`: 300 秒（5 分钟）
+- `schema_filter`: 无限制（显示所有 schema）
 
 ---
 
@@ -1570,6 +1844,81 @@ engines:
 - **审计日志**: 记录补全触发和 Catalog 查询
 - **Metrics**: Prometheus 集成，监控性能
 
+### 13.3 Rust Feature Flags
+
+使用条件编译减少二进制大小：
+
+```toml
+[features]
+default = ["mysql", "postgresql"]
+
+# 方言支持
+mysql = ["tree-sitter-sql/mysql"]
+postgresql = ["tree-sitter-sql/postgresql"]
+sqlite = ["tree-sitter-sql/sqlite"]
+tidb = ["mysql"]
+mariadb = ["mysql"]
+cockroachdb = ["postgresql"]
+
+# 功能模块
+hover = []
+diagnostics = []
+format = ["sqlformatter"]
+
+# 全功能
+full = ["mysql", "postgresql", "sqlite", "hover", "diagnostics", "format"]
+```
+
+**使用示例**：
+
+```bash
+# 仅构建 MySQL + PostgreSQL 支持
+cargo build --release --no-default-features --features "mysql,postgresql"
+
+# 构建全功能版本
+cargo build --release --features "full"
+
+# 开发版本（包含所有方言）
+cargo build --features "full"
+```
+
+### 13.4 LSP Capability Negotiation
+
+向 LSP 客户端声明支持的能力：
+
+```rust
+use tower_lsp::lsp_types::*;
+
+async fn initialize(&self, params: InitializeParams) -> Result<ServerCapabilities> {
+    Ok(ServerCapabilities {
+        // 文本同步（增量）
+        text_document_sync: Some(TextDocumentSyncCapability::Kind(
+            TextDocumentSyncKind::INCREMENTAL
+        )),
+
+        // Completion
+        completion_provider: Some(CompletionOptions {
+            resolve_provider: Some(false),
+            trigger_characters: Some(vec![".".to_string(), " ".to_string()]),
+            ..Default::default()
+        }),
+
+        // Hover（可选）
+        hover_provider: Some(HoverProviderCapability::Simple(true)),
+
+        // Diagnostics（通过推送）
+        diagnostic_provider: Some(DiagnosticServerCapabilities::Options(DiagnosticOptions {
+            work_done_progress_options: WorkDoneProgressOptions {
+                work_done_progress: Some(false),
+            },
+            ..Default::default()
+        })),
+
+        ..Default::default()
+    })
+}
+```
+
 ---
 
 ## 附录
@@ -1586,12 +1935,450 @@ engines:
 - [sqlfluff](https://github.com/sqlfluff/sqlfluff): SQL Linter（Python）
 - [jedi-language-server](https://github.com/pappasam/jedi-language-server): Python LSP（参考架构）
 
-### C. 贡献指南
+### C. 方言扩展指南（Dialect Extension Guide）
 
-（待补充：方言扩展指南、Grammar 编写指南、测试指南）
+本指南提供添加新 SQL 方言支持的详细步骤。
+
+#### C.1 准备工作
+
+**1. 评估方言特性**
+
+在开始之前，收集以下信息：
+
+```markdown
+# 方言特性清单
+
+## 基本信息
+- 名称: TiDB
+- 基于: MySQL
+- 版本范围: 5.0, 6.0, 7.0, 8.0
+- 文档: https://docs.pingcap.com/tidb/stable
+
+## 语法差异
+- 独特关键字: TIDB_BOUNDED_STALENESS, TTL
+- 新函数: ADDTIME, DATE_ADD
+- 语法糖: ?? (NULL coalesce)
+
+## 兼容性
+- 完全兼容 MySQL 8.0 语法
+- 扩展特性: 分布式 SQL 优化器提示
+```
+
+**2. 决定复用策略**
+
+- **完全兼容**: 直接复用现有 Grammar + Lowering（如 TiDB → MySQL）
+- **部分兼容**: 继承 Grammar，自定义 Lowering（如 MariaDB → MySQL）
+- **独立方言**: 全新实现（如 Oracle, MSSQL）
+
+#### C.2 实现 Grammar Layer
+
+**步骤 1: Fork tree-sitter-sql**
+
+```bash
+# Fork 主仓库
+git clone https://github.com/woxQAQ/tree-sitter-sql.git
+cd tree-sitter-sql
+
+# 创建方言分支
+git checkout -b dialect/tidb
+```
+
+**步骤 2: 创建方言目录**
+
+```bash
+mkdir -p grammar/dialect/tidb
+touch grammar/dialect/tidb/grammar.js
+touch grammar/dialect/tidb/scanner.c
+```
+
+**步骤 3: 继承基础 Grammar**
+
+```javascript
+// grammar/dialect/tidb/grammar.js
+
+// 继承 MySQL 基础语法
+const mysqlGrammar = require('../mysql/grammar.js');
+
+module.exports = grammar(mysqlGrammar, {
+  name: 'tidb',
+
+  // 添加 TiDB 特定关键字
+  keywords: ($, previous) => previous.concat({
+    'TIDB_BOUNDED_STALENESS': /tidb_bounded_staleness/i,
+    'TIDB_SNAPSHOT': /tidb_snapshot/i,
+  }),
+
+  // 添加 TiDB 特定函数
+  functions: ($, previous) => previous.concat([
+    'ADD_TIME',
+    'DATE_ADD',
+    'DATE_SUB',
+  ]),
+
+  // 扩展规则（如需要）
+  rules: {
+    // 完全兼容 MySQL，无需额外规则
+  }
+});
+```
+
+**步骤 4: 编写单元测试**
+
+```javascript
+// test/corpus/tidb_test.txt
+
+===========================================
+TiDB snapshot query
+===========================================
+
+SELECT * FROM users TIDB_SNAPSHOT 435215432154321;
 
 ---
 
-**文档版本**: v1.0
+(statement
+  (select_statement
+    (select_clause)
+    (from_clause
+      (table_reference
+        name: (identifier))))
+  (tidb_hint
+    name: (tidb_snapshot)
+    value: (number)))
+```
+
+**步骤 5: 构建 Grammar**
+
+```bash
+# 生成 parser.c
+tree-sitter generate
+
+# 运行测试
+tree-sitter test
+
+# 构建动态库
+cargo build --release
+```
+
+**步骤 6: 集成到项目**
+
+```toml
+# crates/grammar/Cargo.toml
+
+[dependencies]
+tree-sitter-tidb = { path = "../../tree-sitter-sql/grammar/dialect/tidb" }
+```
+
+```rust
+// crates/grammar/src/dialect/tidb.rs
+
+use tree_sitter::Language;
+
+extern "C" {
+    fn tree_sitter_tidb() -> Language;
+}
+
+pub fn language() -> Language {
+    unsafe { tree_sitter_tidb() }
+}
+```
+
+#### C.3 实现 Lowering Layer
+
+**步骤 1: 创建 Lowering 结构体**
+
+```rust
+// crates/lowering/src/dialect/tidb.rs
+
+use crate::{Lowering, LoweringResult, SelectStmt};
+use tree_sitter::Node;
+use ir::*;
+
+pub struct TiDBLowering {
+    version: semver::Version,
+    mysql_lowering: MySQLLowering, // 复用 MySQL 实现
+}
+
+impl TiDBLowering {
+    pub fn new(version: semver::Version) -> Self {
+        Self {
+            version: version.clone(),
+            mysql_lowering: MySQLLowering::new(version),
+        }
+    }
+}
+```
+
+**步骤 2: 实现 Lowering trait**
+
+```rust
+impl Lowering for TiDBLowering {
+    fn lower_select(&self, node: Node) -> LoweringResult {
+        // 完全兼容 MySQL，直接委托
+        self.mysql_lowering.lower_select(node)
+    }
+
+    fn lower_expr(&self, node: Node) -> LoweringResult {
+        match node.kind() {
+            "tidb_hint" => {
+                // 处理 TiDB 特定语法
+                self.lower_tidb_hint(node)
+            }
+            _ => {
+                // 委托给 MySQL lowering
+                self.mysql_lowering.lower_expr(node)
+            }
+        }
+    }
+
+    fn dialect(&self) -> Dialect {
+        Dialect::TiDB { version: self.version.clone() }
+    }
+}
+
+impl TiDBLowering {
+    fn lower_tidb_hint(&self, node: Node) -> LoweringResult {
+        // 解析 TIDB_SNAPSHOT 等提示
+        // 存储到 DialectExtensions 中
+        Ok(LoweringResult::Success(...))
+    }
+}
+```
+
+**步骤 3: 注册到工厂**
+
+```rust
+// crates/lowering/src/lib.rs
+
+use crate::dialect::tidb::TiDBLowering;
+
+pub struct LoweringFactory {
+    lowerings: DashMap<Dialect, Arc<dyn Lowering>>,
+}
+
+impl LoweringFactory {
+    pub fn new() -> Self {
+        let mut factory = Self {
+            lowerings: DashMap::new(),
+        };
+
+        // 注册 TiDB
+        factory.register_dialect(Dialect::TiDB {
+            version: semver::Version::new(8, 0, 0)
+        });
+
+        factory
+    }
+
+    fn register_dialect(&self, dialect: Dialect) {
+        let lowering: Arc<dyn Lowering> = match dialect {
+            Dialect::TiDB { version } => {
+                Arc::new(TiDBLowering::new(version))
+            }
+            _ => return,
+        };
+
+        self.lowerings.insert(dialect, lowering);
+    }
+}
+```
+
+#### C.4 测试新方言
+
+**步骤 1: 单元测试**
+
+```rust
+// crates/lowering/tests/test_tidb.rs
+
+#[tokio::test]
+async fn test_tidb_basic_select() {
+    let sql = "SELECT id FROM users";
+    let grammar = TiDBGrammar::new();
+    let tree = grammar.parse(sql);
+
+    let lowering = TiDBLowering::new(semver::Version::new(8, 0, 0));
+    let result = lowering.lower_select(tree.root_node());
+
+    assert!(matches!(result, LoweringResult::Success(_)));
+}
+
+#[tokio::test]
+async fn test_tidb_snapshot_hint() {
+    let sql = "SELECT * FROM users TIDB_SNAPSHOT 435215432154321";
+    let grammar = TiDBGrammar::new();
+    let tree = grammar.parse(sql);
+
+    let lowering = TiDBLowering::new(semver::Version::new(8, 0, 0));
+    let result = lowering.lower_select(tree.root_node());
+
+    // 验证 TiDB hint 被正确解析
+    match result {
+        LoweringResult::Success(stmt) => {
+            assert!(stmt.dialect_extensions.is_some());
+        }
+        _ => panic!("Expected Success"),
+    }
+}
+```
+
+**步骤 2: 集成测试**
+
+```rust
+// tests/integration/test_tidb_completion.rs
+
+#[tokio::test]
+async fn test_tidb_completion_flow() {
+    let backend = Backend::new(...);
+
+    backend.add_document(
+        Url::parse("file://test.sql").unwrap(),
+        "SELECT id FROM users".to_string(),
+        EngineConfig {
+            dialect: Dialect::TiDB { version: semver::Version::new(8, 0, 0) },
+            connection_string: "mysql://...".to_string(),
+            ...
+        },
+    ).await;
+
+    let result = backend.completion(...).await;
+    assert!(result.is_some());
+}
+```
+
+**步骤 3: 性能测试**
+
+```rust
+#[tokio::test]
+async fn bench_tidb_parsing() {
+    let sql = generate_large_sql(10_000);
+    let grammar = TiDBGrammar::new();
+
+    let start = Instant::now();
+    let tree = grammar.parse(&sql);
+    let elapsed = start.elapsed();
+
+    assert!(elapsed < Duration::from_millis(100));
+}
+```
+
+#### C.5 文档与发布
+
+**1. 更新文档**
+
+```markdown
+# crates/grammar/src/dialect/tidb.md
+
+## TiDB 方言支持
+
+### 版本支持
+- ✅ TiDB 5.0 (兼容 MySQL 5.7)
+- ✅ TiDB 6.0 (兼容 MySQL 8.0)
+- ✅ TiDB 7.0 (兼容 MySQL 8.0)
+- ✅ TiDB 8.0 (兼容 MySQL 8.0)
+
+### 特定功能
+- TIDB_SNAPSHOT (快照查询)
+- TIDB_BOUNDED_STALENESS (有界陈旧度)
+- 优化器提示
+
+### 限制
+- 不支持 TiDB Flashback（计划 Phase 6）
+```
+
+**2. 更新 Cargo.toml**
+
+```toml
+[features]
+default = ["mysql", "postgresql"]
+tidb = ["mysql"]
+```
+
+**3. 发布 Checklist**
+
+- [ ] 所有单元测试通过
+- [ ] 集成测试通过
+- [ ] 性能测试达标
+- [ ] 文档完整
+- [ ] CHANGELOG 更新
+- [ ] 版本号语义化
+
+#### C.6 常见问题
+
+**Q: 如何处理方言语法糖？**
+
+A: 在 Lowering 阶段展开为标准 SQL：
+
+```rust
+// TiDB: ?? 等价于 COALESCE
+fn lower_expr(&self, node: Node) -> LoweringResult {
+    match node.kind() {
+        "null_coalesce" => { // ?? operator
+            Ok(LoweringResult::Success(Expr::Function {
+                name: ObjectName::single("COALESCE"),
+                args: vec![...],
+                ..
+            }))
+        }
+        _ => self.mysql_lowering.lower_expr(node)
+    }
+}
+```
+
+**Q: 如何测试版本兼容性？**
+
+A: 使用测试矩阵 + 参数化测试：
+
+```rust
+#[tokio::test]
+async fn test_tidb_version_compat() {
+    for version in &["5.0", "6.0", "7.0", "8.0"] {
+        let sql = "SELECT * FROM users";
+        let grammar = TiDBGrammar::new_with_version(version);
+        let tree = grammar.parse(sql);
+        assert!(tree.root_node().has_error());
+    }
+}
+```
+
+**Q: 性能不达标怎么办？**
+
+A: 优化策略：
+1. 使用 Criterion.rs 进行性能剖析
+2. 检查 Lowering 中的 allocations
+3. 考虑缓存 Grammar 实例
+4. 使用 `#[inline]` 标记热路径函数
+
+### D. 性能基准
+
+所有方言必须达到以下性能指标：
+
+| 指标 | 目标 | 测量方法 |
+|------|------|----------|
+| 10k 行解析 | < 100ms | `cargo bench --bench parsing` |
+| Completion 延迟 | < 50ms | p95 延迟 |
+| 内存占用 | < 50MB | 峰值 RSS |
+| 缓存命中率 | > 80% | LRU 统计 |
+
+### E. 测试指南
+
+详见 `tests/README.md`：
+
+```bash
+# 运行所有测试
+cargo test --all
+
+# 运行特定方言测试
+cargo test --package lowering --test tidb
+
+# 运行性能测试
+cargo bench --bench parsing
+
+# 运行集成测试
+cargo test --test integration
+```
+
+---
+
+**文档版本**: v1.1
 **最后更新**: 2025-12-31
 **维护者**: unified-sql-lsp team
+
