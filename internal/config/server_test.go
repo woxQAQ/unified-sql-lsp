@@ -5,9 +5,13 @@ import (
 	"testing"
 )
 
-// Basic config tests for F001 initialization
-// TODO: F005 (Connection Manager) will add comprehensive tests for config usage
-// including error handling, validation, and environment variable integration
+// Basic smoke tests for F001 initialization
+// These tests provide basic validation of config loading functionality.
+// TODO: F005 (Connection Manager) will add comprehensive tests including:
+// - Error handling (invalid YAML, permission errors)
+// - Edge cases (empty files, malformed configs)
+// - Config merging and overrides
+// - Environment variable integration
 
 func TestLoadServerConfigDefaults(t *testing.T) {
 	cfg, err := LoadServerConfig("")

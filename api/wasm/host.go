@@ -26,24 +26,24 @@ type SchemaInfo struct {
 	CatalogName string
 	SchemaName  string
 	Tables      []TableInfo
-	Views       []ViewInfo      // Separate from tables for clarity
-	Sequences   []SequenceInfo  // PostgreSQL sequences
+	Views       []ViewInfo     // Separate from tables for clarity
+	Sequences   []SequenceInfo // PostgreSQL sequences
 	Functions   []FunctionInfo
 	Types       []TypeInfo
-	Enums       []EnumInfo      // PostgreSQL enum types
+	Enums       []EnumInfo // PostgreSQL enum types
 }
 
 // TableInfo represents table metadata
 type TableInfo struct {
-	Name         string
-	Schema       string
-	Columns      []ColumnInfo
-	IsView       bool
-	IsSystem     bool
-	IsMaterialized bool       // For PostgreSQL materialized views
-	PrimaryKey   []string     // Column names in primary key
-	ForeignKeys  []ForeignKeyInfo
-	Indexes      []IndexInfo
+	Name           string
+	Schema         string
+	Columns        []ColumnInfo
+	IsView         bool
+	IsSystem       bool
+	IsMaterialized bool     // For PostgreSQL materialized views
+	PrimaryKey     []string // Column names in primary key
+	ForeignKeys    []ForeignKeyInfo
+	Indexes        []IndexInfo
 	// TODO: F012 will add inheritance info, partition info, check constraints
 }
 
@@ -52,7 +52,7 @@ type ColumnInfo struct {
 	Name         string
 	DataType     string
 	Nullable     bool
-	DefaultValue *string      // NULL if no default
+	DefaultValue *string // NULL if no default
 	IsPrimaryKey bool
 	IsUnique     bool
 	IsIndexed    bool
@@ -65,9 +65,9 @@ type FunctionInfo struct {
 	Schema      string
 	Args        []FunctionArg
 	ReturnType  string
-	IsAggregate bool          // For aggregate functions like SUM, COUNT
-	IsWindow    bool          // For window functions
-	Volatility  string        // IMMUTABLE, STABLE, or VOLATILE
+	IsAggregate bool   // For aggregate functions like SUM, COUNT
+	IsWindow    bool   // For window functions
+	Volatility  string // IMMUTABLE, STABLE, or VOLATILE
 	// TODO: F012 will add parallel safety, support for variadic args, table functions
 }
 
@@ -82,8 +82,8 @@ type FunctionArg struct {
 type TypeInfo struct {
 	Name        string
 	Schema      string
-	Category    string      // 'A' for array, 'C' for composite, 'E' for enum, etc.
-	ElementType *string     // For array types
+	Category    string       // 'A' for array, 'C' for composite, 'E' for enum, etc.
+	ElementType *string      // For array types
 	Fields      []ColumnInfo // For composite types
 	Labels      []string     // For enum types
 }
@@ -106,7 +106,8 @@ type SequenceInfo struct {
 	Increment  int64
 	MaxValue   int64
 	MinValue   int64
-	Cycle      bool
+	Cycle      bool // Maps to PostgreSQL's CYCLE option (NO CYCLE is default)
+	// See: https://www.postgresql.org/docs/current/sql-createsequence.html
 }
 
 // EnumInfo represents enum type metadata
