@@ -236,11 +236,37 @@ pub enum Dialect {
 }
 ```
 
-### 4.2 特性支持查询
+### 4.2 版本支持机制
 
-使用 `FeatureSupport` trait 判断方言支持的特性：
+**问题**：同一方言的不同版本支持的特性不同（如 MySQL 5.7 vs 8.0）
 
-- Window Functions, CTEs, LATERAL Joins, JSON Functions
+**解决方案**：
+
+1. **编译时版本选择**（Grammar 层）：
+   - 每个方言的不同版本编译为独立的 parser
+   - `DIALECT=mysql-5.7 tree-sitter generate` → `mysql-5.7.so`
+   - `DIALECT=mysql-8.0 tree-sitter generate` → `mysql-8.0.so`
+   - 8.0 的 Grammar 包含窗口函数等新语法
+
+2. **运行时版本检测**（Lowering 层）：
+   - 使用 `semver` crate 进行版本比较
+   - 根据版本决定是否支持特定特性
+
+3. **特性支持查询**（Semantic 层）：
+   - `FeatureSupport` trait 判断当前版本是否支持某个特性
+   - 示例：MySQL 8.0+ 支持窗口函数，5.7 不支持
+
+**配置示例**：
+```yaml
+engines:
+  mysql-57:
+    dialect: mysql
+    version: "5.7"
+
+  mysql-80:
+    dialect: mysql
+    version: "8.0"
+```
 
 ### 4.3 方言复用策略
 
