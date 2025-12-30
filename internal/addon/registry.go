@@ -63,7 +63,10 @@ func (r *Registry) LookupByEngine(engine string) []*Addon {
 	r.RLock()
 	defer r.RUnlock()
 
-	addons := r.byEngine[engine]
+	addons, ok := r.byEngine[engine]
+	if !ok || len(addons) == 0 {
+		return []*Addon{}
+	}
 	// Return copy to avoid race conditions
 	result := make([]*Addon, len(addons))
 	copy(result, addons)

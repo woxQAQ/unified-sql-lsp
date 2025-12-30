@@ -134,25 +134,39 @@ logMessage(1, ptr, uint32(len(msg))) // Level 1 = info
 
 ### get_schema
 
-Query database schema information (TODO: to be implemented in F012).
+Query database schema information.
 
 ```go
 //go:wasmimport host get_schema
 func getSchema(dbPtr uint32, dbLen uint32) uint32
 ```
 
-**Status:** Stub only, will be implemented in F012 (Schema Introspection)
+**Parameters:**
+- `dbPtr`: Pointer to database name string in Wasm memory
+- `dbLen`: Length of database name string
+
+**Returns:**
+- Pointer to schema JSON in Wasm memory
+
+**Status**: ⚠️ **Currently a stub** - This function will be implemented in **F012 (PostgreSQL Schema Introspection)**. For now, add-ons should assume they will receive schema information in JSON format when this is implemented.
 
 ### execute_query
 
-Execute a SQL query on the database (TODO: to be implemented in F012).
+Execute a SQL query on the database.
 
 ```go
 //go:wasmimport host execute_query
 func executeQuery(dbPtr uint32, dbLen uint32) uint32
 ```
 
-**Status:** Stub only, will be implemented in F012 (Schema Introspection)
+**Parameters:**
+- `dbPtr`: Pointer to SQL query string in Wasm memory
+- `dbLen`: Length of SQL query string
+
+**Returns:**
+- Pointer to query results JSON in Wasm memory
+
+**Status**: ⚠️ **Currently a stub** - This function will be implemented in **F012 (PostgreSQL Schema Introspection)**. For now, add-ons should assume they will receive query results in JSON format when this is implemented.
 
 ## Building Your Add-on
 
@@ -409,9 +423,11 @@ unified-sql-lsp --wasm-debug
 
 ## Example Add-ons
 
-See the `examples/` directory for complete example add-ons:
-- `examples/postgresql-addon/` - PostgreSQL support
-- `examples/mysql-addon/` - MySQL support
+Complete example add-ons will be added in future PRs:
+- PostgreSQL add-on (planned for F010-F013)
+- MySQL add-on (planned for F015-F018)
+
+For now, refer to the manifest schema above and the host function documentation to create your add-on.
 
 ## Further Reading
 
