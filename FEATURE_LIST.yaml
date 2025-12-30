@@ -8,6 +8,7 @@ modules:
       - id: "F001"
         name: "Go 1.24+ 项目初始化"
         description: "设置 Go 模块，配置 go.mod，准备 Wasm 编译环境"
+        status: done
         dependencies: []
         priority: "P0"
 
@@ -277,19 +278,19 @@ linkages:
 
   - description: "连接管理器为 Schema 内省提供数据库连接"
     from_feature: "F005"
-    to_features: ["F012", "F018"]  # PostgreSQL Schema 内省, MySQL 补全引擎需要 MySQL Schema 内省
+    to_features: ["F012", "F018"] # PostgreSQL Schema 内省, MySQL 补全引擎需要 MySQL Schema 内省
 
   - description: "LSP 服务器调用 Add-on 的补全引擎"
     from_feature: "F007"
-    to_features: ["F011", "F018"]  # PostgreSQL 补全引擎, MySQL 补全引擎
+    to_features: ["F011", "F018"] # PostgreSQL 补全引擎, MySQL 补全引擎
 
   - description: "增量解析集成提升补全性能"
     from_feature: "F014"
-    to_features: ["F011", "F018"]  # PostgreSQL 补全引擎, MySQL 补全引擎
+    to_features: ["F011", "F018"] # PostgreSQL 补全引擎, MySQL 补全引擎
 
   - description: "版本检测决定启用哪些语法特性"
-    from_features: ["F013", "F019"]  # PostgreSQL 版本检测, MySQL 版本检测
-    to_features: ["F011", "F018"]  # PostgreSQL 补全引擎, MySQL 补全引擎
+    from_features: ["F013", "F019"] # PostgreSQL 版本检测, MySQL 版本检测
+    to_features: ["F011", "F018"] # PostgreSQL 补全引擎, MySQL 补全引擎
 
 # 优先级说明
 # P0: 核心功能，MVP 必需

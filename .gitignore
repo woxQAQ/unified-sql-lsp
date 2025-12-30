@@ -44,6 +44,7 @@ node_modules/
 
 # Environment files
 .env
+.env.claude
 .env.local
 .env.*.local
 
