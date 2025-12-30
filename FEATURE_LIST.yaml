@@ -70,6 +70,7 @@ meta:
     - 添加 DialectExtensions 枚举
     - 定义核心 SQL 子集
   priority: P0
+  status: done
   dependencies: []
   deliverables:
     - crates/ir/src/query.rs (扩展)
@@ -188,6 +189,7 @@ meta:
     - list_tables, get_columns, list_functions
     - 表/列/函数元数据结构
   priority: P0
+  status: done
   dependencies: []
   deliverables:
     - crates/catalog/src/lib.rs
@@ -288,7 +290,7 @@ meta:
     - cursor position → syntax context → semantic context → catalog → candidates
     - 仅支持基础 SELECT 补全
   priority: P0
-  dependencies: 
+  dependencies:
     - "LSP-001"
     - "SEMANTIC-003"
     - "CATALOG-002"
