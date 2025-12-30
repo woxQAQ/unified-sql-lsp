@@ -351,63 +351,9 @@ Semantic Analyzer 在分析时生成诊断信息，通过 LSP 推送给客户端
 
 ---
 
-## 八、实施路线图
+## 八、测试策略
 
-### Phase 1: 基础设施（2-3 周）
-
-- [ ] Grammar Layer
-  - [ ] Fork DerekStride/tree-sitter-sql
-  - [ ] 实现 MySQL/PostgreSQL 方言
-  - [ ] 编写单元测试
-
-- [ ] IR Layer（已有基础，小幅扩展）
-  - [ ] 添加 Window 子句
-  - [ ] 添加 DialectExtensions
-
-### Phase 2: 核心功能（3-4 周）
-
-- [ ] Lowering Layer
-  - [ ] 实现 Lowering trait
-  - [ ] MySQL/PostgreSQL Lowering
-  - [ ] 错误处理与降级策略
-
-- [ ] Semantic Layer
-  - [ ] Scope, TableSymbol, ColumnSymbol
-  - [ ] SemanticAnalyzer
-  - [ ] 补全触发点判断
-
-- [ ] Catalog Layer
-  - [ ] Catalog trait
-  - [ ] LiveCatalog 实现
-  - [ ] CachedCatalog
-
-### Phase 3: LSP 集成（2-3 周）
-
-- [ ] LSP Server
-  - [ ] Backend 结构
-  - [ ] Completion 处理
-  - [ ] 文档同步（did_open, did_change）
-  - [ ] 增量解析与缓存
-
-### Phase 4: 多引擎扩展（持续）
-
-- [ ] TiDB, MariaDB, CockroachDB
-- [ ] 版本特性支持
-- [ ] 引擎配置文件格式
-
-### Phase 5: 优化与扩展（持续）
-
-- [ ] 性能优化
-- [ ] Hover, Diagnostics
-- [ ] Schema 缓存持久化
-
-**总计**：8-12 周完成核心功能
-
----
-
-## 九、测试策略
-
-### 9.1 测试矩阵
+### 8.1 测试矩阵
 
 为确保多方言版本兼容性，建立测试矩阵：
 
@@ -419,7 +365,7 @@ Semantic Analyzer 在分析时生成诊断信息，通过 LSP 推送给客户端
 | PostgreSQL | 9.3 | LATERAL Joins | Success |
 | All | - | Basic SELECT | Success |
 
-### 9.2 测试覆盖
+### 8.2 测试覆盖
 
 - **单元测试**：Grammar, Lowering, Semantic
 - **集成测试**：Completion 流程
@@ -429,44 +375,9 @@ Semantic Analyzer 在分析时生成诊断信息，通过 LSP 推送给客户端
 
 ---
 
-## 十、配置示例
+## 九、关键决策记录
 
-### 10.1 引擎配置（YAML）
-
-```yaml
-engines:
-  mysql-prod:
-    dialect: mysql
-    version: "8.0"
-    connection_string: "mysql://user:pass@prod-db:3306/app"
-    schema_filter:
-      allowed_schemas: ["app", "reporting"]
-      excluded_tables: ["temp_*", "_*"]
-
-  pg-staging:
-    dialect: postgres
-    version: "14"
-    connection_string: "postgresql://user:pass@staging-db:5432/app"
-```
-
-### 10.2 配置验证
-
-```bash
-unified-sql-lsp --validate-config config/engines.yaml
-unified-sql-lsp --test-connection mysql-prod
-unified-sql-lsp --show-config
-```
-
-**默认值**：
-- `max_connections`: 10
-- `query_timeout`: 5 秒
-- `cache_ttl`: 300 秒
-
----
-
-## 十一、关键决策记录
-
-### 11.1 为什么选择 Tree-sitter？
+### 9.1 为什么选择 Tree-sitter？
 
 **优势**：增量解析、错误恢复、多语言支持、可组合性
 
@@ -474,41 +385,41 @@ unified-sql-lsp --show-config
 - ❌ sqlparser-rs：不支持增量解析
 - ❌ 手写 Parser：开发成本高
 
-### 11.2 为什么需要 IR 层？
+### 9.2 为什么需要 IR 层？
 
 **原因**：
 1. 方言隔离：LSP 逻辑不处理方言差异
 2. 可测试性：IR 独立测试
 3. 可扩展性：新增方言只需实现 Lowering
 
-### 11.3 为什么不支持 Jump Definition？
+### 9.3 为什么不支持 Jump Definition？
 
 **原因**：
 - SQL 的"定义"概念模糊
 - 实现复杂度高（跨文件分析）
 - 优先级低（Completion 是核心）
 
-### 11.4 为什么使用 DashMap？
+### 9.4 为什么使用 DashMap？
 
 **优势**：并发安全、高性能（分片锁）、API 友好
 
 ---
 
-## 十二、风险与挑战
+## 十、风险与挑战
 
-### 12.1 性能风险
+### 10.1 性能风险
 
 **风险**：大文件解析慢，Catalog 查询延迟
 
 **缓解**：增量解析 + 缓存 + 后台异步 + 性能测试
 
-### 12.2 方言兼容性
+### 10.2 方言兼容性
 
 **风险**：某些方言差异巨大，IR 难以统一
 
 **缓解**：DialectExtensions 保留方言特定信息，文档明确支持范围
 
-### 12.3 扩展性挑战
+### 10.3 扩展性挑战
 
 **风险**：支持 30+ 引擎，开发工作量大
 
@@ -516,17 +427,17 @@ unified-sql-lsp --show-config
 
 ---
 
-## 十三、后续扩展
+## 十一、后续扩展
 
-### 13.1 高级功能
+### 11.1 高级功能
 
 - Hover, Diagnostics, Signature Help, Code Actions, Format
 
-### 13.2 企业级特性
+### 11.2 企业级特性
 
 - Schema Cache 持久化, 多租户隔离, 审计日志, Metrics（Prometheus）
 
-### 13.3 Rust Feature Flags
+### 11.3 Rust Feature Flags
 
 使用条件编译减少二进制大小：
 
@@ -539,7 +450,7 @@ tidb = ["mysql"]
 full = ["mysql", "postgresql", "tidb", "hover", "diagnostics"]
 ```
 
-### 13.4 LSP Capability Negotiation
+### 11.4 LSP Capability Negotiation
 
 向客户端声明支持的能力（text_document_sync, completion_provider, hover_provider, diagnostic_provider）
 
