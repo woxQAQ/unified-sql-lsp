@@ -25,6 +25,32 @@ Tree-sitter（语法事实）→ IR（统一抽象）→ Semantic（语义模型
 3. **轻量语义模型**：建立作用域和符号表，不做完整类型检查
 4. **可插拔架构**：引擎、Schema 源、LSP 功能均可独立扩展
 
+#### IR 层 vs Semantic 层
+
+**IR（Intermediate Representation）层**：
+
+- **是什么**：统一的 SQL 语法树，方言无关的中间表示
+- **做什么**：将不同方言的 CST 转换为统一的数据结构
+- **为什么需要**：
+  - MySQL 的 `LIMIT offset, count` 和 PostgreSQL 的 `LIMIT count OFFSET offset` 语法不同，但 IR 都用 `Query { limit, offset }` 表示
+  - LSP 上层逻辑不需要关心方言语法差异，只处理统一的 IR
+- **类比**：就像不同品牌的 CPU（x86, ARM）都编译成相同的中间代码（IR），然后进行优化
+
+**Semantic 层**：
+
+- **是什么**：基于 IR 构建的语义模型（作用域、符号表）
+- **做什么**：解析"这是什么"（表名？列名？别名？）以及"它属于谁"
+- **为什么需要**：
+  - SQL 中 `SELECT id FROM users u JOIN orders o`，`id` 可能属于 `users` 或 `orders`，需要 Semantic 层解析
+  - `FROM users u` 定义了别名 `u`，Semantic 层记录 `u` 是 `users` 表的别名
+- **类比**：就像编程语言的作用域分析，知道哪些变量/函数在当前作用域可见
+
+**简单理解**：
+
+- **Grammar**："这句话语法对吗？" → 解析 `SELECT * FORM users` 时发现语法错误（FORM → FROM）
+- **IR**："这是什么语句？" → 转换为 `SelectStmt { projections: [Wildcard], from: [Table("users")] }`
+- **Semantic**："`id` 属于哪个表？" → 分析后知道 `id` 是 `users.id` 或 `orders.id`（如果有歧义则报错）
+
 ---
 
 ## 二、系统架构
