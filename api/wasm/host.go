@@ -134,3 +134,6 @@ type IndexInfo struct {
 	IsPrimary bool
 	// TODO: F012 will add index type (btree, hash, gist, etc.), partial indexes, expression indexes
 }
+
+// Additional schema metadata types will be added in F012 (PostgreSQL Schema Introspection)
+// as needed, including: triggers, rules, policies, extensions, and other database objects
