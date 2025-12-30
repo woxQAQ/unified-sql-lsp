@@ -170,6 +170,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "unified-sql-lsp-semantic"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "thiserror",
+ "unified-sql-lsp-catalog",
+ "unified-sql-lsp-ir",
+]
+
+[[package]]
 name = "zmij"
 version = "1.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"

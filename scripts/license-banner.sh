@@ -46,8 +46,11 @@ has_banner() {
 
     case "$ext" in
         rs)
-            head -1 "$file" | grep -q "Copyright (c) 2025 woxQAQ"
-            return $?
+            if head -1 "$file" | grep -q "Copyright (c) 2025 woxQAQ"; then
+                return 0  # Has banner
+            else
+                return 1  # No banner
+            fi
             ;;
         # Add more cases for other file types
         *)
