@@ -206,6 +206,7 @@ meta:
     - 健康检查
     - 从数据库实时查询 schema
   priority: P0
+  status: done
   dependencies: ["CATALOG-001"]
   deliverables:
     - crates/catalog/src/live_mysql.rs
