@@ -73,6 +73,7 @@ pub mod r#trait;
 pub mod metadata;
 pub mod error;
 pub mod live_mysql;
+pub mod live_postgres;
 
 // Re-exports
 pub use r#trait::Catalog;
@@ -82,3 +83,4 @@ pub use metadata::{
 };
 pub use error::{CatalogError, CatalogResult};
 pub use live_mysql::LiveMySQLCatalog;
+pub use live_postgres::LivePostgreSQLCatalog;
