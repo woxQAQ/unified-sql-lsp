@@ -298,11 +298,16 @@ impl Catalog for LivePostgreSQLCatalog {
     ///
     /// Queries information_schema.tables to get all tables, views, and materialized views.
     async fn list_tables(&self) -> CatalogResult<Vec<TableMetadata>> {
-        // Note: This is a placeholder implementation.
+        // HACK: Placeholder implementation - returns error instead of actual data
+        // This is a workaround to avoid adding PostgreSQL driver dependency (e.g., sqlx)
+        // which would significantly increase binary size and complexity
+        //
+        // TODO: (CATALOG-003) Implement actual database connection and query
         // In a real implementation, you would:
-        // 1. Establish a connection to the database
-        // 2. Query information_schema.tables and pg_catalog.pg_class
-        // 3. Parse the results into TableMetadata
+        // 1. Add sqlx or tokio-postgres dependency
+        // 2. Establish connection pool
+        // 3. Query information_schema.tables and pg_catalog.pg_class
+        // 4. Parse results into TableMetadata
         //
         // Example query:
         // SELECT
@@ -329,7 +334,10 @@ impl Catalog for LivePostgreSQLCatalog {
     ///
     /// Queries information_schema.columns and pg_catalog to get column information.
     async fn get_columns(&self, _table: &str) -> CatalogResult<Vec<ColumnMetadata>> {
-        // TODO: Implement actual database connection and query
+        // HACK: Placeholder implementation - returns error instead of actual data
+        // This is a workaround to avoid adding PostgreSQL driver dependency (e.g., sqlx)
+        //
+        // TODO: (CATALOG-003) Implement actual database connection and query
         //
         // Example query:
         // SELECT
@@ -368,9 +376,21 @@ impl Catalog for LivePostgreSQLCatalog {
     ///
     /// Returns a list of built-in PostgreSQL functions.
     async fn list_functions(&self) -> CatalogResult<Vec<FunctionMetadata>> {
-        // Return a static list of common PostgreSQL functions
-        // In a full implementation, this could be queried from pg_catalog.pg_proc
-        // or pg_catalog.pg_function
+        // HACK: Static list of functions instead of querying from database
+        // This is a workaround to avoid database driver dependency
+        //
+        // TODO: (CATALOG-003) Query from pg_catalog.pg_proc for complete function list
+        // or maintain as comprehensive static list if dynamic querying is too expensive
+        //
+        // Example query:
+        // SELECT
+        //     p.proname as function_name,
+        //     pg_get_function_result(p.oid) as return_type,
+        //     pg_get_function_arguments(p.oid) as arguments,
+        //     p.prokind as function_kind
+        // FROM pg_catalog.pg_proc p
+        // JOIN pg_catalog.pg_namespace n ON p.pronamespace = n.oid
+        // WHERE n.nspname NOT IN ('pg_catalog', 'information_schema')
 
         Ok(vec![
             // Aggregate functions

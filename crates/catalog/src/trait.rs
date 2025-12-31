@@ -18,7 +18,8 @@ use crate::metadata::{ColumnMetadata, FunctionMetadata, TableMetadata};
 /// # Examples
 ///
 /// ```rust,ignore
-/// // TODO: Implement actual catalog to make this example testable
+/// // TODO: (CATALOG-001) Implement actual catalog to make this example testable
+/// // This example requires a working catalog implementation
 /// use unified_sql_lsp_catalog::{Catalog, CatalogError};
 ///
 /// async fn list_user_tables(catalog: &impl Catalog) -> Result<Vec<String>, CatalogError> {
@@ -48,7 +49,7 @@ pub trait Catalog: Send + Sync {
     /// # Examples
     ///
     /// ```rust,ignore
-    /// // TODO: Implement actual catalog to make this example testable
+    /// // TODO: (CATALOG-001) Implement actual catalog to make this example testable
     /// let tables = catalog.list_tables().await?;
     /// for table in tables {
     ///     println!("{}.{}", table.schema, table.name);
@@ -74,7 +75,7 @@ pub trait Catalog: Send + Sync {
     /// # Examples
     ///
     /// ```rust,ignore
-    /// // TODO: Implement actual catalog to make this example testable
+    /// // TODO: (CATALOG-001) Implement actual catalog to make this example testable
     /// let columns = catalog.get_columns("users").await?;
     /// for column in columns {
     ///     println!("{}: {:?}", column.name, column.data_type);
@@ -99,7 +100,7 @@ pub trait Catalog: Send + Sync {
     /// # Examples
     ///
     /// ```rust,ignore
-    /// // TODO: Implement actual catalog to make this example testable
+    /// // TODO: (CATALOG-001) Implement actual catalog to make this example testable
     /// let functions = catalog.list_functions().await?;
     /// let aggregate_funcs: Vec<_> = functions.into_iter()
     ///     .filter(|f| matches!(f.function_type, FunctionType::Aggregate))

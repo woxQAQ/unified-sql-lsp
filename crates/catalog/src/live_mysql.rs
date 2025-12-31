@@ -255,14 +255,16 @@ impl Catalog for LiveMySQLCatalog {
     ///
     /// Queries information_schema.tables to get all tables, views, and materialized views.
     async fn list_tables(&self) -> CatalogResult<Vec<TableMetadata>> {
-        // Note: This is a placeholder implementation.
+        // HACK: Placeholder implementation - returns error instead of actual data
+        // This is a workaround to avoid adding MySQL driver dependency (e.g., mysql_async or sqlx)
+        // which would significantly increase binary size and complexity
+        //
+        // TODO: (CATALOG-002) Implement actual database connection and query
         // In a real implementation, you would:
-        // 1. Establish a connection to the database
-        // 2. Query information_schema.tables
-        // 3. Parse the results into TableMetadata
-
-        // TODO: Implement actual database connection and query
-        // This requires adding a MySQL driver dependency (e.g., mysql_async or sqlx)
+        // 1. Add mysql_async or sqlx dependency
+        // 2. Establish connection pool
+        // 3. Query information_schema.tables
+        // 4. Parse results into TableMetadata
         //
         // Example query:
         // SELECT
@@ -283,7 +285,10 @@ impl Catalog for LiveMySQLCatalog {
     ///
     /// Queries information_schema.columns to get column information.
     async fn get_columns(&self, _table: &str) -> CatalogResult<Vec<ColumnMetadata>> {
-        // TODO: Implement actual database connection and query
+        // HACK: Placeholder implementation - returns error instead of actual data
+        // This is a workaround to avoid adding MySQL driver dependency
+        //
+        // TODO: (CATALOG-002) Implement actual database connection and query
         //
         // Example query:
         // SELECT
@@ -306,9 +311,20 @@ impl Catalog for LiveMySQLCatalog {
     ///
     /// Returns a list of built-in MySQL functions.
     async fn list_functions(&self) -> CatalogResult<Vec<FunctionMetadata>> {
-        // Return a static list of common MySQL functions
-        // In a full implementation, this could be queried from mysql.proc
-        // or maintained as a comprehensive static list
+        // HACK: Static list of functions instead of querying from database
+        // This is a workaround to avoid database driver dependency
+        //
+        // TODO: (CATALOG-002) Query from mysql.proc for complete function list
+        // or maintain as comprehensive static list if dynamic querying is too expensive
+        //
+        // Example query (MySQL 5.x):
+        // SELECT
+        //     name,
+        //     db,
+        //     param_list,
+        //     returns
+        // FROM mysql.proc
+        // WHERE db = DATABASE()
 
         Ok(vec![
             // Aggregate functions

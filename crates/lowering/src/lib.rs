@@ -35,6 +35,7 @@
 //! ## Usage
 //!
 //! ```rust,ignore
+//! // TODO: (LOWERING-002, LOWERING-003) Implement actual lowering examples when dialect implementations are ready
 //! use unified_sql_lsp_lowering::{Lowering, LoweringContext, LoweringResult};
 //! use unified_sql_lsp_ir::{Query, Dialect};
 //!
@@ -97,6 +98,7 @@ use unified_sql_lsp_ir::{Dialect, Expr, Query};
 /// # Example
 ///
 /// ```rust,ignore
+/// // TODO: (LOWERING-002, LOWERING-003) Implement actual MySQL/PostgreSQL lowering implementations
 /// use unified_sql_lsp_lowering::{Lowering, LoweringContext, LoweringResult};
 /// use unified_sql_lsp_ir::{Query, Dialect};
 ///
