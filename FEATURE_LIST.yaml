@@ -270,6 +270,7 @@ meta:
     - 文档管理（多连接支持）
     - 引擎配置管理
   priority: P0
+  status: done
   dependencies: []
   deliverables:
     - crates/lsp/src/backend.rs
