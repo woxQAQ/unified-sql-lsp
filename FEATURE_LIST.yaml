@@ -85,6 +85,7 @@ meta:
     - 错误处理策略 (Success/Partial/Failed)
     - 降级补全机制
   priority: P0
+  status: done
   dependencies: ["IR-001"]
   deliverables:
     - crates/lowering/src/lib.rs
