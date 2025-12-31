@@ -25,11 +25,15 @@ meta:
     - 实现方言继承机制
     - 配置化方言支持（DIALECT=xxx tree-sitter generate）
   priority: P0
+  status: done
   dependencies: []
   deliverables:
     - tree-sitter-unified-sql/grammar.js
     - tree-sitter-unified-sql/dialect/base.js
+    - tree-sitter-unified-sql/dialect/mysql.js
+    - tree-sitter-unified-sql/dialect/postgresql.js
     - 构建脚本和配置
+    - 单元测试
 
 - id: GRAMMAR-002
   name: "MySQL 方言 Grammar 实现"

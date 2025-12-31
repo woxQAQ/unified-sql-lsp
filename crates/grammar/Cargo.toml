@@ -1,0 +1,17 @@
+[package]
+name = "unified-sql-grammar"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Multi-dialect SQL grammar for tree-sitter supporting MySQL, PostgreSQL, and more"
+
+[build-dependencies]
+cc = "1.0"
+
+# The grammar files are at src/grammar/
+# Build script will compile them using tree-sitter-cli
+
+[dev-dependencies]
+tree-sitter = "0.20"

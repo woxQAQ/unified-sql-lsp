@@ -1,0 +1,367 @@
+==========================================
+Basic SELECT statements
+==========================================
+
+SELECT * FROM users
+---
+
+(source_file
+  (statement
+    (select_statement
+      (SELECT)
+      (projection
+        (literal))
+      (from_clause
+        (FROM)
+        (table_reference
+          (table_name))))))
+
+==========================================
+
+SELECT id, name, email FROM users
+---
+
+(source_file
+  (statement
+    (select_statement
+      (SELECT)
+      (projection
+        (expression
+          (column_reference
+            (column_name)))
+        (expression
+          (column_reference
+            (column_name)))
+        (expression
+          (column_reference
+            (column_name))))
+      (from_clause
+        (FROM)
+        (table_reference
+          (table_name))))))
+
+==========================================
+
+SELECT u.id, u.name FROM users u
+---
+
+(source_file
+  (statement
+    (select_statement
+      (SELECT)
+      (projection
+        (expression
+          (column_reference
+            (table_name)
+            (column_name)))
+        (expression
+          (column_reference
+            (table_name)
+            (column_name))))
+      (from_clause
+        (FROM)
+        (table_reference
+          (table_name)
+          (alias))))))
+
+==========================================
+SELECT with WHERE clause
+==========================================
+
+SELECT * FROM users WHERE id = 1
+---
+
+(source_file
+  (statement
+    (select_statement
+      (SELECT)
+      (projection
+        (literal))
+      (from_clause
+        (FROM)
+        (table_reference
+          (table_name)))
+      (where_clause
+        (WHERE)
+        (expression
+          (binary_expression
+            left: (column_reference
+              (column_name))
+            operator: (("="))
+            right: (literal)))))))
+
+==========================================
+
+SELECT * FROM users WHERE age > 18 AND status = 'active'
+---
+
+(source_file
+  (statement
+    (select_statement
+      (SELECT)
+      (projection
+        (literal))
+      (from_clause
+        (FROM)
+        (table_reference
+          (table_name)))
+      (where_clause
+        (WHERE)
+        (expression
+          (binary_expression
+            left: (binary_expression
+              left: (column_reference
+                (column_name))
+              operator: ((">"))
+              right: (literal))
+            operator: (("AND"))
+            right: (binary_expression
+              left: (column_reference
+                (column_name))
+              operator: (("="))
+              right: (literal))))))))
+
+==========================================
+INSERT statements
+==========================================
+
+INSERT INTO users (name, email) VALUES ('John', 'john@example.com')
+---
+
+(source_file
+  (statement
+    (insert_statement
+      (INSERT)
+      (INTO)
+      (table_name)
+      (column_list
+        (column_name)
+        (column_name))
+      (VALUES)
+      (value_list
+        (expression
+          (literal))
+        (expression
+          (literal))))))
+
+==========================================
+UPDATE statements
+==========================================
+
+UPDATE users SET name = 'Jane', email = 'jane@example.com' WHERE id = 1
+---
+
+(source_file
+  (statement
+    (update_statement
+      (UPDATE)
+      (table_name)
+      (SET)
+      (assignment
+        (column_name)
+        (literal))
+      (assignment
+        (column_name)
+        (literal))
+      (where_clause
+        (WHERE)
+        (expression
+          (binary_expression
+            left: (column_reference
+              (column_name))
+            operator: (("="))
+            right: (literal)))))))
+
+==========================================
+DELETE statements
+==========================================
+
+DELETE FROM users WHERE id = 1
+---
+
+(source_file
+  (statement
+    (delete_statement
+      (DELETE)
+      (FROM)
+      (table_name)
+      (where_clause
+        (WHERE)
+        (expression
+          (binary_expression
+            left: (column_reference
+              (column_name))
+            operator: (("="))
+            right: (literal)))))))
+
+==========================================
+JOIN statements
+==========================================
+
+SELECT * FROM users INNER JOIN orders ON users.id = orders.user_id
+---
+
+(source_file
+  (statement
+    (select_statement
+      (SELECT)
+      (projection
+        (literal))
+      (from_clause
+        (FROM)
+        (table_reference
+          (join_clause
+            (join_type
+              (INNER))
+            (JOIN)
+            (table_name)
+            (ON)
+            (expression
+              (binary_expression
+                left: (column_reference
+                  (table_name)
+                  (column_name))
+                operator: (("="))
+                right: (column_reference
+                  (table_name)
+                  (column_name))))))))))
+
+==========================================
+Function calls
+==========================================
+
+SELECT COUNT(*) FROM users
+---
+
+(source_file
+  (statement
+    (select_statement
+      (SELECT)
+      (projection
+        (expression
+          (function_call
+            (function_name)
+            (literal))))
+      (from_clause
+        (FROM)
+        (table_reference
+          (table_name))))))
+
+==========================================
+
+SELECT UPPER(name) FROM users
+---
+
+(source_file
+  (statement
+    (select_statement
+      (SELECT)
+      (projection
+        (expression
+          (function_call
+            (function_name)
+            (expression
+              (column_reference
+                (column_name))))))
+      (from_clause
+        (FROM)
+        (table_reference
+          (table_name))))))
+
+==========================================
+ORDER BY and LIMIT
+==========================================
+
+SELECT * FROM users ORDER BY name DESC LIMIT 10
+---
+
+(source_file
+  (statement
+    (select_statement
+      (SELECT)
+      (projection
+        (literal))
+      (from_clause
+        (FROM)
+        (table_reference
+          (table_name)))
+      (order_by_clause
+        (ORDER)
+        (BY)
+        (order_by_element
+          (expression
+            (column_reference
+              (column_name)))
+          (DESC)))
+      (limit_clause
+        (LIMIT)
+        (expression
+          (literal))))))
+
+==========================================
+Comments
+==========================================
+
+-- This is a comment
+SELECT * FROM users
+---
+
+(source_file
+  (statement
+    (comment)
+    (select_statement
+      (SELECT)
+      (projection
+        (literal))
+      (from_clause
+        (FROM)
+        (table_reference
+          (table_name))))))
+
+==========================================
+
+/* Multi-line
+   comment */
+SELECT * FROM users
+---
+
+(source_file
+  (statement
+    (comment)
+    (select_statement
+      (SELECT)
+      (projection
+        (literal))
+      (from_clause
+        (FROM)
+        (table_reference
+          (table_name))))))
+
+==========================================
+Multiple statements
+==========================================
+
+SELECT * FROM users;
+SELECT * FROM orders;
+---
+
+(source_file
+  (statement
+    (select_statement
+      (SELECT)
+      (projection
+        (literal))
+      (from_clause
+        (FROM)
+        (table_reference
+          (table_name)))))
+  (statement
+    (select_statement
+      (SELECT)
+      (projection
+        (literal))
+      (from_clause
+        (FROM)
+        (table_reference
+          (table_name))))))
+
