@@ -9,8 +9,9 @@
 
 meta:
   version: "1.0"
-  last_updated: "2025-12-31"
+  last_updated: "2026-01-01"
   total_features: 42
+  completed_features: 10
 
 # =============================================================================
 # 阶段 0: 基础设施 (Foundation)
@@ -43,6 +44,7 @@ meta:
     - LIMIT/OFFSET 语法
     - 基础关键字和函数
   priority: P0
+  status: done
   dependencies: ["GRAMMAR-001"]
   deliverables:
     - dialect/mysql.js
@@ -59,6 +61,7 @@ meta:
     - LATERAL JOIN
     - DISTINCT ON
   priority: P0
+  status: done
   dependencies: ["GRAMMAR-001"]
   deliverables:
     - dialect/postgresql.js
@@ -137,6 +140,7 @@ meta:
     - 符号表
   priority: P0
   dependencies: ["IR-001"]
+  status: done
   deliverables:
     - crates/semantic/src/scope.rs
     - crates/semantic/src/symbol.rs
