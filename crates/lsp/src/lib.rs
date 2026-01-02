@@ -167,13 +167,17 @@
 pub mod backend;
 pub mod config;
 pub mod document;
+pub mod parsing;
+pub mod sync;
 
 // Re-exports for convenience
 pub use backend::{LspBackend, LspError};
 pub use config::{
     ConfigError, ConnectionPoolConfig, DialectVersion, EngineConfig, SchemaFilter,
 };
-pub use document::{Document, DocumentError, DocumentMetadata, DocumentStore};
+pub use document::{Document, DocumentError, DocumentMetadata, DocumentStore, ParseMetadata};
+pub use parsing::{ParseError, ParseResult, ParserManager};
+pub use sync::DocumentSync;
 
 /// Version information
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");

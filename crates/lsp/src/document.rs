@@ -48,8 +48,31 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 use ropey::Rope;
-use tokio::sync::RwLock;
+use tokio::sync::{Mutex, RwLock};
 use tower_lsp::lsp_types::{Url, TextDocumentContentChangeEvent, VersionedTextDocumentIdentifier};
+
+/// Parse metadata
+///
+/// Contains information about a document parsing operation.
+/// This type is defined in the document module and used by both
+/// document and sync modules to track parse results.
+#[derive(Debug, Clone)]
+pub struct ParseMetadata {
+    /// When the document was parsed
+    pub parsed_at: std::time::SystemTime,
+
+    /// Time taken to parse (milliseconds)
+    pub parse_time_ms: u64,
+
+    /// SQL dialect used for parsing
+    pub dialect: unified_sql_lsp_ir::Dialect,
+
+    /// Whether the parse had errors
+    pub has_errors: bool,
+
+    /// Number of parse errors
+    pub error_count: usize,
+}
 
 /// Document metadata
 ///
@@ -93,6 +116,15 @@ pub struct Document {
 
     /// Document content as a rope for efficient editing
     content: Rope,
+
+    /// Parsed syntax tree (if available)
+    tree: Option<Arc<Mutex<tree_sitter::Tree>>>,
+
+    /// Parse metadata (if parsing has occurred)
+    parse_metadata: Option<Arc<ParseMetadata>>,
+
+    /// Previous content (for computing incremental edits)
+    previous_content: Option<Rope>,
 }
 
 impl Document {
@@ -106,6 +138,9 @@ impl Document {
         Self {
             metadata,
             content: rope,
+            tree: None,
+            parse_metadata: None,
+            previous_content: None,
         }
     }
 
@@ -274,6 +309,38 @@ impl Document {
     pub fn metadata(&self) -> &DocumentMetadata {
         &self.metadata
     }
+
+    /// Get the parsed tree (if available)
+    pub fn tree(&self) -> Option<Arc<Mutex<tree_sitter::Tree>>> {
+        self.tree.clone()
+    }
+
+    /// Update the parsed tree
+    pub fn set_tree(&mut self, tree: tree_sitter::Tree, metadata: ParseMetadata) {
+        self.tree = Some(Arc::new(Mutex::new(tree)));
+        self.parse_metadata = Some(Arc::new(metadata));
+    }
+
+    /// Clear the parsed tree
+    pub fn clear_tree(&mut self) {
+        self.tree = None;
+        self.parse_metadata = None;
+    }
+
+    /// Get parse metadata
+    pub fn parse_metadata(&self) -> Option<&ParseMetadata> {
+        self.parse_metadata.as_deref()
+    }
+
+    /// Get previous content (for incremental edits)
+    pub fn previous_content(&self) -> Option<&Rope> {
+        self.previous_content.as_ref()
+    }
+
+    /// Store current content as previous content
+    pub fn store_previous_content(&mut self) {
+        self.previous_content = Some(self.content.clone());
+    }
 }
 
 /// Document store for managing multiple documents
@@ -393,6 +460,41 @@ impl DocumentStore {
     pub async fn document_count(&self) -> usize {
         let docs = self.documents.read().await;
         docs.len()
+    }
+
+    /// Update document's parsed tree
+    ///
+    /// # Arguments
+    ///
+    /// - `uri`: Document URI
+    /// - `tree`: Parsed syntax tree
+    /// - `metadata`: Parse metadata
+    pub async fn update_document_tree(
+        &self,
+        uri: &Url,
+        tree: tree_sitter::Tree,
+        metadata: ParseMetadata,
+    ) -> Result<(), DocumentError> {
+        let mut docs = self.documents.write().await;
+        let doc = docs
+            .get_mut(uri)
+            .ok_or_else(|| DocumentError::DocumentNotFound(uri.clone()))?;
+        doc.set_tree(tree, metadata);
+        Ok(())
+    }
+
+    /// Clear document's parsed tree
+    ///
+    /// # Arguments
+    ///
+    /// - `uri`: Document URI
+    pub async fn clear_document_tree(&self, uri: &Url) -> Result<(), DocumentError> {
+        let mut docs = self.documents.write().await;
+        let doc = docs
+            .get_mut(uri)
+            .ok_or_else(|| DocumentError::DocumentNotFound(uri.clone()))?;
+        doc.clear_tree();
+        Ok(())
     }
 }
 

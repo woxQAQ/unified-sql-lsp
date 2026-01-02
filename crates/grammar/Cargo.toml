@@ -10,6 +10,10 @@ description = "Multi-dialect SQL grammar for tree-sitter supporting MySQL, Postg
 [build-dependencies]
 cc = "1.0"
 
+[dependencies]
+tree-sitter = "0.20"
+unified-sql-lsp-ir = { path = "../ir" }
+
 # The grammar files are at src/grammar/
 # Build script will compile them using tree-sitter-cli
 

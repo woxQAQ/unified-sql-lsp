@@ -9,9 +9,9 @@
 
 meta:
   version: "1.0"
-  last_updated: "2026-01-01"
+  last_updated: "2026-01-02"
   total_features: 42
-  completed_features: 10
+  completed_features: 11
 
 # =============================================================================
 # 阶段 0: 基础设施 (Foundation)
@@ -290,9 +290,11 @@ meta:
     - Tree-sitter 增量解析
     - 粗粒度缓存失效
   priority: P0
+  status: done
   dependencies: ["LSP-001", "GRAMMAR-002", "GRAMMAR-003"]
   deliverables:
     - crates/lsp/src/sync.rs
+    - crates/lsp/src/parsing.rs
     - 增量解析测试
 
 - id: LSP-003

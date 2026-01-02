@@ -32,6 +32,10 @@ ropey = "1.6"
 unified-sql-lsp-ir = { path = "../ir" }
 unified-sql-lsp-catalog = { path = "../catalog" }
 unified-sql-lsp-lowering = { path = "../lowering" }
+unified-sql-grammar = { path = "../grammar" }
+
+# Tree-sitter parsing
+tree-sitter = "0.20"
 
 [dev-dependencies]
 tokio-test = "0.4"

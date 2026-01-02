@@ -15,8 +15,9 @@ fn main() {
     for dialect in dialects {
         println!("cargo:warning=Building grammar for dialect: {}", dialect);
 
-        // Set DIALECT environment variable
-        env::set_var("DIALECT", dialect);
+        // Set DIALECT environment variable for tree-sitter
+        // Safe in build scripts: single-threaded, controlled execution
+        unsafe { env::set_var("DIALECT", dialect); }
 
         // Run tree-sitter generate
         let status = Command::new("tree-sitter")
@@ -52,7 +53,7 @@ fn main() {
             cc::Build::new()
                 .file(&dest_path)
                 .include(grammar_dir.join("src"))
-                .compile(format!("parser-{}", dialect));
+                .compile(&format!("parser-{}", dialect));
 
             println!("cargo:warning=Compiled {} parser", dialect);
         } else {

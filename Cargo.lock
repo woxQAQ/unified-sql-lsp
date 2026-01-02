@@ -904,6 +904,7 @@ version = "0.1.0"
 dependencies = [
  "cc",
  "tree-sitter 0.20.10",
+ "unified-sql-lsp-ir",
 ]
 
 [[package]]
@@ -951,6 +952,8 @@ dependencies = [
  "tower-lsp",
  "tracing",
  "tracing-subscriber",
+ "tree-sitter 0.20.10",
+ "unified-sql-grammar",
  "unified-sql-lsp-catalog",
  "unified-sql-lsp-ir",
  "unified-sql-lsp-lowering",

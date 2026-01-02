@@ -53,7 +53,8 @@
 //! ```
 
 use crate::config::EngineConfig;
-use crate::document::{DocumentError, DocumentStore};
+use crate::document::{DocumentError, DocumentStore, ParseMetadata};
+use crate::sync::DocumentSync;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use tower_lsp::jsonrpc::Result;
@@ -75,6 +76,9 @@ pub struct LspBackend {
 
     /// Engine configuration
     config: Arc<RwLock<Option<EngineConfig>>>,
+
+    /// Document synchronization and parsing manager
+    doc_sync: Arc<DocumentSync>,
 }
 
 impl LspBackend {
@@ -84,10 +88,14 @@ impl LspBackend {
     ///
     /// - `client`: LSP client handle
     pub fn new(client: Client) -> Self {
+        let config = Arc::new(RwLock::new(None));
+        let doc_sync = Arc::new(DocumentSync::new(config.clone()));
+
         Self {
             client,
             documents: Arc::new(DocumentStore::new()),
-            config: Arc::new(RwLock::new(None)),
+            config,
+            doc_sync,
         }
     }
 
@@ -272,7 +280,40 @@ impl LanguageServer for LspBackend {
                 )
                 .await;
 
-                // TODO: (DIAG-001, LSP-002) Trigger parsing and diagnostics
+                // Trigger parsing
+                if let Some(document) = self.documents.get_document(&uri).await {
+                    match self.doc_sync.on_document_open(&document) {
+                        crate::parsing::ParseResult::Success { tree, parse_time } => {
+                            info!("Document parsed successfully in {:?}", parse_time);
+                            let metadata = ParseMetadata::new(
+                                parse_time.as_millis() as u64,
+                                self.doc_sync.resolve_dialect(&document),
+                                false,
+                                0,
+                            );
+                            if let Err(e) = self.documents.update_document_tree(&uri, tree, metadata).await {
+                                error!("Failed to update document tree: {}", e);
+                            }
+                        }
+                        crate::parsing::ParseResult::Partial { tree, errors } => {
+                            warn!("Document parsed with {} errors", errors.len());
+                            let metadata = ParseMetadata::new(
+                                0, // parse_time not available in Partial
+                                self.doc_sync.resolve_dialect(&document),
+                                true,
+                                errors.len(),
+                            );
+                            if let Err(e) = self.documents.update_document_tree(&uri, tree, metadata).await {
+                                error!("Failed to update document tree: {}", e);
+                            }
+                            // TODO: (DIAG-002) Publish diagnostics
+                        }
+                        crate::parsing::ParseResult::Failed { error } => {
+                            error!("Failed to parse document: {}", error);
+                            // Document remains usable, just without tree
+                        }
+                    }
+                }
             }
             Err(e) => {
                 error!("Failed to open document: {}", e);
@@ -300,11 +341,56 @@ impl LanguageServer for LspBackend {
             changes.len()
         );
 
+        // Get old tree before update
+        let old_document = self.documents.get_document(&uri).await;
+        let old_tree: Option<tree_sitter::Tree> = old_document
+            .as_ref()
+            .and_then(|d| {
+                d.tree().as_ref().and_then(|arc_mutex| {
+                    // Try to lock and clone the tree
+                    arc_mutex.try_lock().ok().map(|guard| (*guard).clone())
+                })
+            });
+
         // Update document in store
         match self.documents.update_document(&identifier, &changes).await {
             Ok(()) => {
-                // TODO: (LSP-002) Incremental parsing and cache invalidation
-                // TODO: (DIAG-001) Re-run diagnostics
+                // Trigger re-parsing
+                if let Some(document) = self.documents.get_document(&uri).await {
+                    match self.doc_sync.on_document_change(&document, old_tree.as_ref(), &changes) {
+                        crate::parsing::ParseResult::Success { tree, parse_time } => {
+                            info!("Document reparsed in {:?}", parse_time);
+                            let metadata = ParseMetadata::new(
+                                parse_time.as_millis() as u64,
+                                self.doc_sync.resolve_dialect(&document),
+                                false,
+                                0,
+                            );
+                            if let Err(e) = self.documents.update_document_tree(&uri, tree, metadata).await {
+                                error!("Failed to update document tree: {}", e);
+                            }
+                        }
+                        crate::parsing::ParseResult::Partial { tree, errors } => {
+                            warn!("Document reparsed with {} errors", errors.len());
+                            let metadata = ParseMetadata::new(
+                                0,
+                                self.doc_sync.resolve_dialect(&document),
+                                true,
+                                errors.len(),
+                            );
+                            if let Err(e) = self.documents.update_document_tree(&uri, tree, metadata).await {
+                                error!("Failed to update document tree: {}", e);
+                            }
+                            // TODO: (DIAG-002) Publish diagnostics
+                        }
+                        crate::parsing::ParseResult::Failed { error } => {
+                            error!("Failed to reparse document: {}", error);
+                            if let Err(e) = self.documents.clear_document_tree(&uri).await {
+                                error!("Failed to clear document tree: {}", e);
+                            }
+                        }
+                    }
+                }
             }
             Err(DocumentError::DocumentNotFound(uri)) => {
                 warn!("Document not found for change: {}", uri);
@@ -330,13 +416,14 @@ impl LanguageServer for LspBackend {
 
         // Remove from document store
         if self.documents.close_document(&uri).await {
+            // Clear parse data
+            self.doc_sync.on_document_close(&uri);
+
             self.log_message(
                 &format!("Document closed: {}", uri),
                 MessageType::INFO,
             )
             .await;
-
-            // TODO: (LSP-002) Clear document cache
         } else {
             warn!("Document not found for close: {}", uri);
         }

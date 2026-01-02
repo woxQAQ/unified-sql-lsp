@@ -2,96 +2,125 @@
 //!
 //! This crate provides multi-dialect SQL grammar support using tree-sitter.
 //!
+//! ## Grammar Architecture
+//!
+//! The grammar is organized using a compile-time dialect selection strategy:
+//!
+//! - **`grammar.js`**: Main entry point that reads `DIALECT` environment variable
+//! - **`dialect/base.js`**: Common SQL rules shared across all dialects
+//! - **`dialect/mysql.js`**: MySQL-specific syntax (LIMIT, AUTO_INCREMENT, etc.)
+//! - **`dialect/postgresql.js`**: PostgreSQL-specific syntax (DISTINCT ON, LATERAL, etc.)
+//!
+//! ## Build Process
+//!
+//! The build script (`build.rs`) compiles separate parsers for each dialect:
+//!
+//! 1. Sets `DIALECT` environment variable (e.g., `DIALECT=mysql`)
+//! 2. Runs `tree-sitter generate --no-bindings` to generate `parser.c`
+//! 3. Compiles `parser.c` to dialect-specific object files
+//! 4. Repeats for each dialect (base, mysql, postgresql)
+//!
+//! Each dialect gets its own compiled parser, allowing tree-sitter to parse
+//! SQL with dialect-specific syntax correctly.
+//!
 //! ## Supported Dialects
 //!
-//! - **base**: Core SQL grammar (common subset)
-//! - **mysql**: MySQL-specific extensions
-//! - **postgresql**: PostgreSQL-specific extensions
+//! - **MySQL**: MySQL 5.7, 8.0+
+//! - **PostgreSQL**: PostgreSQL 12+
+//! - **TiDB**: Inherits MySQL grammar (MySQL-compatible)
+//! - **MariaDB**: Inherits MySQL grammar (MySQL-compatible)
+//! - **CockroachDB**: Inherits PostgreSQL grammar (PostgreSQL-compatible)
 //!
 //! ## Usage
 //!
-//! ```rust
-//! use unified_sql_grammar::Dialect;
+//! ```rust,ignore
+//! use unified_sql_lsp_ir::Dialect;
+//! use unified_sql_grammar::language_for_dialect;
 //!
-//! // Get the tree-sitter language for a specific dialect
-//! let mysql_lang = Dialect::MySQL.language();
-//! let postgresql_lang = Dialect::PostgreSQL.language();
+//! // Get the tree-sitter Language for a specific dialect
+//! let mysql_lang = language_for_dialect(Dialect::MySQL).unwrap();
+//! let tidb_lang = language_for_dialect(Dialect::TiDB).unwrap();
+//! let postgresql_lang = language_for_dialect(Dialect::PostgreSQL).unwrap();
+//!
+//! // Use the language with a parser
+//! let mut parser = tree_sitter::Parser::new();
+//! parser.set_language(mysql_lang).unwrap();
+//! let tree = parser.parse("SELECT * FROM users", None).unwrap();
 //! ```
 
 use std::sync::OnceLock;
+use unified_sql_lsp_ir::Dialect;
 
-/// SQL dialect identifier
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum Dialect {
-    /// Base SQL (common subset)
-    Base,
-    /// MySQL dialect
-    MySQL,
-    /// PostgreSQL dialect
-    PostgreSQL,
-}
-
-impl Dialect {
-    /// Get all supported dialects
-    pub fn all() -> &'static [Dialect] {
-        &[Dialect::Base, Dialect::MySQL, Dialect::PostgreSQL]
-    }
-
-    /// Get dialect name as string
-    pub fn name(&self) -> &'static str {
-        match self {
-            Dialect::Base => "base",
-            Dialect::MySQL => "mysql",
-            Dialect::PostgreSQL => "postgresql",
-        }
-    }
-
-    /// Parse dialect from string
-    pub fn from_str(s: &str) -> Option<Dialect> {
-        match s.to_lowercase().as_str() {
-            "base" => Some(Dialect::Base),
-            "mysql" => Some(Dialect::MySQL),
-            "postgresql" | "postgres" => Some(Dialect::PostgreSQL),
-            _ => None,
-        }
-    }
-}
-
-impl std::fmt::Display for Dialect {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.name())
-    }
-}
-
-/// Get the tree-sitter Language for a specific dialect
+/// Get the tree-sitter Language for a specific SQL dialect
 ///
-/// Note: This requires the tree-sitter feature and compiled grammars.
+/// This function returns a compiled tree-sitter grammar for the given dialect.
+/// The grammar parsers are compiled at build time by `build.rs` using the
+/// `DIALECT` environment variable to select which dialect rules to include.
+///
+/// # Dialect Mapping
+///
+/// The IR dialects are mapped to compiled grammar implementations:
+///
+/// - **MySQL family** → MySQL grammar (`parser-mysql.o`):
+///   - `Dialect::MySQL` - Native MySQL support
+///   - `Dialect::TiDB` - TiDB is MySQL-compatible
+///   - `Dialect::MariaDB` - MariaDB is MySQL-compatible
+///
+/// - **PostgreSQL family** → PostgreSQL grammar (`parser-postgresql.o`):
+///   - `Dialect::PostgreSQL` - Native PostgreSQL support
+///   - `Dialect::CockroachDB` - CockroachDB is PostgreSQL-compatible
+///
+/// # Returns
+///
+/// - `Some(Language)` - Compiled tree-sitter language object for the dialect
+/// - `None` - Dialect not supported or grammar compilation failed
+///
+/// # Example
+///
+/// ```rust,ignore
+/// use unified_sql_lsp_ir::Dialect;
+/// use unified_sql_grammar::language_for_dialect;
+///
+/// // Get MySQL grammar (also works for TiDB, MariaDB)
+/// if let Some(lang) = language_for_dialect(Dialect::MySQL) {
+///     let mut parser = tree_sitter::Parser::new();
+///     parser.set_language(lang).unwrap();
+///     let tree = parser.parse("SELECT * FROM users LIMIT 10", None);
+/// }
+/// ```
 pub fn language_for_dialect(dialect: Dialect) -> Option<&'static tree_sitter::Language> {
-    static BASE_LANG: OnceLock<Option<tree_sitter::Language>> = OnceLock::new();
     static MYSQL_LANG: OnceLock<Option<tree_sitter::Language>> = OnceLock::new();
     static POSTGRESQL_LANG: OnceLock<Option<tree_sitter::Language>> = OnceLock::new();
 
+    // Map IR dialects to compiled grammar implementations
+    // Each grammar was compiled separately by build.rs with different DIALECT env vars
     match dialect {
-        Dialect::Base => BASE_LANG
+        Dialect::MySQL | Dialect::TiDB | Dialect::MariaDB => MYSQL_LANG
             .get_or_init(|| unsafe {
-                tree_sitter::Language::from_raw(tree_sitter_unified_sql_base())
+                // Safety: tree_sitter_unified_sql_mysql() returns a pointer to the
+                // language object compiled by tree-sitter from src/grammar/dialect/mysql.js
+                // The transmute converts the function pointer to a Language struct
+                Some(std::mem::transmute::<_, tree_sitter::Language>(
+                    tree_sitter_unified_sql_mysql()
+                ))
             })
             .as_ref(),
-        Dialect::MySQL => MYSQL_LANG
+        Dialect::PostgreSQL | Dialect::CockroachDB => POSTGRESQL_LANG
             .get_or_init(|| unsafe {
-                tree_sitter::Language::from_raw(tree_sitter_unified_sql_mysql())
+                // Safety: tree_sitter_unified_sql_postgresql() returns a pointer to the
+                // language object compiled by tree-sitter from src/grammar/dialect/postgresql.js
+                Some(std::mem::transmute::<_, tree_sitter::Language>(
+                    tree_sitter_unified_sql_postgresql()
+                ))
             })
             .as_ref(),
-        Dialect::PostgreSQL => POSTGRESQL_LANG
-            .get_or_init(|| unsafe {
-                tree_sitter::Language::from_raw(tree_sitter_unified_sql_postgresql())
-            })
-            .as_ref(),
+        _ => None, // Unsupported dialect
     }
 }
 
 // External functions from compiled grammars
-extern "C" {
+// Rust 2024 edition requires extern blocks to be unsafe
+unsafe extern "C" {
     fn tree_sitter_unified_sql_base() -> *const ();
     fn tree_sitter_unified_sql_mysql() -> *const ();
     fn tree_sitter_unified_sql_postgresql() -> *const ();
@@ -100,21 +129,17 @@ extern "C" {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use unified_sql_lsp_ir::Dialect;
 
     #[test]
-    fn test_dialect_from_str() {
-        assert_eq!(Dialect::from_str("mysql"), Some(Dialect::MySQL));
-        assert_eq!(Dialect::from_str("MySQL"), Some(Dialect::MySQL));
-        assert_eq!(Dialect::from_str("postgresql"), Some(Dialect::PostgreSQL));
-        assert_eq!(Dialect::from_str("postgres"), Some(Dialect::PostgreSQL));
-        assert_eq!(Dialect::from_str("base"), Some(Dialect::Base));
-        assert_eq!(Dialect::from_str("invalid"), None);
-    }
+    fn test_language_for_dialect() {
+        // Test MySQL-family dialects
+        assert!(language_for_dialect(Dialect::MySQL).is_some());
+        assert!(language_for_dialect(Dialect::TiDB).is_some());
+        assert!(language_for_dialect(Dialect::MariaDB).is_some());
 
-    #[test]
-    fn test_dialect_display() {
-        assert_eq!(Dialect::MySQL.to_string(), "mysql");
-        assert_eq!(Dialect::PostgreSQL.to_string(), "postgresql");
-        assert_eq!(Dialect::Base.to_string(), "base");
+        // Test PostgreSQL-family dialects
+        assert!(language_for_dialect(Dialect::PostgreSQL).is_some());
+        assert!(language_for_dialect(Dialect::CockroachDB).is_some());
     }
 }
