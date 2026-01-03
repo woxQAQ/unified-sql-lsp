@@ -1,0 +1,19 @@
+[package]
+name = "unified-sql-lsp-test-utils"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Testing utilities for unified-sql-lsp"
+
+[dependencies]
+# Workspace dependencies
+unified-sql-lsp-catalog = { path = "../catalog" }
+unified-sql-lsp-ir = { path = "../ir" }
+unified-sql-lsp-lowering = { path = "../lowering" }
+
+async-trait = { workspace = true }
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }

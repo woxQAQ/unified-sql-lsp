@@ -17,6 +17,9 @@ pub mod expr;
 pub mod dialect;
 
 // Re-export commonly used types
-pub use query::{Query, SetOp, SelectStatement};
-pub use expr::{Expr, ColumnRef, Literal, BinaryOp};
+pub use query::{
+    Query, SetOp, SelectStatement, TableRef, Join, JoinType, JoinCondition,
+    SelectItem, OrderBy, CommonTableExpr, WindowDef,
+};
+pub use expr::{Expr, ColumnRef, Literal, BinaryOp, UnaryOp};
 pub use dialect::{Dialect, DialectExtensions};

@@ -29,6 +29,13 @@ cd crates/grammar/src/grammar
 DIALECT=mysql tree-sitter test
 ```
 
+**See `TESTING.md`** for comprehensive testing documentation including:
+- Running unit, integration, and grammar tests
+- Test organization and structure
+- Writing tests with mock utilities
+- Test utilities (MockCatalog, MockCstBuilder, SqlFixtures)
+- CI/CD automation and coverage reports
+
 ### Prerequisites
 
 - Rust 2024 edition
@@ -136,6 +143,7 @@ Different versions of the same dialect (e.g., MySQL 5.7 vs 8.0) may support diff
 
 ## References
 
+- `TESTING.md` - Comprehensive testing guide
 - `DESIGN.md` - Detailed architecture documentation (in Chinese)
 - `FEATURE_LIST.yaml` - Feature tracking and milestones
 - DerekStride/tree-sitter-sql - Primary reference for grammar design
