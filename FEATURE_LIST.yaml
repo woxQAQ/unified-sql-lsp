@@ -10,7 +10,7 @@
 meta:
   version: "1.0"
   last_updated: "2026-01-03"
-  total_features: 42
+  total_features: 46
   completed_features: 13
 
 # =============================================================================
@@ -130,6 +130,33 @@ meta:
     - 单元测试
     - 版本测试矩阵
     - Note: Fully implemented with PostgreSQL-specific syntax support (double-quote identifiers, dollar-quoted strings, LIMIT/OFFSET single form), graceful degradation for unsupported features (DISTINCT ON, RETURNING, LATERAL), and comprehensive unit tests
+
+- id: LOWERING-004
+  name: "ORDER BY Direction 解析"
+  description: |
+    实现 ORDER BY 方向解析
+    - 解析 ASC/DESC 关键字
+    - 将方向与 order_by 中的表达式关联
+    - 处理多个带有不同方向的排序表达式
+  priority: P1
+  dependencies: ["LOWERING-001"]
+  deliverables:
+    - ORDER BY 方向解析逻辑
+    - 测试用例
+
+- id: LOWERING-005
+  name: "CASE 表达式 Lowering"
+  description: |
+    实现 CASE 表达式 CST → IR 转换
+    - 解析 WHEN-THEN-ELSE 子句结构
+    - 支持简单 CASE 和搜索 CASE 两种形式
+    - 支持多个 WHEN 子句，保证正确的求值顺序
+    - 处理 ELSE 子句和 NULL 结果
+  priority: P1
+  dependencies: ["LOWERING-001"]
+  deliverables:
+    - CASE 表达式 lowering 逻辑
+    - 测试用例
 
 # =============================================================================
 # 阶段 1: 语义分析 (Semantic Analysis)
@@ -319,6 +346,33 @@ meta:
     - crates/lsp/src/completion.rs
     - 集成测试
     - E2E 测试
+
+- id: LSP-004
+  name: "Go-to-Definition 支持"
+  description: |
+    实现跳转到定义功能
+    - 跳转到表定义
+    - 跳转到列定义
+    - 支持跨文件跳转（如果表定义在其他文件）
+  priority: P2
+  dependencies: ["LSP-003", "SEMANTIC-004"]
+  deliverables:
+    - crates/lsp/src/definition.rs
+    - 测试用例
+
+- id: LSP-005
+  name: "Document Symbols 支持"
+  description: |
+    实现文档符号功能
+    - 显示查询中的表
+    - 显示列
+    - 显示表别名
+    - 支持大纲视图导航
+  priority: P2
+  dependencies: ["LSP-003", "SEMANTIC-002"]
+  deliverables:
+    - crates/lsp/src/symbols.rs
+    - 测试用例
 
 # =============================================================================
 # 阶段 4: Completion 功能完善
