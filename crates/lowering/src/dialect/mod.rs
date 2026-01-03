@@ -8,6 +8,8 @@
 pub mod base;
 
 pub mod mysql;
+pub mod postgresql;
 
 pub use base::DialectLoweringBase;
 pub use mysql::MySQLLowering;
+pub use postgresql::PostgreSQLLowering;

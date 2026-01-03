@@ -123,11 +123,13 @@ meta:
     - CTE 转换
     - LATERAL JOIN 转换
   priority: P0
+  status: done
   dependencies: ["LOWERING-001", "GRAMMAR-003"]
   deliverables:
     - crates/lowering/src/dialect/postgresql.rs
     - 单元测试
     - 版本测试矩阵
+    - Note: Fully implemented with PostgreSQL-specific syntax support (double-quote identifiers, dollar-quoted strings, LIMIT/OFFSET single form), graceful degradation for unsupported features (DISTINCT ON, RETURNING, LATERAL), and comprehensive unit tests
 
 # =============================================================================
 # 阶段 1: 语义分析 (Semantic Analysis)
