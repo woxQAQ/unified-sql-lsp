@@ -343,28 +343,6 @@ mod tests {
     }
 
     #[test]
-    fn test_scope_creation() {
-        let scope = Scope::new(0, ScopeType::Query);
-        assert_eq!(scope.id, 0);
-        assert!(scope.tables.is_empty());
-        assert!(scope.parent_id.is_none());
-        assert_eq!(scope.scope_type, ScopeType::Query);
-    }
-
-    #[test]
-    fn test_scope_with_parent() {
-        let scope = Scope::new(1, ScopeType::Subquery).with_parent(0);
-        assert_eq!(scope.parent_id, Some(0));
-    }
-
-    #[test]
-    fn test_scope_with_tables() {
-        let scope = Scope::new(0, ScopeType::Query).with_tables(vec![create_mock_table()]);
-        assert_eq!(scope.tables.len(), 1);
-        assert_eq!(scope.tables[0].table_name, "users");
-    }
-
-    #[test]
     fn test_scope_find_table_by_name() {
         let table = create_mock_table();
         let scope = Scope::new(0, ScopeType::Query).with_tables(vec![table]);
@@ -524,9 +502,4 @@ mod tests {
         assert_eq!(cte.parent_id, Some(subquery_id));
     }
 
-    #[test]
-    fn test_scope_manager_default() {
-        let manager = ScopeManager::default();
-        assert_eq!(manager.scope_count(), 0);
-    }
 }

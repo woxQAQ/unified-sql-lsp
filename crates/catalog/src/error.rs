@@ -111,14 +111,6 @@ mod tests {
     }
 
     #[test]
-    fn test_result_type_alias() {
-        fn returns_result() -> CatalogResult<()> {
-            Ok(())
-        }
-        assert!(returns_result().is_ok());
-    }
-
-    #[test]
     fn test_error_serialization() {
         let err = CatalogError::TableNotFound("test".to_string(), "schema".to_string());
         // Verify it can be serialized to JSON

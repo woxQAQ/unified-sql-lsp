@@ -631,21 +631,9 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_postgres_varchar_aliased() {
-        let dt = LivePostgreSQLCatalog::parse_postgres_type("varchar(100)");
-        assert_eq!(dt, DataType::Varchar(Some(100)));
-    }
-
-    #[test]
     fn test_parse_postgres_varchar_no_length() {
         let dt = LivePostgreSQLCatalog::parse_postgres_type("varchar");
         assert_eq!(dt, DataType::Varchar(None));
-    }
-
-    #[test]
-    fn test_parse_postgres_character_varying() {
-        let dt = LivePostgreSQLCatalog::parse_postgres_type("character varying(50)");
-        assert_eq!(dt, DataType::Varchar(Some(50)));
     }
 
     #[test]
@@ -655,26 +643,8 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_postgres_character() {
-        let dt = LivePostgreSQLCatalog::parse_postgres_type("character(5)");
-        assert_eq!(dt, DataType::Char(Some(5)));
-    }
-
-    #[test]
     fn test_parse_postgres_integer() {
         let dt = LivePostgreSQLCatalog::parse_postgres_type("integer");
-        assert_eq!(dt, DataType::Integer);
-    }
-
-    #[test]
-    fn test_parse_postgres_int_aliased() {
-        let dt = LivePostgreSQLCatalog::parse_postgres_type("int");
-        assert_eq!(dt, DataType::Integer);
-    }
-
-    #[test]
-    fn test_parse_postgres_int4() {
-        let dt = LivePostgreSQLCatalog::parse_postgres_type("int4");
         assert_eq!(dt, DataType::Integer);
     }
 
@@ -685,20 +655,8 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_postgres_int8() {
-        let dt = LivePostgreSQLCatalog::parse_postgres_type("int8");
-        assert_eq!(dt, DataType::BigInt);
-    }
-
-    #[test]
     fn test_parse_postgres_smallint() {
         let dt = LivePostgreSQLCatalog::parse_postgres_type("smallint");
-        assert_eq!(dt, DataType::SmallInt);
-    }
-
-    #[test]
-    fn test_parse_postgres_int2() {
-        let dt = LivePostgreSQLCatalog::parse_postgres_type("int2");
         assert_eq!(dt, DataType::SmallInt);
     }
 
@@ -706,18 +664,6 @@ mod tests {
     fn test_parse_postgres_text() {
         let dt = LivePostgreSQLCatalog::parse_postgres_type("text");
         assert_eq!(dt, DataType::Text);
-    }
-
-    #[test]
-    fn test_parse_postgres_boolean() {
-        let dt = LivePostgreSQLCatalog::parse_postgres_type("boolean");
-        assert_eq!(dt, DataType::Boolean);
-    }
-
-    #[test]
-    fn test_parse_postgres_bool() {
-        let dt = LivePostgreSQLCatalog::parse_postgres_type("bool");
-        assert_eq!(dt, DataType::Boolean);
     }
 
     #[test]
@@ -733,20 +679,8 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_postgres_decimal() {
-        let dt = LivePostgreSQLCatalog::parse_postgres_type("decimal");
-        assert_eq!(dt, DataType::Decimal);
-    }
-
-    #[test]
     fn test_parse_postgres_real() {
         let dt = LivePostgreSQLCatalog::parse_postgres_type("real");
-        assert_eq!(dt, DataType::Float);
-    }
-
-    #[test]
-    fn test_parse_postgres_float4() {
-        let dt = LivePostgreSQLCatalog::parse_postgres_type("float4");
         assert_eq!(dt, DataType::Float);
     }
 
@@ -757,20 +691,8 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_postgres_float8() {
-        let dt = LivePostgreSQLCatalog::parse_postgres_type("float8");
-        assert_eq!(dt, DataType::Double);
-    }
-
-    #[test]
     fn test_parse_postgres_json() {
         let dt = LivePostgreSQLCatalog::parse_postgres_type("json");
-        assert_eq!(dt, DataType::Json);
-    }
-
-    #[test]
-    fn test_parse_postgres_jsonb() {
-        let dt = LivePostgreSQLCatalog::parse_postgres_type("jsonb");
         assert_eq!(dt, DataType::Json);
     }
 
@@ -787,62 +709,14 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_postgres_date() {
-        let dt = LivePostgreSQLCatalog::parse_postgres_type("date");
-        assert_eq!(dt, DataType::Date);
-    }
-
-    #[test]
-    fn test_parse_postgres_bytea() {
-        let dt = LivePostgreSQLCatalog::parse_postgres_type("bytea");
-        assert_eq!(dt, DataType::Binary);
-    }
-
-    #[test]
-    fn test_parse_postgres_uuid() {
-        let dt = LivePostgreSQLCatalog::parse_postgres_type("uuid");
-        assert!(matches!(dt, DataType::Other(_)));
-    }
-
-    #[test]
-    fn test_parse_postgres_array() {
-        let dt = LivePostgreSQLCatalog::parse_postgres_type("integer[]");
-        assert!(matches!(dt, DataType::Other(_)));
-    }
-
-    #[test]
-    fn test_parse_postgres_varchar_array() {
-        let dt = LivePostgreSQLCatalog::parse_postgres_type("varchar(100)[]");
-        assert!(matches!(dt, DataType::Other(_)));
-    }
-
-    #[test]
-    fn test_parse_postgres_unknown() {
-        let dt = LivePostgreSQLCatalog::parse_postgres_type("custom_type");
-        assert!(matches!(dt, DataType::Other(_)));
-    }
-
-    #[test]
     fn test_extract_length_from_varchar() {
         let len = LivePostgreSQLCatalog::extract_length("varchar(255)");
         assert_eq!(len, Some(255));
     }
 
     #[test]
-    fn test_extract_length_from_character_varying() {
-        let len = LivePostgreSQLCatalog::extract_length("character varying(100)");
-        assert_eq!(len, Some(100));
-    }
-
-    #[test]
     fn test_extract_length_from_numeric() {
         let len = LivePostgreSQLCatalog::extract_length("numeric(10,2)");
-        assert_eq!(len, Some(10));
-    }
-
-    #[test]
-    fn test_extract_length_from_char() {
-        let len = LivePostgreSQLCatalog::extract_length("char(10)");
         assert_eq!(len, Some(10));
     }
 

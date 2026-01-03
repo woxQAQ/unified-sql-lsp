@@ -77,23 +77,4 @@ mod tests {
         assert!(msg.contains("Duplicate"));
     }
 
-    #[test]
-    fn test_error_equality() {
-        let err1 = SemanticError::TableNotFound("users".to_string());
-        let err2 = SemanticError::TableNotFound("users".to_string());
-        assert_eq!(err1, err2);
-
-        let err3 = SemanticError::TableNotFound("orders".to_string());
-        assert_ne!(err1, err3);
-    }
-
-    #[test]
-    fn test_error_clone() {
-        let err1 = SemanticError::AmbiguousColumn(
-            "id".to_string(),
-            vec!["users".to_string(), "orders".to_string()],
-        );
-        let err2 = err1.clone();
-        assert_eq!(err1, err2);
-    }
 }

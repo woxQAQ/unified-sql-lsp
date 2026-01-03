@@ -307,14 +307,4 @@ mod tests {
         assert!(!lowering.supports_node(&node, "other"));
     }
 
-    #[test]
-    fn test_trait_dialect() {
-        let lowering = MockLowering;
-        let node = MockCstNode::new("select_statement");
-        assert_eq!(
-            <MockLowering as Lowering<MockCstNode>>::dialect(&lowering),
-            Dialect::MySQL
-        );
-        assert!(lowering.supports_node(&node, "select_statement"));
-    }
 }

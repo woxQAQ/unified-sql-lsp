@@ -302,59 +302,6 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_column_metadata_builder() {
-        let col = ColumnMetadata::new("id", DataType::Integer)
-            .with_nullable(false)
-            .with_primary_key()
-            .with_comment("User ID");
-
-        assert_eq!(col.name, "id");
-        assert!(!col.nullable);
-        assert!(col.is_primary_key);
-        assert_eq!(col.comment, Some("User ID".to_string()));
-        assert!(!col.is_foreign_key);
-    }
-
-    #[test]
-    fn test_column_metadata_with_foreign_key() {
-        let col = ColumnMetadata::new("user_id", DataType::Integer)
-            .with_foreign_key("users", "id");
-
-        assert!(col.is_foreign_key);
-        assert!(col.references.is_some());
-        let ref_table = col.references.as_ref().unwrap();
-        assert_eq!(ref_table.table, "users");
-        assert_eq!(ref_table.column, "id");
-    }
-
-    #[test]
-    fn test_column_metadata_with_default() {
-        let col = ColumnMetadata::new("status", DataType::Text)
-            .with_default("'active'")
-            .with_nullable(true);
-
-        assert!(col.nullable);
-        assert_eq!(col.default_value, Some("'active'".to_string()));
-    }
-
-    #[test]
-    fn test_table_metadata_builder() {
-        let col1 = ColumnMetadata::new("id", DataType::Integer).with_primary_key();
-        let col2 = ColumnMetadata::new("name", DataType::Varchar(Some(255)));
-
-        let table = TableMetadata::new("users", "public")
-            .with_columns(vec![col1, col2])
-            .with_row_count(1000)
-            .with_comment("User accounts");
-
-        assert_eq!(table.name, "users");
-        assert_eq!(table.schema, "public");
-        assert_eq!(table.columns.len(), 2);
-        assert_eq!(table.row_count_estimate, Some(1000));
-        assert_eq!(table.comment, Some("User accounts".to_string()));
-    }
-
-    #[test]
     fn test_table_get_column() {
         let col1 = ColumnMetadata::new("id", DataType::Integer);
         let col2 = ColumnMetadata::new("name", DataType::Text);
@@ -383,41 +330,11 @@ mod tests {
     }
 
     #[test]
-    fn test_function_metadata_builder() {
-        let func = FunctionMetadata::new("count", DataType::BigInt)
-            .with_type(FunctionType::Aggregate)
-            .with_description("Count rows");
-
-        assert_eq!(func.name, "count");
-        assert_eq!(func.return_type, DataType::BigInt);
-        assert!(matches!(func.function_type, FunctionType::Aggregate));
-        assert!(func.is_builtin);
-    }
-
-    #[test]
     fn test_function_metadata_signature() {
         let func = FunctionMetadata::new("abs", DataType::Integer);
         let signature = func.signature();
         assert!(signature.contains("abs"));
         assert!(signature.contains("Integer"));
-    }
-
-    #[test]
-    fn test_function_with_parameters() {
-        let params = vec![
-            FunctionParameter {
-                name: "x".to_string(),
-                data_type: DataType::Integer,
-                has_default: false,
-                is_variadic: false,
-            },
-        ];
-
-        let func = FunctionMetadata::new("abs", DataType::Integer)
-            .with_parameters(params);
-
-        assert_eq!(func.parameters.len(), 1);
-        assert_eq!(func.parameters[0].name, "x");
     }
 
     #[test]

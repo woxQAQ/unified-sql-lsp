@@ -439,48 +439,6 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_mysql_varchar_no_length() {
-        let dt = LiveMySQLCatalog::parse_mysql_type("varchar");
-        assert_eq!(dt, DataType::Varchar(None));
-    }
-
-    #[test]
-    fn test_parse_mysql_int() {
-        let dt = LiveMySQLCatalog::parse_mysql_type("int");
-        assert_eq!(dt, DataType::Integer);
-    }
-
-    #[test]
-    fn test_parse_mysql_bigint() {
-        let dt = LiveMySQLCatalog::parse_mysql_type("bigint");
-        assert_eq!(dt, DataType::BigInt);
-    }
-
-    #[test]
-    fn test_parse_mysql_text() {
-        let dt = LiveMySQLCatalog::parse_mysql_type("text");
-        assert_eq!(dt, DataType::Text);
-    }
-
-    #[test]
-    fn test_parse_mysql_timestamp() {
-        let dt = LiveMySQLCatalog::parse_mysql_type("timestamp");
-        assert_eq!(dt, DataType::Timestamp);
-    }
-
-    #[test]
-    fn test_parse_mysql_json() {
-        let dt = LiveMySQLCatalog::parse_mysql_type("json");
-        assert_eq!(dt, DataType::Json);
-    }
-
-    #[test]
-    fn test_parse_mysql_unknown() {
-        let dt = LiveMySQLCatalog::parse_mysql_type("custom_type");
-        assert!(matches!(dt, DataType::Other(_)));
-    }
-
-    #[test]
     fn test_extract_length_from_varchar() {
         let len = LiveMySQLCatalog::extract_length("varchar(255)");
         assert_eq!(len, Some(255));

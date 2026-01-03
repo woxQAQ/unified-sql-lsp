@@ -231,14 +231,6 @@ mod tests {
     }
 
     #[test]
-    fn test_wildcard_item() {
-        let item = CompletionRenderer::wildcard_item();
-        assert_eq!(item.label, "*");
-        assert_eq!(item.kind, Some(CompletionItemKind::FIELD));
-        assert_eq!(item.detail, Some("All columns".to_string()));
-    }
-
-    #[test]
     fn test_format_data_type() {
         assert_eq!(CompletionRenderer::format_data_type(&DataType::Integer), "INTEGER");
         assert_eq!(

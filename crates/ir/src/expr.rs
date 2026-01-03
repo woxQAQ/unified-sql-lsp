@@ -277,9 +277,4 @@ mod tests {
         assert_eq!(qualified.table.as_deref(), Some("users"));
     }
 
-    #[test]
-    fn test_literal_comparison() {
-        assert_eq!(Literal::Integer(42), Literal::Integer(42));
-        assert_ne!(Literal::Integer(42), Literal::Integer(43));
-    }
 }

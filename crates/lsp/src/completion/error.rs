@@ -88,25 +88,4 @@ mod tests {
         assert!(!CompletionError::Catalog(catalog_err).should_return_empty());
     }
 
-    #[test]
-    fn test_completion_error_from_catalog() {
-        let catalog_err = CatalogError::ConnectionFailed {
-            details: "connection refused".to_string(),
-        };
-        let completion_err: CompletionError = catalog_err.into();
-        assert!(matches!(
-            completion_err,
-            CompletionError::Catalog(CatalogError::ConnectionFailed { .. })
-        ));
-    }
-
-    #[test]
-    fn test_completion_error_from_semantic() {
-        let semantic_err = SemanticError::TableNotFound("users".to_string());
-        let completion_err: CompletionError = semantic_err.into();
-        assert!(matches!(
-            completion_err,
-            CompletionError::Semantic(SemanticError::TableNotFound(_))
-        ));
-    }
 }

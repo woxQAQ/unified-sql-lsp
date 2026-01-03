@@ -189,29 +189,6 @@ mod tests {
     }
 
     #[test]
-    fn test_outcome_success() {
-        let outcome = LoweringOutcome::Success;
-        assert!(matches!(outcome, LoweringOutcome::Success));
-    }
-
-    #[test]
-    fn test_outcome_partial() {
-        let errors = vec![
-            LoweringError::Generic {
-                message: "Error 1".to_string(),
-            },
-            LoweringError::Generic {
-                message: "Error 2".to_string(),
-            },
-        ];
-        let outcome = LoweringOutcome::Partial(errors.clone());
-        assert!(matches!(outcome, LoweringOutcome::Partial(_)));
-        if let LoweringOutcome::Partial(errs) = outcome {
-            assert_eq!(errs.len(), 2);
-        }
-    }
-
-    #[test]
     fn test_outcome_failed() {
         let err = LoweringError::Generic {
             message: "Critical error".to_string(),

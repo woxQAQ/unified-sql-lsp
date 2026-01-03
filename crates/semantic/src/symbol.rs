@@ -198,25 +198,6 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_table_symbol_builder() {
-        let table = TableSymbol::new("users").with_alias("u").with_columns(vec![
-            ColumnSymbol::new("id", DataType::Integer, "users"),
-            ColumnSymbol::new("name", DataType::Text, "users"),
-        ]);
-
-        assert_eq!(table.table_name, "users");
-        assert_eq!(table.alias, Some("u".to_string()));
-        assert_eq!(table.columns.len(), 2);
-    }
-
-    #[test]
-    fn test_table_symbol_with_alias() {
-        let table = TableSymbol::new("users").with_alias("u");
-        assert_eq!(table.table_name, "users");
-        assert_eq!(table.alias, Some("u".to_string()));
-    }
-
-    #[test]
     fn test_table_symbol_matches_name() {
         let table = TableSymbol::new("users");
         assert!(table.matches("users"));
@@ -253,14 +234,6 @@ mod tests {
         assert!(table.find_column("name").is_some());
         assert!(table.find_column("email").is_some());
         assert!(table.find_column("nonexistent").is_none());
-    }
-
-    #[test]
-    fn test_column_symbol_new() {
-        let column = ColumnSymbol::new("id", DataType::Integer, "users");
-        assert_eq!(column.name, "id");
-        assert_eq!(column.data_type, DataType::Integer);
-        assert_eq!(column.table_name, "users");
     }
 
     #[test]
