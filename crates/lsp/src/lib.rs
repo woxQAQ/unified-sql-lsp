@@ -176,9 +176,7 @@ pub mod sync;
 pub use backend::{LspBackend, LspError};
 pub use catalog_manager::CatalogManager;
 pub use completion::CompletionEngine;
-pub use config::{
-    ConfigError, ConnectionPoolConfig, DialectVersion, EngineConfig, SchemaFilter,
-};
+pub use config::{ConfigError, ConnectionPoolConfig, DialectVersion, EngineConfig, SchemaFilter};
 pub use document::{Document, DocumentError, DocumentMetadata, DocumentStore, ParseMetadata};
 pub use parsing::{ParseError, ParseResult, ParserManager};
 pub use sync::DocumentSync;

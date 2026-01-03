@@ -43,7 +43,7 @@ use tower_lsp::lsp_types::{CompletionItem, Position};
 use unified_sql_lsp_catalog::Catalog;
 
 use crate::completion::catalog_integration::CatalogCompletionFetcher;
-use crate::completion::context::{detect_completion_context, CompletionContext};
+use crate::completion::context::{CompletionContext, detect_completion_context};
 use crate::completion::error::CompletionError;
 use crate::completion::render::CompletionRenderer;
 use crate::completion::scopes::ScopeBuilder;
@@ -109,9 +109,7 @@ impl CompletionEngine {
 
         // Get the parsed tree and do all synchronous parsing
         let (ctx, scope_manager) = {
-            let tree = document
-                .tree()
-                .ok_or(CompletionError::NotParsed)?;
+            let tree = document.tree().ok_or(CompletionError::NotParsed)?;
             let tree_lock = tree.try_lock().map_err(|_| CompletionError::NotParsed)?;
             let tree = tree_lock.clone();
 
@@ -137,15 +135,40 @@ impl CompletionEngine {
             CompletionContext::SelectProjection { qualifier, .. } => {
                 if let Some(mut scope_manager) = scope_manager {
                     let scope_id = 0; // Main query scope
-                    let scope = scope_manager.get_scope_mut(scope_id).unwrap();
 
-                    self.catalog_fetcher
-                        .populate_all_tables(&mut scope.tables)
-                        .await?;
+                    // Populate all tables with columns from catalog
+                    {
+                        let scope = scope_manager.get_scope_mut(scope_id).unwrap();
+                        self.catalog_fetcher
+                            .populate_all_tables(&mut scope.tables)
+                            .await?;
+                    }
+
+                    // Resolve qualifier if present to filter tables
+                    let tables_to_render = if let Some(q) = &qualifier {
+                        // Resolve qualifier to actual table
+                        let scope = scope_manager.get_scope(scope_id).unwrap();
+                        match scope.find_table(q) {
+                            Some(qualified_table) => {
+                                // Found the table - create filtered list with just this table
+                                vec![qualified_table.clone()]
+                            }
+                            None => {
+                                // Invalid qualifier - return empty completion
+                                // User might be typing a wrong table name
+                                return Ok(Some(vec![]));
+                            }
+                        }
+                    } else {
+                        // No qualifier - show all columns from all tables
+                        let scope = scope_manager.get_scope(scope_id).unwrap();
+                        scope.tables.clone()
+                    };
 
                     // Render completion items
                     let force_qualifier = qualifier.is_some();
-                    let items = CompletionRenderer::render_columns(&scope.tables, force_qualifier);
+                    let items =
+                        CompletionRenderer::render_columns(&tables_to_render, force_qualifier);
 
                     Ok(Some(items))
                 } else {
@@ -168,11 +191,142 @@ impl CompletionEngine {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::Arc;
 
     #[test]
     fn test_completion_engine_new() {
         // This test requires a catalog, which we'd mock in real tests
         // Placeholder to show module structure
         assert!(true);
+    }
+
+    #[tokio::test]
+    async fn test_qualified_column_completion_with_table_name() {
+        use tower_lsp::lsp_types::Position;
+        use unified_sql_lsp_test_utils::{MockCatalogBuilder, catalog::DataType};
+
+        // Create mock catalog
+        let catalog = MockCatalogBuilder::new()
+            .with_table(
+                "users",
+                vec![
+                    ("id", DataType::Integer),
+                    ("name", DataType::Text),
+                    ("email", DataType::Text),
+                ],
+            )
+            .with_table(
+                "orders",
+                vec![("id", DataType::Integer), ("user_id", DataType::Integer)],
+            )
+            .build();
+
+        let engine = CompletionEngine::new(Arc::new(catalog));
+
+        // Test: SELECT users. FROM users;
+        let source = r#"SELECT users. FROM users;"#;
+        let document = Document::new(source, "test.sql");
+        document.parse().await;
+
+        let items = engine
+            .complete(&document, Position::new(0, 14))
+            .await
+            .unwrap();
+        assert!(items.is_some());
+        let items = items.unwrap();
+
+        // Should only show users columns, all qualified
+        assert!(items.iter().any(|i| i.label == "users.id"));
+        assert!(items.iter().any(|i| i.label == "users.name"));
+        assert!(items.iter().any(|i| i.label == "users.email"));
+        // Should NOT show orders columns
+        assert!(!items.iter().any(|i| i.label.contains("orders")));
+    }
+
+    #[tokio::test]
+    async fn test_qualified_column_completion_with_alias() {
+        use tower_lsp::lsp_types::Position;
+        use unified_sql_lsp_test_utils::{MockCatalogBuilder, catalog::DataType};
+
+        let catalog = MockCatalogBuilder::new()
+            .with_table(
+                "users",
+                vec![("id", DataType::Integer), ("name", DataType::Text)],
+            )
+            .build();
+
+        let engine = CompletionEngine::new(Arc::new(catalog));
+
+        // Test: SELECT u. FROM users AS u;
+        let source = r#"SELECT u. FROM users AS u;"#;
+        let document = Document::new(source, "test.sql");
+        document.parse().await;
+
+        let items = engine
+            .complete(&document, Position::new(0, 10))
+            .await
+            .unwrap();
+        assert!(items.is_some());
+        let items = items.unwrap();
+
+        // Should show columns with alias "u"
+        assert!(items.iter().any(|i| i.label == "u.id"));
+        assert!(items.iter().any(|i| i.label == "u.name"));
+    }
+
+    #[tokio::test]
+    async fn test_qualified_column_completion_invalid_qualifier() {
+        use tower_lsp::lsp_types::Position;
+        use unified_sql_lsp_test_utils::{MockCatalogBuilder, catalog::DataType};
+
+        let catalog = MockCatalogBuilder::new()
+            .with_table("users", vec![("id", DataType::Integer)])
+            .build();
+
+        let engine = CompletionEngine::new(Arc::new(catalog));
+
+        // Test: SELECT nonexistent. FROM users;
+        let source = r#"SELECT nonexistent. FROM users;"#;
+        let document = Document::new(source, "test.sql");
+        document.parse().await;
+
+        let items = engine
+            .complete(&document, Position::new(0, 22))
+            .await
+            .unwrap();
+        assert!(items.is_some());
+        // Should return empty completion for invalid qualifier
+        assert_eq!(items.unwrap().len(), 0);
+    }
+
+    #[tokio::test]
+    async fn test_unqualified_column_completion_still_works() {
+        use tower_lsp::lsp_types::Position;
+        use unified_sql_lsp_test_utils::{MockCatalogBuilder, catalog::DataType};
+
+        let catalog = MockCatalogBuilder::new()
+            .with_table(
+                "users",
+                vec![("id", DataType::Integer), ("name", DataType::Text)],
+            )
+            .build();
+
+        let engine = CompletionEngine::new(Arc::new(catalog));
+
+        // Test: SELECT  FROM users; (no qualifier)
+        let source = r#"SELECT  FROM users;"#;
+        let document = Document::new(source, "test.sql");
+        document.parse().await;
+
+        let items = engine
+            .complete(&document, Position::new(0, 8))
+            .await
+            .unwrap();
+        assert!(items.is_some());
+        let items = items.unwrap();
+
+        // Should show all columns without qualifier
+        assert!(items.iter().any(|i| i.label == "id"));
+        assert!(items.iter().any(|i| i.label == "name"));
     }
 }

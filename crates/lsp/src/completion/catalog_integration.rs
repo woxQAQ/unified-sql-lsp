@@ -119,8 +119,8 @@ impl CatalogCompletionFetcher {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use unified_sql_lsp_catalog::{CatalogError, DataType, TableMetadata};
     use std::sync::Arc;
+    use unified_sql_lsp_catalog::{CatalogError, DataType, TableMetadata};
 
     // Mock catalog for testing
     struct MockCatalog {
@@ -215,7 +215,10 @@ mod tests {
         let fetcher = CatalogCompletionFetcher::new(catalog);
 
         let mut table_symbols = vec![TableSymbol::new("users"), TableSymbol::new("orders")];
-        fetcher.populate_all_tables(&mut table_symbols).await.unwrap();
+        fetcher
+            .populate_all_tables(&mut table_symbols)
+            .await
+            .unwrap();
 
         assert_eq!(table_symbols[0].columns.len(), 1);
         assert_eq!(table_symbols[1].columns.len(), 1);
@@ -234,7 +237,10 @@ mod tests {
         let fetcher = CatalogCompletionFetcher::new(catalog);
 
         let mut table_symbols = vec![TableSymbol::new("users"), TableSymbol::new("orders")];
-        fetcher.populate_all_tables(&mut table_symbols).await.unwrap();
+        fetcher
+            .populate_all_tables(&mut table_symbols)
+            .await
+            .unwrap();
 
         // users should be populated, orders should be empty
         assert_eq!(table_symbols[0].columns.len(), 1);

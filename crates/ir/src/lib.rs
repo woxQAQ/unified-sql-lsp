@@ -12,14 +12,14 @@
 //! - Enable lowering from CST (Concrete Syntax Tree)
 //! - Support dialect-specific extensions
 
-pub mod query;
-pub mod expr;
 pub mod dialect;
+pub mod expr;
+pub mod query;
 
 // Re-export commonly used types
-pub use query::{
-    Query, SetOp, SelectStatement, TableRef, Join, JoinType, JoinCondition,
-    SelectItem, OrderBy, CommonTableExpr, WindowDef,
-};
-pub use expr::{Expr, ColumnRef, Literal, BinaryOp, UnaryOp};
 pub use dialect::{Dialect, DialectExtensions};
+pub use expr::{BinaryOp, ColumnRef, Expr, Literal, UnaryOp};
+pub use query::{
+    CommonTableExpr, Join, JoinCondition, JoinType, OrderBy, Query, SelectItem, SelectStatement,
+    SetOp, TableRef, WindowDef,
+};

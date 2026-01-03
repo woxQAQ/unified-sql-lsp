@@ -190,9 +190,11 @@ mod tests {
 
     #[test]
     fn test_render_columns_qualified() {
-        let table = TableSymbol::new("users").with_columns(vec![
-            ColumnSymbol::new("id", DataType::Integer, "users"),
-        ]);
+        let table = TableSymbol::new("users").with_columns(vec![ColumnSymbol::new(
+            "id",
+            DataType::Integer,
+            "users",
+        )]);
 
         let items = CompletionRenderer::render_columns(&[table], true);
 
@@ -213,13 +215,17 @@ mod tests {
 
     #[test]
     fn test_render_columns_ambiguous() {
-        let table1 = TableSymbol::new("users").with_columns(vec![
-            ColumnSymbol::new("id", DataType::Integer, "users"),
-        ]);
+        let table1 = TableSymbol::new("users").with_columns(vec![ColumnSymbol::new(
+            "id",
+            DataType::Integer,
+            "users",
+        )]);
 
-        let table2 = TableSymbol::new("orders").with_columns(vec![
-            ColumnSymbol::new("id", DataType::Integer, "orders"),
-        ]);
+        let table2 = TableSymbol::new("orders").with_columns(vec![ColumnSymbol::new(
+            "id",
+            DataType::Integer,
+            "orders",
+        )]);
 
         let items = CompletionRenderer::render_columns(&[table1, table2], false);
 
@@ -232,12 +238,18 @@ mod tests {
 
     #[test]
     fn test_format_data_type() {
-        assert_eq!(CompletionRenderer::format_data_type(&DataType::Integer), "INTEGER");
+        assert_eq!(
+            CompletionRenderer::format_data_type(&DataType::Integer),
+            "INTEGER"
+        );
         assert_eq!(
             CompletionRenderer::format_data_type(&DataType::Varchar(Some(255))),
             "VARCHAR(255)"
         );
-        assert_eq!(CompletionRenderer::format_data_type(&DataType::Text), "TEXT");
+        assert_eq!(
+            CompletionRenderer::format_data_type(&DataType::Text),
+            "TEXT"
+        );
         assert_eq!(
             CompletionRenderer::format_data_type(&DataType::Array(Box::new(DataType::Integer))),
             "INTEGER[]"

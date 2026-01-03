@@ -76,5 +76,4 @@ mod tests {
         assert!(msg.contains("u"));
         assert!(msg.contains("Duplicate"));
     }
-
 }

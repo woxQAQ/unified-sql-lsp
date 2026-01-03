@@ -55,8 +55,8 @@ use std::time::{Duration, Instant};
 use tower_lsp::lsp_types::*;
 use tracing::debug;
 
-use unified_sql_lsp_ir::Dialect;
 use unified_sql_grammar::language_for_dialect;
+use unified_sql_lsp_ir::Dialect;
 
 /// Parser manager for multiple SQL dialects
 ///
@@ -89,9 +89,11 @@ impl ParserManager {
         // Create new parser
         let mut parser = tree_sitter::Parser::new();
 
-        parser.set_language(*language).map_err(|e| ParseError::Generic {
-            message: format!("Failed to set language: {}", e),
-        })?;
+        parser
+            .set_language(*language)
+            .map_err(|e| ParseError::Generic {
+                message: format!("Failed to set language: {}", e),
+            })?;
 
         Ok(parser)
     }
@@ -221,12 +223,7 @@ impl ParserManager {
     }
 
     /// Recursively find ERROR nodes in tree
-    fn find_error_nodes(
-        &self,
-        node: &tree_sitter::Node,
-        errors: &mut Vec<ParseError>,
-        text: &str,
-    ) {
+    fn find_error_nodes(&self, node: &tree_sitter::Node, errors: &mut Vec<ParseError>, text: &str) {
         if node.kind() == "ERROR" {
             // Get error location
             let line = node.start_position().row;

@@ -87,5 +87,4 @@ mod tests {
         let catalog_err = CatalogError::TableNotFound("test".to_string(), "public".to_string());
         assert!(!CompletionError::Catalog(catalog_err).should_return_empty());
     }
-
 }

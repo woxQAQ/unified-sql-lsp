@@ -248,9 +248,9 @@
 //! - Feature checking via [`Dialect::supports()`]
 //! - Version-specific syntax handling
 
-use serde::{Deserialize, Serialize};
-use crate::expr::Expr;
 use crate::dialect::Dialect;
+use crate::expr::Expr;
+use serde::{Deserialize, Serialize};
 
 /// A SQL query (SELECT statement or set operation)
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

@@ -257,9 +257,7 @@ impl LivePostgreSQLCatalog {
             "uuid" => DataType::Other("uuid".to_string()),
 
             // Network types
-            "cidr" | "inet" | "macaddr" | "macaddr8" => {
-                DataType::Other(type_name.to_string())
-            }
+            "cidr" | "inet" | "macaddr" | "macaddr8" => DataType::Other(type_name.to_string()),
 
             // Geometric types
             "point" | "line" | "lseg" | "box" | "path" | "polygon" | "circle" => {
@@ -421,7 +419,6 @@ impl Catalog for LivePostgreSQLCatalog {
             FunctionMetadata::new("JSONB_AGG", DataType::Json)
                 .with_type(FunctionType::Aggregate)
                 .with_description("Aggregate values as JSONB"),
-
             // Scalar functions
             FunctionMetadata::new("ABS", DataType::Decimal)
                 .with_type(FunctionType::Scalar)
@@ -492,7 +489,6 @@ impl Catalog for LivePostgreSQLCatalog {
             FunctionMetadata::new("REGEXP_MATCHES", DataType::Other("array".to_string()))
                 .with_type(FunctionType::Scalar)
                 .with_description("Match regex and return array"),
-
             // Date/Time functions
             FunctionMetadata::new("NOW", DataType::Timestamp)
                 .with_type(FunctionType::Scalar)
@@ -524,7 +520,6 @@ impl Catalog for LivePostgreSQLCatalog {
             FunctionMetadata::new("TO_TIMESTAMP", DataType::Timestamp)
                 .with_type(FunctionType::Scalar)
                 .with_description("Convert string to timestamp"),
-
             // Window functions (PostgreSQL 8.4+)
             FunctionMetadata::new("ROW_NUMBER", DataType::BigInt)
                 .with_type(FunctionType::Window)
@@ -553,7 +548,6 @@ impl Catalog for LivePostgreSQLCatalog {
             FunctionMetadata::new("NTH_VALUE", DataType::Text)
                 .with_type(FunctionType::Window)
                 .with_description("Nth value in window"),
-
             // JSON functions (PostgreSQL 9.2+)
             FunctionMetadata::new("TO_JSON", DataType::Json)
                 .with_type(FunctionType::Scalar)
@@ -579,7 +573,6 @@ impl Catalog for LivePostgreSQLCatalog {
             FunctionMetadata::new("JSONB_GET_TEXT", DataType::Text)
                 .with_type(FunctionType::Scalar)
                 .with_description("Get JSONB field as text"),
-
             // Array functions
             FunctionMetadata::new("ARRAY_LENGTH", DataType::Integer)
                 .with_type(FunctionType::Scalar)
@@ -596,7 +589,6 @@ impl Catalog for LivePostgreSQLCatalog {
             FunctionMetadata::new("ARRAY_CAT", DataType::Other("array".to_string()))
                 .with_type(FunctionType::Scalar)
                 .with_description("Concatenate arrays"),
-
             // Mathematical functions
             FunctionMetadata::new("SQRT", DataType::Decimal)
                 .with_type(FunctionType::Scalar)
@@ -768,10 +760,9 @@ mod tests {
 
     #[tokio::test]
     async fn test_catalog_with_config() {
-        let catalog =
-            LivePostgreSQLCatalog::with_config("postgresql://localhost", 20, 10)
-                .await
-                .unwrap();
+        let catalog = LivePostgreSQLCatalog::with_config("postgresql://localhost", 20, 10)
+            .await
+            .unwrap();
         assert_eq!(catalog.pool_size(), 20);
         assert_eq!(catalog.timeout_secs(), 10);
     }
@@ -814,7 +805,10 @@ mod tests {
         let row_number_func = functions.iter().find(|f| f.name == "ROW_NUMBER");
         assert!(row_number_func.is_some());
         let row_number_func = row_number_func.unwrap();
-        assert!(matches!(row_number_func.function_type, FunctionType::Window));
+        assert!(matches!(
+            row_number_func.function_type,
+            FunctionType::Window
+        ));
 
         // Check for PostgreSQL-specific functions
         let string_agg_func = functions.iter().find(|f| f.name == "STRING_AGG");

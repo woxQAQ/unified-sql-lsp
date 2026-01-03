@@ -69,8 +69,8 @@ impl ScopeBuilder {
         let scope_id = manager.create_scope(ScopeType::Query, None);
 
         // Find the FROM clause
-        let from_clause = Self::find_from_clause(select_node)
-            .ok_or(CompletionError::NoFromClause)?;
+        let from_clause =
+            Self::find_from_clause(select_node).ok_or(CompletionError::NoFromClause)?;
 
         // Extract table references
         let tables = Self::extract_table_references(&from_clause, source)?;

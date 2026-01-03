@@ -112,7 +112,10 @@ pub trait Catalog: Send + Sync {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{CatalogError, metadata::{ColumnMetadata, DataType, FunctionMetadata, FunctionType, TableMetadata}};
+    use crate::{
+        CatalogError,
+        metadata::{ColumnMetadata, DataType, FunctionMetadata, FunctionType, TableMetadata},
+    };
 
     // Mock implementation for testing
     struct MockCatalog;
@@ -120,12 +123,14 @@ mod tests {
     #[async_trait::async_trait]
     impl Catalog for MockCatalog {
         async fn list_tables(&self) -> CatalogResult<Vec<TableMetadata>> {
-            Ok(vec![TableMetadata::new("users", "public")
-                .with_columns(vec![
-                    ColumnMetadata::new("id", DataType::Integer).with_primary_key(),
-                    ColumnMetadata::new("name", DataType::Text),
-                ])
-                .with_row_count(100)])
+            Ok(vec![
+                TableMetadata::new("users", "public")
+                    .with_columns(vec![
+                        ColumnMetadata::new("id", DataType::Integer).with_primary_key(),
+                        ColumnMetadata::new("name", DataType::Text),
+                    ])
+                    .with_row_count(100),
+            ])
         }
 
         async fn get_columns(&self, table: &str) -> CatalogResult<Vec<ColumnMetadata>> {
@@ -135,7 +140,10 @@ mod tests {
                     ColumnMetadata::new("name", DataType::Text),
                 ])
             } else {
-                Err(CatalogError::TableNotFound(table.to_string(), "public".to_string()))
+                Err(CatalogError::TableNotFound(
+                    table.to_string(),
+                    "public".to_string(),
+                ))
             }
         }
 
@@ -169,7 +177,10 @@ mod tests {
         let catalog = MockCatalog;
         let result = catalog.get_columns("nonexistent").await;
         assert!(result.is_err());
-        assert!(matches!(result.unwrap_err(), CatalogError::TableNotFound(_, _)));
+        assert!(matches!(
+            result.unwrap_err(),
+            CatalogError::TableNotFound(_, _)
+        ));
     }
 
     #[tokio::test]

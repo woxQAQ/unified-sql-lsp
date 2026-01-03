@@ -144,10 +144,7 @@ pub enum Expr {
     },
 
     /// Unary operation (e.g., `-x`, `NOT a`)
-    UnaryOp {
-        op: UnaryOp,
-        expr: Box<Expr>,
-    },
+    UnaryOp { op: UnaryOp, expr: Box<Expr> },
 
     /// Function call (e.g., `COUNT(*)`, `MAX(column)`)
     Function {
@@ -164,10 +161,7 @@ pub enum Expr {
     },
 
     /// CAST expression
-    Cast {
-        expr: Box<Expr>,
-        type_name: String,
-    },
+    Cast { expr: Box<Expr>, type_name: String },
 
     /// Parenthesized expression
     Paren(Box<Expr>),
@@ -276,5 +270,4 @@ mod tests {
         assert_eq!(qualified.qualified(), "users.id");
         assert_eq!(qualified.table.as_deref(), Some("users"));
     }
-
 }

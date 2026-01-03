@@ -293,7 +293,12 @@ impl FunctionMetadata {
             .iter()
             .map(|p| format!("{} {:?}", p.name, p.data_type))
             .collect();
-        format!("{}({}) -> {:?}", self.name, params.join(", "), self.return_type)
+        format!(
+            "{}({}) -> {:?}",
+            self.name,
+            params.join(", "),
+            self.return_type
+        )
     }
 }
 
@@ -306,8 +311,7 @@ mod tests {
         let col1 = ColumnMetadata::new("id", DataType::Integer);
         let col2 = ColumnMetadata::new("name", DataType::Text);
 
-        let table = TableMetadata::new("users", "public")
-            .with_columns(vec![col1, col2]);
+        let table = TableMetadata::new("users", "public").with_columns(vec![col1, col2]);
 
         assert!(table.get_column("id").is_some());
         assert!(table.get_column("name").is_some());
@@ -320,8 +324,7 @@ mod tests {
         let col2 = ColumnMetadata::new("user_id", DataType::Integer).with_primary_key();
         let col3 = ColumnMetadata::new("name", DataType::Text);
 
-        let table = TableMetadata::new("user_roles", "public")
-            .with_columns(vec![col1, col2, col3]);
+        let table = TableMetadata::new("user_roles", "public").with_columns(vec![col1, col2, col3]);
 
         let pks = table.primary_keys();
         assert_eq!(pks.len(), 2);

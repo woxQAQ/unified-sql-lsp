@@ -158,12 +158,11 @@ pub struct SqlCstHelpers;
 impl SqlCstHelpers {
     /// Create a simple SELECT statement: SELECT col1, col2 FROM table
     pub fn simple_select(columns: Vec<&str>, table: &str) -> MockCstNode {
-        let select_list =
-            columns
-                .into_iter()
-                .fold(MockCstNode::new("select_list"), |node, col| {
-                    node.with_child(None, MockCstNode::new("column_ref").with_text(col))
-                });
+        let select_list = columns
+            .into_iter()
+            .fold(MockCstNode::new("select_list"), |node, col| {
+                node.with_child(None, MockCstNode::new("column_ref").with_text(col))
+            });
 
         let from_clause = MockCstNode::new("from_clause").with_child(
             Some("table"),
@@ -192,15 +191,17 @@ impl SqlCstHelpers {
         table2: &str,
         join_type: &str,
     ) -> MockCstNode {
-        let select_list =
-            columns
-                .into_iter()
-                .fold(MockCstNode::new("select_list"), |node, col| {
-                    node.with_child(None, MockCstNode::new("column_ref").with_text(col))
-                });
+        let select_list = columns
+            .into_iter()
+            .fold(MockCstNode::new("select_list"), |node, col| {
+                node.with_child(None, MockCstNode::new("column_ref").with_text(col))
+            });
 
         let from_clause = MockCstNode::new("from_clause")
-            .with_child(Some("table"), MockCstNode::new("table_ref").with_text(table1))
+            .with_child(
+                Some("table"),
+                MockCstNode::new("table_ref").with_text(table1),
+            )
             .with_child(
                 Some("join"),
                 MockCstNode::new("join_clause")

@@ -501,5 +501,4 @@ mod tests {
         assert_eq!(subquery.parent_id, Some(query_id));
         assert_eq!(cte.parent_id, Some(subquery_id));
     }
-
 }

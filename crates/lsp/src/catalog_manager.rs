@@ -56,19 +56,16 @@ impl CatalogManager {
     /// let catalog = manager.get_catalog(&config).await?;
     /// let columns = catalog.get_columns("users").await?;
     /// ```
-    pub async fn get_catalog(
-        &mut self,
-        config: &EngineConfig,
-    ) -> CatalogResult<Arc<dyn Catalog>> {
+    pub async fn get_catalog(&mut self, config: &EngineConfig) -> CatalogResult<Arc<dyn Catalog>> {
         match config.dialect {
-            unified_sql_lsp_ir::Dialect::MySQL => {
-                self.get_mysql_catalog(config).await.map(|c| c as Arc<dyn Catalog>)
-            }
-            unified_sql_lsp_ir::Dialect::PostgreSQL => {
-                self.get_postgres_catalog(config)
-                    .await
-                    .map(|c| c as Arc<dyn Catalog>)
-            }
+            unified_sql_lsp_ir::Dialect::MySQL => self
+                .get_mysql_catalog(config)
+                .await
+                .map(|c| c as Arc<dyn Catalog>),
+            unified_sql_lsp_ir::Dialect::PostgreSQL => self
+                .get_postgres_catalog(config)
+                .await
+                .map(|c| c as Arc<dyn Catalog>),
             _ => Err(CatalogError::NotSupported(format!(
                 "Dialect {:?} is not supported yet",
                 config.dialect
@@ -165,10 +162,7 @@ mod tests {
         };
 
         let result = manager.get_catalog(&config).await;
-        assert!(matches!(
-            result,
-            Err(CatalogError::NotSupported(_))
-        ));
+        assert!(matches!(result, Err(CatalogError::NotSupported(_))));
     }
 
     #[tokio::test]

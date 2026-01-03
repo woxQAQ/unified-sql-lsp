@@ -17,7 +17,9 @@ fn main() {
 
         // Set DIALECT environment variable for tree-sitter
         // Safe in build scripts: single-threaded, controlled execution
-        unsafe { env::set_var("DIALECT", dialect); }
+        unsafe {
+            env::set_var("DIALECT", dialect);
+        }
 
         // Run tree-sitter generate
         let status = Command::new("tree-sitter")
@@ -32,11 +34,15 @@ fn main() {
             Ok(s) => {
                 println!(
                     "cargo:warning=Failed to generate {} grammar: exit code {:?}",
-                    dialect, s.code()
+                    dialect,
+                    s.code()
                 );
             }
             Err(e) => {
-                println!("cargo:warning=Failed to run tree-sitter for {}: {}", dialect, e);
+                println!(
+                    "cargo:warning=Failed to run tree-sitter for {}: {}",
+                    dialect, e
+                );
                 println!("cargo:warning=Install tree-sitter-cli: npm install -g tree-sitter-cli");
                 continue;
             }
@@ -47,7 +53,11 @@ fn main() {
         if parser_c.exists() {
             let dest_path = Path::new(&out_dir).join(format!("parser-{}.c", dialect));
             fs::copy(&parser_c, &dest_path).expect("Failed to copy parser.c");
-            println!("cargo:warning=Copied {} parser to {}", dialect, dest_path.display());
+            println!(
+                "cargo:warning=Copied {} parser to {}",
+                dialect,
+                dest_path.display()
+            );
 
             // Compile the parser
             cc::Build::new()

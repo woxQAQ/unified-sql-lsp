@@ -101,7 +101,7 @@ pub fn language_for_dialect(dialect: Dialect) -> Option<&'static tree_sitter::La
                 // language object compiled by tree-sitter from src/grammar/dialect/mysql.js
                 // The transmute converts the function pointer to a Language struct
                 Some(std::mem::transmute::<_, tree_sitter::Language>(
-                    tree_sitter_unified_sql_mysql()
+                    tree_sitter_unified_sql_mysql(),
                 ))
             })
             .as_ref(),
@@ -110,7 +110,7 @@ pub fn language_for_dialect(dialect: Dialect) -> Option<&'static tree_sitter::La
                 // Safety: tree_sitter_unified_sql_postgresql() returns a pointer to the
                 // language object compiled by tree-sitter from src/grammar/dialect/postgresql.js
                 Some(std::mem::transmute::<_, tree_sitter::Language>(
-                    tree_sitter_unified_sql_postgresql()
+                    tree_sitter_unified_sql_postgresql(),
                 ))
             })
             .as_ref(),

@@ -152,11 +152,7 @@ impl DocumentSync {
                 );
             }
             ParseResult::Partial { errors, .. } => {
-                warn!(
-                    "Document parsed with {} errors: uri={}",
-                    errors.len(),
-                    uri
-                );
+                warn!("Document parsed with {} errors: uri={}", errors.len(), uri);
             }
             ParseResult::Failed { error } => {
                 warn!("Document parse failed: uri={}, error={}", uri, error);
@@ -292,21 +288,11 @@ impl DocumentSync {
     pub fn create_metadata(&self, result: &ParseResult, dialect: Dialect) -> ParseMetadata {
         match result {
             ParseResult::Success { parse_time, .. } => {
-                ParseMetadata::new(
-                    parse_time.as_millis() as u64,
-                    dialect,
-                    false,
-                    0,
-                )
+                ParseMetadata::new(parse_time.as_millis() as u64, dialect, false, 0)
             }
             ParseResult::Partial { errors, .. } => {
                 // Partial parse doesn't have timing info, use 0
-                ParseMetadata::new(
-                    0,
-                    dialect,
-                    true,
-                    errors.len(),
-                )
+                ParseMetadata::new(0, dialect, true, errors.len())
             }
             ParseResult::Failed { .. } => {
                 // Create metadata even for failures
@@ -413,8 +399,14 @@ mod tests {
         // Has old tree, single change with range - can use incremental
         let change = TextDocumentContentChangeEvent {
             range: Some(Range {
-                start: Position { line: 0, character: 0 },
-                end: Position { line: 0, character: 1 },
+                start: Position {
+                    line: 0,
+                    character: 0,
+                },
+                end: Position {
+                    line: 0,
+                    character: 1,
+                },
             }),
             range_length: Some(1),
             text: "x".to_string(),

@@ -21,8 +21,7 @@ impl Catalog for TestCatalog {
                     ColumnMetadata::new("id", DataType::BigInt)
                         .with_nullable(false)
                         .with_primary_key(),
-                    ColumnMetadata::new("email", DataType::Varchar(Some(255)))
-                        .with_nullable(false),
+                    ColumnMetadata::new("email", DataType::Varchar(Some(255))).with_nullable(false),
                     ColumnMetadata::new("created_at", DataType::Timestamp).with_nullable(true),
                 ])
                 .with_row_count(50000)
@@ -51,8 +50,7 @@ impl Catalog for TestCatalog {
                 ColumnMetadata::new("id", DataType::BigInt)
                     .with_nullable(false)
                     .with_primary_key(),
-                ColumnMetadata::new("email", DataType::Varchar(Some(255)))
-                    .with_nullable(false),
+                ColumnMetadata::new("email", DataType::Varchar(Some(255))).with_nullable(false),
                 ColumnMetadata::new("created_at", DataType::Timestamp).with_nullable(true),
             ]),
             "orders" => Ok(vec![
@@ -104,7 +102,10 @@ async fn test_complete_table_metadata() {
     assert_eq!(users_table.schema, "myapp");
     assert_eq!(users_table.columns.len(), 3);
     assert_eq!(users_table.row_count_estimate, Some(50000));
-    assert_eq!(users_table.comment, Some("User account information".to_string()));
+    assert_eq!(
+        users_table.comment,
+        Some("User account information".to_string())
+    );
 }
 
 #[tokio::test]
@@ -165,7 +166,10 @@ async fn test_get_columns_table_not_found() {
 
     assert!(result.is_err());
     let err = result.unwrap_err();
-    assert!(matches!(err, unified_sql_lsp_catalog::CatalogError::TableNotFound(_, _)));
+    assert!(matches!(
+        err,
+        unified_sql_lsp_catalog::CatalogError::TableNotFound(_, _)
+    ));
 }
 
 #[tokio::test]

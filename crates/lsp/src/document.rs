@@ -45,11 +45,11 @@
 //! }
 //! ```
 
+use ropey::Rope;
 use std::collections::HashMap;
 use std::sync::Arc;
-use ropey::Rope;
 use tokio::sync::{Mutex, RwLock};
-use tower_lsp::lsp_types::{Url, TextDocumentContentChangeEvent, VersionedTextDocumentIdentifier};
+use tower_lsp::lsp_types::{TextDocumentContentChangeEvent, Url, VersionedTextDocumentIdentifier};
 
 /// Parse metadata
 ///
@@ -198,8 +198,15 @@ impl Document {
     /// # Returns
     ///
     /// The text in the specified range
-    pub fn get_text(&self, start_line: usize, start_col: usize, end_line: usize, end_col: usize) -> Option<String> {
-        if start_line > end_line || start_line >= self.line_count() || end_line >= self.line_count() {
+    pub fn get_text(
+        &self,
+        start_line: usize,
+        start_col: usize,
+        end_line: usize,
+        end_col: usize,
+    ) -> Option<String> {
+        if start_line > end_line || start_line >= self.line_count() || end_line >= self.line_count()
+        {
             return None;
         }
 
@@ -283,8 +290,7 @@ impl Document {
                     }
 
                     // Apply the change
-                    self.content
-                        .remove(start_char..end_char);
+                    self.content.remove(start_char..end_char);
                     self.content.insert(start_char, &change.text);
                 }
                 (None, None) => {
@@ -524,7 +530,7 @@ pub enum DocumentError {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tower_lsp::lsp_types as lsp_types;
+    use tower_lsp::lsp_types;
 
     fn create_test_uri() -> Url {
         Url::parse("file:///test.sql").unwrap()
@@ -533,7 +539,12 @@ mod tests {
     #[test]
     fn test_document_new() {
         let uri = create_test_uri();
-        let doc = Document::new(uri.clone(), "SELECT * FROM users".to_string(), 1, "sql".to_string());
+        let doc = Document::new(
+            uri.clone(),
+            "SELECT * FROM users".to_string(),
+            1,
+            "sql".to_string(),
+        );
 
         assert_eq!(doc.uri(), &uri);
         assert_eq!(doc.language_id(), "sql");

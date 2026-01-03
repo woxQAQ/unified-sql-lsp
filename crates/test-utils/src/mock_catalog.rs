@@ -7,11 +7,11 @@
 //!
 //! Provides an in-memory catalog with builder pattern for easy test setup
 
-use unified_sql_lsp_catalog::{
-    Catalog, CatalogError, CatalogResult, ColumnMetadata, DataType, FunctionMetadata,
-    FunctionType, TableMetadata, TableType,
-};
 use std::collections::HashMap;
+use unified_sql_lsp_catalog::{
+    Catalog, CatalogError, CatalogResult, ColumnMetadata, DataType, FunctionMetadata, FunctionType,
+    TableMetadata, TableType,
+};
 
 /// In-memory mock catalog for testing
 #[derive(Debug, Clone)]
@@ -64,7 +64,10 @@ impl Catalog for MockCatalog {
         if let Some(table_metadata) = self.get_table(table) {
             Ok(table_metadata.columns.clone())
         } else {
-            Err(CatalogError::TableNotFound(table.to_string(), "mock".to_string()))
+            Err(CatalogError::TableNotFound(
+                table.to_string(),
+                "mock".to_string(),
+            ))
         }
     }
 
@@ -106,8 +109,7 @@ impl MockCatalogBuilder {
                             .with_nullable(false),
                         ColumnMetadata::new("name", DataType::Varchar(Some(100)))
                             .with_nullable(true),
-                        ColumnMetadata::new("created_at", DataType::Timestamp)
-                            .with_nullable(true),
+                        ColumnMetadata::new("created_at", DataType::Timestamp).with_nullable(true),
                     ])
                     .with_row_count(50000)
                     .with_comment("User account information"),
@@ -124,8 +126,7 @@ impl MockCatalogBuilder {
                         ColumnMetadata::new("total", DataType::Decimal).with_nullable(true),
                         ColumnMetadata::new("status", DataType::Varchar(Some(50)))
                             .with_nullable(false),
-                        ColumnMetadata::new("created_at", DataType::Timestamp)
-                            .with_nullable(true),
+                        ColumnMetadata::new("created_at", DataType::Timestamp).with_nullable(true),
                     ])
                     .with_row_count(100000)
                     .with_type(TableType::Table),
@@ -222,9 +223,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_mock_catalog_list_tables() {
-        let catalog = MockCatalogBuilder::new()
-            .with_standard_schema()
-            .build();
+        let catalog = MockCatalogBuilder::new().with_standard_schema().build();
 
         let tables = catalog.list_tables().await.unwrap();
         assert_eq!(tables.len(), 3);
@@ -237,9 +236,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_mock_catalog_get_columns() {
-        let catalog = MockCatalogBuilder::new()
-            .with_standard_schema()
-            .build();
+        let catalog = MockCatalogBuilder::new().with_standard_schema().build();
 
         let columns = catalog.get_columns("users").await.unwrap();
         assert_eq!(columns.len(), 4);
@@ -253,9 +250,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_mock_catalog_list_functions() {
-        let catalog = MockCatalogBuilder::new()
-            .with_standard_schema()
-            .build();
+        let catalog = MockCatalogBuilder::new().with_standard_schema().build();
 
         let functions = catalog.list_functions().await.unwrap();
         assert!(!functions.is_empty());

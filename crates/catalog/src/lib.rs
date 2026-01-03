@@ -69,18 +69,18 @@
 //! }
 //! ```
 
-pub mod r#trait;
-pub mod metadata;
 pub mod error;
 pub mod live_mysql;
 pub mod live_postgres;
+pub mod metadata;
+pub mod r#trait;
 
 // Re-exports
-pub use r#trait::Catalog;
+pub use error::{CatalogError, CatalogResult};
+pub use live_mysql::LiveMySQLCatalog;
+pub use live_postgres::LivePostgreSQLCatalog;
 pub use metadata::{
     ColumnMetadata, DataType, FunctionMetadata, FunctionParameter, FunctionType, TableMetadata,
     TableReference, TableType,
 };
-pub use error::{CatalogError, CatalogResult};
-pub use live_mysql::LiveMySQLCatalog;
-pub use live_postgres::LivePostgreSQLCatalog;
+pub use r#trait::Catalog;

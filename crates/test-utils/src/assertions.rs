@@ -16,7 +16,11 @@ impl SqlAssertions {
     pub fn assert_column_ref(expr: &Expr, name: &str) {
         match expr {
             Expr::Column(col) => {
-                assert_eq!(col.column, name, "Expected column '{}', found '{}'", name, col.column);
+                assert_eq!(
+                    col.column, name,
+                    "Expected column '{}', found '{}'",
+                    name, col.column
+                );
             }
             _ => panic!("Expected Column expression, found {:?}", expr),
         }
@@ -43,12 +47,7 @@ impl SqlAssertions {
     }
 
     /// Assert that a column has the given properties
-    pub fn assert_column(
-        column: &ColumnMetadata,
-        name: &str,
-        data_type: DataType,
-        nullable: bool,
-    ) {
+    pub fn assert_column(column: &ColumnMetadata, name: &str, data_type: DataType, nullable: bool) {
         assert_eq!(column.name, name, "Column name mismatch");
         assert_eq!(column.data_type, data_type, "Column data type mismatch");
         assert_eq!(column.nullable, nullable, "Column nullable mismatch");
@@ -73,7 +72,10 @@ impl SqlAssertions {
 
         if let Some(refs) = &column.references {
             assert_eq!(refs.table, table, "Foreign key references wrong table");
-            assert_eq!(refs.column, ref_column, "Foreign key references wrong column");
+            assert_eq!(
+                refs.column, ref_column,
+                "Foreign key references wrong column"
+            );
         } else {
             panic!("Column '{}' has no reference information", column.name);
         }
@@ -83,8 +85,8 @@ impl SqlAssertions {
 /// Helper to check if a string contains SQL keywords
 pub fn contains_sql_keywords(text: &str) -> bool {
     let keywords = [
-        "SELECT", "FROM", "WHERE", "JOIN", "INSERT", "UPDATE", "DELETE", "CREATE", "DROP",
-        "ALTER", "INDEX",
+        "SELECT", "FROM", "WHERE", "JOIN", "INSERT", "UPDATE", "DELETE", "CREATE", "DROP", "ALTER",
+        "INDEX",
     ];
 
     let upper = text.to_uppercase();
@@ -98,7 +100,12 @@ pub fn is_valid_identifier(name: &str) -> bool {
     }
 
     // Check if it starts with a letter or underscore
-    if !name.chars().next().map(|c| c.is_alphabetic() || c == '_').unwrap_or(false) {
+    if !name
+        .chars()
+        .next()
+        .map(|c| c.is_alphabetic() || c == '_')
+        .unwrap_or(false)
+    {
         return false;
     }
 

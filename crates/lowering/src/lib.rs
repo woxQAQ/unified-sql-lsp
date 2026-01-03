@@ -306,5 +306,4 @@ mod tests {
         assert!(lowering.supports_node(&node, "select_statement"));
         assert!(!lowering.supports_node(&node, "other"));
     }
-
 }

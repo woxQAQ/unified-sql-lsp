@@ -159,7 +159,10 @@ pub enum DialectExtensions {
 impl DialectExtensions {
     /// Check if this extension is part of the core SQL subset
     pub fn is_core(self) -> bool {
-        matches!(self, DialectExtensions::CTE | DialectExtensions::WindowFunctions)
+        matches!(
+            self,
+            DialectExtensions::CTE | DialectExtensions::WindowFunctions
+        )
     }
 }
 

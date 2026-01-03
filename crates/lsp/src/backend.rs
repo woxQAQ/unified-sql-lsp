@@ -125,16 +125,12 @@ impl LspBackend {
 
     /// Log a message to the client
     async fn log_message(&self, message: &str, message_type: MessageType) {
-        self.client
-            .log_message(message_type, message)
-            .await;
+        self.client.log_message(message_type, message).await;
     }
 
     /// Show a message to the user
     async fn show_message(&self, message: &str, message_type: MessageType) {
-        self.client
-            .show_message(message_type, message)
-            .await;
+        self.client.show_message(message_type, message).await;
     }
 
     /// Publish diagnostics to the client
@@ -166,11 +162,8 @@ impl LanguageServer for LspBackend {
         }
 
         // Send initialization message
-        self.log_message(
-            "Unified SQL LSP server initialized",
-            MessageType::INFO,
-        )
-        .await;
+        self.log_message("Unified SQL LSP server initialized", MessageType::INFO)
+            .await;
 
         // Return server capabilities
         Ok(InitializeResult {
@@ -195,14 +188,16 @@ impl LanguageServer for LspBackend {
                 hover_provider: Some(HoverProviderCapability::Simple(true)),
 
                 // Diagnostics (will be implemented in DIAG-001)
-                diagnostic_provider: Some(DiagnosticServerCapabilities::Options(DiagnosticOptions {
-                    work_done_progress_options: WorkDoneProgressOptions {
-                        work_done_progress: Some(false),
+                diagnostic_provider: Some(DiagnosticServerCapabilities::Options(
+                    DiagnosticOptions {
+                        work_done_progress_options: WorkDoneProgressOptions {
+                            work_done_progress: Some(false),
+                        },
+                        inter_file_dependencies: false,
+                        workspace_diagnostics: false,
+                        identifier: None,
                     },
-                    inter_file_dependencies: false,
-                    workspace_diagnostics: false,
-                    identifier: None,
-                })),
+                )),
 
                 // Definition (future feature)
                 definition_provider: Some(OneOf::Left(true)),
@@ -277,13 +272,14 @@ impl LanguageServer for LspBackend {
         );
 
         // Add to document store
-        match self.documents.open_document(uri.clone(), content, version, language_id).await {
+        match self
+            .documents
+            .open_document(uri.clone(), content, version, language_id)
+            .await
+        {
             Ok(()) => {
-                self.log_message(
-                    &format!("Document opened: {}", uri),
-                    MessageType::INFO,
-                )
-                .await;
+                self.log_message(&format!("Document opened: {}", uri), MessageType::INFO)
+                    .await;
 
                 // Trigger parsing
                 if let Some(document) = self.documents.get_document(&uri).await {
@@ -296,7 +292,11 @@ impl LanguageServer for LspBackend {
                                 false,
                                 0,
                             );
-                            if let Err(e) = self.documents.update_document_tree(&uri, tree, metadata).await {
+                            if let Err(e) = self
+                                .documents
+                                .update_document_tree(&uri, tree, metadata)
+                                .await
+                            {
                                 error!("Failed to update document tree: {}", e);
                             }
                         }
@@ -308,7 +308,11 @@ impl LanguageServer for LspBackend {
                                 true,
                                 errors.len(),
                             );
-                            if let Err(e) = self.documents.update_document_tree(&uri, tree, metadata).await {
+                            if let Err(e) = self
+                                .documents
+                                .update_document_tree(&uri, tree, metadata)
+                                .await
+                            {
                                 error!("Failed to update document tree: {}", e);
                             }
                             // TODO: (DIAG-002) Publish diagnostics
@@ -348,21 +352,22 @@ impl LanguageServer for LspBackend {
 
         // Get old tree before update
         let old_document = self.documents.get_document(&uri).await;
-        let old_tree: Option<tree_sitter::Tree> = old_document
-            .as_ref()
-            .and_then(|d| {
-                d.tree().as_ref().and_then(|arc_mutex| {
-                    // Try to lock and clone the tree
-                    arc_mutex.try_lock().ok().map(|guard| (*guard).clone())
-                })
-            });
+        let old_tree: Option<tree_sitter::Tree> = old_document.as_ref().and_then(|d| {
+            d.tree().as_ref().and_then(|arc_mutex| {
+                // Try to lock and clone the tree
+                arc_mutex.try_lock().ok().map(|guard| (*guard).clone())
+            })
+        });
 
         // Update document in store
         match self.documents.update_document(&identifier, &changes).await {
             Ok(()) => {
                 // Trigger re-parsing
                 if let Some(document) = self.documents.get_document(&uri).await {
-                    match self.doc_sync.on_document_change(&document, old_tree.as_ref(), &changes) {
+                    match self
+                        .doc_sync
+                        .on_document_change(&document, old_tree.as_ref(), &changes)
+                    {
                         crate::parsing::ParseResult::Success { tree, parse_time } => {
                             info!("Document reparsed in {:?}", parse_time);
                             let metadata = ParseMetadata::new(
@@ -371,7 +376,11 @@ impl LanguageServer for LspBackend {
                                 false,
                                 0,
                             );
-                            if let Err(e) = self.documents.update_document_tree(&uri, tree, metadata).await {
+                            if let Err(e) = self
+                                .documents
+                                .update_document_tree(&uri, tree, metadata)
+                                .await
+                            {
                                 error!("Failed to update document tree: {}", e);
                             }
                         }
@@ -383,7 +392,11 @@ impl LanguageServer for LspBackend {
                                 true,
                                 errors.len(),
                             );
-                            if let Err(e) = self.documents.update_document_tree(&uri, tree, metadata).await {
+                            if let Err(e) = self
+                                .documents
+                                .update_document_tree(&uri, tree, metadata)
+                                .await
+                            {
                                 error!("Failed to update document tree: {}", e);
                             }
                             // TODO: (DIAG-002) Publish diagnostics
@@ -424,11 +437,8 @@ impl LanguageServer for LspBackend {
             // Clear parse data
             self.doc_sync.on_document_close(&uri);
 
-            self.log_message(
-                &format!("Document closed: {}", uri),
-                MessageType::INFO,
-            )
-            .await;
+            self.log_message(&format!("Document closed: {}", uri), MessageType::INFO)
+                .await;
         } else {
             warn!("Document not found for close: {}", uri);
         }
@@ -438,10 +448,7 @@ impl LanguageServer for LspBackend {
     ///
     /// Called when the user requests completion (e.g., Ctrl+Space).
     /// Implements COMPLETION-001: SELECT clause column completion.
-    async fn completion(
-        &self,
-        params: CompletionParams,
-    ) -> Result<Option<CompletionResponse>> {
+    async fn completion(&self, params: CompletionParams) -> Result<Option<CompletionResponse>> {
         let uri = params.text_document_position.text_document.uri;
         let position = params.text_document_position.position;
 
@@ -551,10 +558,7 @@ impl LanguageServer for LspBackend {
     ///
     /// Called when the user formats a document.
     /// This is a stub implementation - full implementation will be in FORMAT-001.
-    async fn formatting(
-        &self,
-        params: DocumentFormattingParams,
-    ) -> Result<Option<Vec<TextEdit>>> {
+    async fn formatting(&self, params: DocumentFormattingParams) -> Result<Option<Vec<TextEdit>>> {
         let uri = params.text_document.uri;
 
         info!("Document formatting requested: uri={}", uri);

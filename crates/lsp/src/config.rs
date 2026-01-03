@@ -30,8 +30,8 @@
 //! ```
 
 use std::collections::HashSet;
-use unified_sql_lsp_ir::Dialect;
 use unified_sql_lsp_catalog::CatalogError;
+use unified_sql_lsp_ir::Dialect;
 
 /// SQL dialect version enumeration
 ///
@@ -63,12 +63,13 @@ impl DialectVersion {
     pub fn dialect(&self) -> Dialect {
         match self {
             DialectVersion::MySQL57 | DialectVersion::MySQL80 => Dialect::MySQL,
-            DialectVersion::PostgreSQL12 | DialectVersion::PostgreSQL14 | DialectVersion::PostgreSQL16 => {
-                Dialect::PostgreSQL
-            }
-            DialectVersion::TiDB50 | DialectVersion::TiDB60 | DialectVersion::TiDB70 | DialectVersion::TiDB80 => {
-                Dialect::TiDB
-            }
+            DialectVersion::PostgreSQL12
+            | DialectVersion::PostgreSQL14
+            | DialectVersion::PostgreSQL16 => Dialect::PostgreSQL,
+            DialectVersion::TiDB50
+            | DialectVersion::TiDB60
+            | DialectVersion::TiDB70
+            | DialectVersion::TiDB80 => Dialect::TiDB,
         }
     }
 }
@@ -224,7 +225,11 @@ impl Default for EngineConfig {
 
 impl EngineConfig {
     /// Create a new engine configuration
-    pub fn new(dialect: Dialect, version: DialectVersion, connection_string: impl Into<String>) -> Self {
+    pub fn new(
+        dialect: Dialect,
+        version: DialectVersion,
+        connection_string: impl Into<String>,
+    ) -> Self {
         Self {
             dialect,
             version,
@@ -491,10 +496,7 @@ mod tests {
         };
 
         let result = config.validate();
-        assert!(matches!(
-            result,
-            Err(ConfigError::InvalidPoolConfig { .. })
-        ));
+        assert!(matches!(result, Err(ConfigError::InvalidPoolConfig { .. })));
     }
 
     #[test]
@@ -511,11 +513,8 @@ mod tests {
 
     #[test]
     fn test_engine_config_mysql() {
-        let config = EngineConfig::mysql(
-            DialectVersion::MySQL80,
-            "mysql://localhost/mydb",
-        )
-        .unwrap();
+        let config =
+            EngineConfig::mysql(DialectVersion::MySQL80, "mysql://localhost/mydb").unwrap();
 
         assert_eq!(config.dialect, Dialect::MySQL);
         assert_eq!(config.version, DialectVersion::MySQL80);
@@ -523,21 +522,19 @@ mod tests {
 
     #[test]
     fn test_engine_config_mysql_incompatible_version() {
-        let result = EngineConfig::mysql(
-            DialectVersion::PostgreSQL14,
-            "mysql://localhost/mydb",
-        );
+        let result = EngineConfig::mysql(DialectVersion::PostgreSQL14, "mysql://localhost/mydb");
 
-        assert!(matches!(result, Err(ConfigError::IncompatibleVersion { .. })));
+        assert!(matches!(
+            result,
+            Err(ConfigError::IncompatibleVersion { .. })
+        ));
     }
 
     #[test]
     fn test_engine_config_postgresql() {
-        let config = EngineConfig::postgresql(
-            DialectVersion::PostgreSQL14,
-            "postgres://localhost/mydb",
-        )
-        .unwrap();
+        let config =
+            EngineConfig::postgresql(DialectVersion::PostgreSQL14, "postgres://localhost/mydb")
+                .unwrap();
 
         assert_eq!(config.dialect, Dialect::PostgreSQL);
         assert_eq!(config.version, DialectVersion::PostgreSQL14);

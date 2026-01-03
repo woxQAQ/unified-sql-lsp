@@ -277,7 +277,8 @@ impl Catalog for LiveMySQLCatalog {
         //   AND TABLE_TYPE IN ('BASE TABLE', 'VIEW')
 
         Err(CatalogError::NotSupported(
-            "LiveMySQLCatalog::list_tables not yet implemented - requires MySQL driver dependency".to_string(),
+            "LiveMySQLCatalog::list_tables not yet implemented - requires MySQL driver dependency"
+                .to_string(),
         ))
     }
 
@@ -303,7 +304,8 @@ impl Catalog for LiveMySQLCatalog {
         //   AND TABLE_NAME = ?
 
         Err(CatalogError::NotSupported(
-            "LiveMySQLCatalog::get_columns not yet implemented - requires MySQL driver dependency".to_string(),
+            "LiveMySQLCatalog::get_columns not yet implemented - requires MySQL driver dependency"
+                .to_string(),
         ))
     }
 
@@ -346,7 +348,6 @@ impl Catalog for LiveMySQLCatalog {
             FunctionMetadata::new("GROUP_CONCAT", DataType::Text)
                 .with_type(FunctionType::Aggregate)
                 .with_description("Concatenate values from multiple rows"),
-
             // Scalar functions
             FunctionMetadata::new("ABS", DataType::Decimal)
                 .with_type(FunctionType::Scalar)
@@ -384,7 +385,6 @@ impl Catalog for LiveMySQLCatalog {
             FunctionMetadata::new("IFNULL", DataType::Text)
                 .with_type(FunctionType::Scalar)
                 .with_description("Return alternative if null"),
-
             // Date/Time functions
             FunctionMetadata::new("NOW", DataType::DateTime)
                 .with_type(FunctionType::Scalar)
@@ -407,7 +407,6 @@ impl Catalog for LiveMySQLCatalog {
             FunctionMetadata::new("DATEDIFF", DataType::Integer)
                 .with_type(FunctionType::Scalar)
                 .with_description("Difference between dates"),
-
             // Window functions (MySQL 8.0+)
             FunctionMetadata::new("ROW_NUMBER", DataType::BigInt)
                 .with_type(FunctionType::Window)
@@ -490,23 +489,22 @@ mod tests {
 
     #[tokio::test]
     async fn test_catalog_with_config() {
-        let catalog =
-            LiveMySQLCatalog::with_config("mysql://localhost", 20, 10).await.unwrap();
+        let catalog = LiveMySQLCatalog::with_config("mysql://localhost", 20, 10)
+            .await
+            .unwrap();
         assert_eq!(catalog.pool_size(), 20);
         assert_eq!(catalog.timeout_secs(), 10);
     }
 
     #[tokio::test]
     async fn test_catalog_with_config_invalid_pool_size() {
-        let result =
-            LiveMySQLCatalog::with_config("mysql://localhost", 0, 10).await;
+        let result = LiveMySQLCatalog::with_config("mysql://localhost", 0, 10).await;
         assert!(result.is_err());
     }
 
     #[tokio::test]
     async fn test_catalog_with_config_invalid_timeout() {
-        let result =
-            LiveMySQLCatalog::with_config("mysql://localhost", 10, 0).await;
+        let result = LiveMySQLCatalog::with_config("mysql://localhost", 10, 0).await;
         assert!(result.is_err());
     }
 
@@ -534,6 +532,9 @@ mod tests {
         let row_number_func = functions.iter().find(|f| f.name == "ROW_NUMBER");
         assert!(row_number_func.is_some());
         let row_number_func = row_number_func.unwrap();
-        assert!(matches!(row_number_func.function_type, FunctionType::Window));
+        assert!(matches!(
+            row_number_func.function_type,
+            FunctionType::Window
+        ));
     }
 }
