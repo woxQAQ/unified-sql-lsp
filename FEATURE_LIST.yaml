@@ -343,10 +343,12 @@ meta:
     - 应用 SchemaFilter
     - 显示 schema 限定符
   priority: P0
+  status: done
   dependencies: ["LSP-003"]
   deliverables:
     - 表补全逻辑
     - 测试用例
+    - Note: Fully implemented with render_tables(), FROM clause context handling, and comprehensive tests
 
 - id: COMPLETION-003
   name: "JOIN 条件列补全"

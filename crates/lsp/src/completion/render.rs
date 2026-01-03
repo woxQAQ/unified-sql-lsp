@@ -9,7 +9,7 @@
 //! from semantic symbols.
 
 use tower_lsp::lsp_types::{CompletionItem, CompletionItemKind, Documentation};
-use unified_sql_lsp_catalog::DataType;
+use unified_sql_lsp_catalog::{DataType, TableMetadata, TableType};
 use unified_sql_lsp_semantic::{ColumnSymbol, TableSymbol};
 
 /// Completion renderer
@@ -68,6 +68,128 @@ impl CompletionRenderer {
         }
 
         items
+    }
+
+    /// Render table completion items
+    ///
+    /// # Arguments
+    ///
+    /// * `tables` - Vector of table metadata from catalog
+    /// * `show_schema` - Whether to show schema qualifier (e.g., "public.users")
+    ///
+    /// # Returns
+    ///
+    /// Vector of completion items
+    ///
+    /// # Examples
+    ///
+    /// ```ignore
+    /// let items = CompletionRenderer::render_tables(&tables, false);
+    /// assert!(items.iter().any(|i| i.label == "users"));
+    /// ```
+    pub fn render_tables(tables: &[TableMetadata], show_schema: bool) -> Vec<CompletionItem> {
+        let mut items = Vec::new();
+
+        for table in tables {
+            items.push(Self::table_item(table, show_schema));
+        }
+
+        items
+    }
+
+    /// Render a single table completion item
+    ///
+    /// # Arguments
+    ///
+    /// * `table` - The table metadata
+    /// * `show_schema` - Whether to include schema qualifier in label
+    fn table_item(table: &TableMetadata, show_schema: bool) -> CompletionItem {
+        let label = if show_schema {
+            format!("{}.{}", table.schema, table.name)
+        } else {
+            table.name.clone()
+        };
+
+        let detail = Self::format_table_detail(table);
+        let documentation = Self::format_table_documentation(table);
+
+        CompletionItem {
+            label,
+            kind: Some(CompletionItemKind::CLASS),
+            detail: Some(detail),
+            documentation: Some(Documentation::String(documentation)),
+            deprecated: Some(false),
+            preselect: Some(false),
+            sort_text: Some(Self::table_sort_text(table, show_schema)),
+            filter_text: Some(table.name.clone()),
+            insert_text: Some(if show_schema {
+                format!("{}.{}", table.schema, table.name)
+            } else {
+                table.name.clone()
+            }),
+            ..Default::default()
+        }
+    }
+
+    /// Format the detail string for a table
+    ///
+    /// Shows the schema name and table type
+    fn format_table_detail(table: &TableMetadata) -> String {
+        let type_str = match table.table_type {
+            TableType::Table => "TABLE",
+            TableType::View => "VIEW",
+            TableType::MaterializedView => "MATERIALIZED VIEW",
+            TableType::Temporary => "TEMPORARY",
+            TableType::System => "SYSTEM",
+        };
+        format!("{}.{} [{}]", table.schema, table.name, type_str)
+    }
+
+    /// Format the documentation string for a table
+    ///
+    /// Shows column count and comment if available
+    fn format_table_documentation(table: &TableMetadata) -> String {
+        let mut parts = Vec::new();
+
+        // Add column count
+        let column_count = table.columns.len();
+        if column_count > 0 {
+            parts.push(format!("{} columns", column_count));
+
+            // List column names if there are few (<= 5)
+            if column_count <= 5 {
+                let column_names: Vec<&str> =
+                    table.columns.iter().map(|c| c.name.as_str()).collect();
+                parts.push(format!("Columns: {}", column_names.join(", ")));
+            }
+        }
+
+        // Add comment if available
+        if let Some(comment) = &table.comment {
+            parts.push(comment.clone());
+        }
+
+        // Add row count estimate if available
+        if let Some(row_count) = table.row_count_estimate {
+            parts.push(format!("~{} rows", row_count));
+        }
+
+        if parts.is_empty() {
+            "Database table".to_string()
+        } else {
+            parts.join("\n\n")
+        }
+    }
+
+    /// Generate sort text for a table
+    ///
+    /// Tables are sorted alphabetically by schema.table name
+    fn table_sort_text(table: &TableMetadata, show_schema: bool) -> String {
+        if show_schema {
+            format!("{}_.{}", table.schema, table.name)
+        } else {
+            format!("{}_{}", table.schema, table.name)
+        }
     }
 
     /// Render a single column completion item
@@ -170,7 +292,7 @@ impl CompletionRenderer {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use unified_sql_lsp_catalog::DataType;
+    use unified_sql_lsp_catalog::{ColumnMetadata, DataType, TableType};
 
     #[test]
     fn test_render_columns_simple() {
@@ -268,5 +390,153 @@ mod tests {
         assert_eq!(pk_sort, "01_id");
         assert_eq!(regular_sort, "01_name");
         assert!(pk_sort < regular_sort);
+    }
+
+    #[test]
+    fn test_render_tables_simple() {
+        let table = TableMetadata::new("users", "public")
+            .with_columns(vec![
+                ColumnMetadata::new("id", DataType::Integer).with_primary_key(),
+                ColumnMetadata::new("name", DataType::Text),
+            ])
+            .with_row_count(100);
+
+        let items = CompletionRenderer::render_tables(&[table], false);
+
+        assert_eq!(items.len(), 1);
+        assert_eq!(items[0].label, "users");
+        assert_eq!(items[0].kind, Some(CompletionItemKind::CLASS));
+        assert!(items[0].detail.as_ref().unwrap().contains("TABLE"));
+        assert!(
+            items[0]
+                .documentation
+                .as_ref()
+                .unwrap()
+                .to_string()
+                .contains("2 columns")
+        );
+    }
+
+    #[test]
+    fn test_render_tables_with_schema() {
+        let table = TableMetadata::new("users", "public")
+            .with_columns(vec![ColumnMetadata::new("id", DataType::Integer)]);
+
+        let items = CompletionRenderer::render_tables(&[table], true);
+
+        assert_eq!(items.len(), 1);
+        assert_eq!(items[0].label, "public.users");
+        assert!(items[0].detail.as_ref().unwrap().contains("public"));
+    }
+
+    #[test]
+    fn test_render_tables_multiple_schemas() {
+        let table1 = TableMetadata::new("users", "public")
+            .with_columns(vec![ColumnMetadata::new("id", DataType::Integer)]);
+        let table2 = TableMetadata::new("users", "myapp")
+            .with_columns(vec![ColumnMetadata::new("id", DataType::Integer)]);
+
+        let items = CompletionRenderer::render_tables(&[table1, table2], true);
+
+        assert_eq!(items.len(), 2);
+        assert!(items.iter().any(|i| i.label == "public.users"));
+        assert!(items.iter().any(|i| i.label == "myapp.users"));
+    }
+
+    #[test]
+    fn test_render_tables_with_view() {
+        let view = TableMetadata::new("active_users", "public")
+            .with_columns(vec![ColumnMetadata::new("id", DataType::Integer)])
+            .with_type(TableType::View);
+
+        let items = CompletionRenderer::render_tables(&[view], false);
+
+        assert_eq!(items.len(), 1);
+        assert!(items[0].detail.as_ref().unwrap().contains("VIEW"));
+    }
+
+    #[test]
+    fn test_render_tables_with_materialized_view() {
+        let mv = TableMetadata::new("user_summary", "public")
+            .with_columns(vec![ColumnMetadata::new("id", DataType::Integer)])
+            .with_type(TableType::MaterializedView);
+
+        let items = CompletionRenderer::render_tables(&[mv], false);
+
+        assert_eq!(items.len(), 1);
+        assert!(
+            items[0]
+                .detail
+                .as_ref()
+                .unwrap()
+                .contains("MATERIALIZED VIEW")
+        );
+    }
+
+    #[test]
+    fn test_render_tables_with_comment() {
+        let table = TableMetadata::new("users", "public")
+            .with_columns(vec![ColumnMetadata::new("id", DataType::Integer)])
+            .with_comment("User accounts table");
+
+        let items = CompletionRenderer::render_tables(&[table], false);
+
+        assert_eq!(items.len(), 1);
+        assert!(
+            items[0]
+                .documentation
+                .as_ref()
+                .unwrap()
+                .to_string()
+                .contains("User accounts table")
+        );
+    }
+
+    #[test]
+    fn test_render_tables_few_columns_lists_names() {
+        let table = TableMetadata::new("users", "public").with_columns(vec![
+            ColumnMetadata::new("id", DataType::Integer),
+            ColumnMetadata::new("name", DataType::Text),
+            ColumnMetadata::new("email", DataType::Text),
+        ]);
+
+        let items = CompletionRenderer::render_tables(&[table], false);
+
+        assert_eq!(items.len(), 1);
+        let doc = items[0].documentation.as_ref().unwrap().to_string();
+        assert!(doc.contains("id, name, email"));
+    }
+
+    #[test]
+    fn test_render_tables_many_columns_hides_names() {
+        // Create a table with more than 5 columns
+        let columns: Vec<_> = (0..10)
+            .map(|i| ColumnMetadata::new(&format!("col{}", i), DataType::Text))
+            .collect();
+
+        let table = TableMetadata::new("wide_table", "public").with_columns(columns);
+
+        let items = CompletionRenderer::render_tables(&[table], false);
+
+        assert_eq!(items.len(), 1);
+        let doc = items[0].documentation.as_ref().unwrap().to_string();
+        assert!(doc.contains("10 columns"));
+        // Should not list column names for wide tables
+        assert!(!doc.contains("col0"));
+    }
+
+    #[test]
+    fn test_render_tables_sort_order() {
+        let table1 = TableMetadata::new("zebra", "public")
+            .with_columns(vec![ColumnMetadata::new("id", DataType::Integer)]);
+        let table2 = TableMetadata::new("apple", "public")
+            .with_columns(vec![ColumnMetadata::new("id", DataType::Integer)]);
+
+        let items = CompletionRenderer::render_tables(&[table1, table2], false);
+
+        assert_eq!(items.len(), 2);
+        // Items should be sorted alphabetically
+        assert_eq!(items[0].label, "apple");
+        assert_eq!(items[1].label, "zebra");
     }
 }

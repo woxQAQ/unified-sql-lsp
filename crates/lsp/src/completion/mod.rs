@@ -38,6 +38,7 @@ pub mod error;
 pub mod render;
 pub mod scopes;
 
+use std::collections::HashSet;
 use std::sync::Arc;
 use tower_lsp::lsp_types::{CompletionItem, Position};
 use unified_sql_lsp_catalog::Catalog;
@@ -176,8 +177,17 @@ impl CompletionEngine {
                 }
             }
             CompletionContext::FromClause => {
-                // Table completion (COMPLETION-002) - not implemented yet
-                Ok(None)
+                // Fetch all tables from catalog
+                let tables = self.catalog_fetcher.list_tables().await?;
+
+                // Check if we should show schema qualifier
+                // Show if multiple schemas exist or schema is not 'public'
+                let schemas: HashSet<&str> = tables.iter().map(|t| t.schema.as_str()).collect();
+                let show_schema = schemas.len() > 1 || !schemas.iter().any(|&s| s == "public");
+
+                // Render completion items
+                let items = CompletionRenderer::render_tables(&tables, show_schema);
+                Ok(Some(items))
             }
             CompletionContext::WhereClause => {
                 // WHERE clause completion (COMPLETION-005) - not implemented yet

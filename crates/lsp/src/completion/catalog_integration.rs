@@ -10,7 +10,7 @@
 
 use crate::completion::error::CompletionError;
 use std::sync::Arc;
-use unified_sql_lsp_catalog::{Catalog, ColumnMetadata};
+use unified_sql_lsp_catalog::{Catalog, ColumnMetadata, TableMetadata};
 use unified_sql_lsp_semantic::{ColumnSymbol, TableSymbol};
 
 /// Catalog fetcher for completion
@@ -29,6 +29,25 @@ impl CatalogCompletionFetcher {
     /// * `catalog` - The catalog to fetch from
     pub fn new(catalog: Arc<dyn Catalog>) -> Self {
         Self { catalog }
+    }
+
+    /// List all tables from the catalog
+    ///
+    /// # Returns
+    ///
+    /// Vector of table metadata
+    ///
+    /// # Examples
+    ///
+    /// ```ignore
+    /// let tables = fetcher.list_tables().await?;
+    /// assert!(!tables.is_empty());
+    /// ```
+    pub async fn list_tables(&self) -> Result<Vec<TableMetadata>, CompletionError> {
+        self.catalog
+            .list_tables()
+            .await
+            .map_err(CompletionError::Catalog)
     }
 
     /// Populate table columns from the catalog
