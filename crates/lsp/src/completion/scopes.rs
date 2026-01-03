@@ -33,6 +33,8 @@
 //! - Only builds scopes for SELECT statements (not INSERT/UPDATE/DELETE)
 //! - Only extracts table references (not full column resolution)
 //! - Populated incrementally by catalog during completion (not upfront)
+//!
+//! TODO: (SEMANTIC-002) Replace with full semantic analyzer when available
 
 use crate::completion::error::CompletionError;
 use std::collections::HashMap;

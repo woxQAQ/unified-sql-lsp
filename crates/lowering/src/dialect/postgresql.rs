@@ -827,6 +827,12 @@ impl PostgreSQLLowering {
     }
 
     /// Lower function call
+    ///
+    /// TODO: (COMPLETION-006) Implement full function call lowering with:
+    /// - Window function support (OVER clause with PARTITION BY, ORDER BY, window frame)
+    /// - Filter clause (aggregate function FILTER)
+    /// - Function type detection (aggregate vs scalar vs window)
+    /// - Argument type validation
     fn lower_function_call<N>(&self, ctx: &mut LoweringContext, node: &N) -> LoweringResult<Expr>
     where
         N: CstNode,

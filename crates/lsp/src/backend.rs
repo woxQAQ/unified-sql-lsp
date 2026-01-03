@@ -550,7 +550,9 @@ impl LanguageServer for LspBackend {
 
         info!("Go to definition requested: uri={}", uri);
 
-        // TODO: Implement go-to-definition
+        // TODO: (LSP-004) Implement go-to-definition
+        // This feature is not yet tracked in FEATURE_LIST.yaml
+        // Would enable users to jump to table/column definitions
         Ok(None)
     }
 
@@ -584,7 +586,9 @@ impl LanguageServer for LspBackend {
 
         info!("Document symbols requested: uri={}", uri);
 
-        // TODO: Implement document symbols (tables, columns, etc.)
+        // TODO: (LSP-005) Implement document symbols (tables, columns, etc.)
+        // This feature is not yet tracked in FEATURE_LIST.yaml
+        // Would enable outline view showing tables, columns, aliases in the query
         Ok(None)
     }
 

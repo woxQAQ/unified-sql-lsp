@@ -114,6 +114,9 @@ impl LoweringContext {
     ///
     /// This allows graceful degradation by inserting a placeholder
     /// when encountering unsupported or invalid syntax.
+    ///
+    /// TODO: (LOWERING-001) Enhance placeholder system to preserve source location
+    /// and provide better error messages for diagnostics
     pub fn create_placeholder(&mut self) -> Expr {
         let name = format!("__placeholder_{}", self.placeholder_counter);
         self.placeholder_counter += 1;

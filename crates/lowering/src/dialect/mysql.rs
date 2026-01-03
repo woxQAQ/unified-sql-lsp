@@ -171,7 +171,9 @@ impl MySQLLowering {
     {
         // REPLACE INTO table VALUES (...)
         // Convert to INSERT structure for now
-        // TODO: Track REPLACE semantics in query metadata
+        // TODO: (LOWERING-002) Track REPLACE semantics in query metadata
+        // REPLACE differs from INSERT in that it deletes duplicate rows before inserting
+        // This should be tracked separately once IR supports mutation operation metadata
 
         let mut select = SelectStatement::default();
 
@@ -671,6 +673,12 @@ impl MySQLLowering {
     }
 
     /// Lower function call
+    ///
+    /// TODO: (COMPLETION-006) Implement full function call lowering with:
+    /// - DISTINCT modifier parsing (already done for PostgreSQL, add for MySQL)
+    /// - Window function support (OVER clause)
+    /// - Aggregate function handling
+    /// - Function type detection (aggregate vs scalar vs window)
     fn lower_function_call<N>(&self, ctx: &mut LoweringContext, node: &N) -> LoweringResult<Expr>
     where
         N: CstNode,
@@ -691,6 +699,7 @@ impl MySQLLowering {
             }
         }
 
+        // TODO: (COMPLETION-006) Parse DISTINCT modifier (currently hardcoded to false)
         Ok(Expr::Function {
             name: func_name,
             args,
