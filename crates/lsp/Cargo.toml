@@ -31,6 +31,7 @@ ropey = "1.6"
 # Internal crates
 unified-sql-lsp-ir = { path = "../ir" }
 unified-sql-lsp-catalog = { path = "../catalog" }
+unified-sql-lsp-semantic = { path = "../semantic" }
 unified-sql-lsp-lowering = { path = "../lowering" }
 unified-sql-grammar = { path = "../grammar" }
 

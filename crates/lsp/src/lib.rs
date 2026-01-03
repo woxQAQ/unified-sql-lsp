@@ -165,6 +165,8 @@
 //! ```
 
 pub mod backend;
+pub mod catalog_manager;
+pub mod completion;
 pub mod config;
 pub mod document;
 pub mod parsing;
@@ -172,6 +174,8 @@ pub mod sync;
 
 // Re-exports for convenience
 pub use backend::{LspBackend, LspError};
+pub use catalog_manager::CatalogManager;
+pub use completion::CompletionEngine;
 pub use config::{
     ConfigError, ConnectionPoolConfig, DialectVersion, EngineConfig, SchemaFilter,
 };

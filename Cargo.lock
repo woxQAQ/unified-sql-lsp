@@ -957,6 +957,7 @@ dependencies = [
  "unified-sql-lsp-catalog",
  "unified-sql-lsp-ir",
  "unified-sql-lsp-lowering",
+ "unified-sql-lsp-semantic",
 ]
 
 [[package]]

@@ -52,6 +52,8 @@
 //! }
 //! ```
 
+use crate::catalog_manager::CatalogManager;
+use crate::completion::CompletionEngine;
 use crate::config::EngineConfig;
 use crate::document::{DocumentError, DocumentStore, ParseMetadata};
 use crate::sync::DocumentSync;
@@ -66,7 +68,6 @@ use tracing::{error, info, warn};
 ///
 /// Main entry point for all LSP protocol operations.
 /// Uses tower-lsp framework for protocol handling.
-#[derive(Debug, Clone)]
 pub struct LspBackend {
     /// LSP client for sending notifications and requests
     client: Client,
@@ -79,6 +80,9 @@ pub struct LspBackend {
 
     /// Document synchronization and parsing manager
     doc_sync: Arc<DocumentSync>,
+
+    /// Catalog manager for database connections
+    catalog_manager: Arc<RwLock<CatalogManager>>,
 }
 
 impl LspBackend {
@@ -96,6 +100,7 @@ impl LspBackend {
             documents: Arc::new(DocumentStore::new()),
             config,
             doc_sync,
+            catalog_manager: Arc::new(RwLock::new(CatalogManager::new())),
         }
     }
 
@@ -432,7 +437,7 @@ impl LanguageServer for LspBackend {
     /// Completion request
     ///
     /// Called when the user requests completion (e.g., Ctrl+Space).
-    /// This is a stub implementation - full implementation will be in LSP-003.
+    /// Implements COMPLETION-001: SELECT clause column completion.
     async fn completion(
         &self,
         params: CompletionParams,
@@ -445,15 +450,69 @@ impl LanguageServer for LspBackend {
             uri, position.line, position.character
         );
 
-        // TODO: (LSP-003) Implement actual completion logic
-        // For now, return empty completion list
-        self.log_message(
-            "Completion is not yet implemented (LSP-003)",
-            MessageType::INFO,
-        )
-        .await;
+        // Get document
+        let document = match self.documents.get_document(&uri).await {
+            Some(doc) => doc,
+            None => {
+                warn!("Document not found for completion: {}", uri);
+                return Ok(None);
+            }
+        };
 
-        Ok(None)
+        // Get engine configuration
+        let config = match self.get_config().await {
+            Some(cfg) => cfg,
+            None => {
+                warn!("No engine configuration available for completion");
+                self.log_message(
+                    "Completion requires database connection configuration",
+                    MessageType::WARNING,
+                )
+                .await;
+                return Ok(None);
+            }
+        };
+
+        // Get catalog
+        let catalog = {
+            let mut manager = self.catalog_manager.write().await;
+            match manager.get_catalog(&config).await {
+                Ok(catalog) => catalog,
+                Err(e) => {
+                    error!("Failed to get catalog: {}", e);
+                    self.log_message(
+                        &format!("Failed to connect to database: {}", e),
+                        MessageType::ERROR,
+                    )
+                    .await;
+                    return Ok(None);
+                }
+            }
+        };
+
+        // Create completion engine and perform completion
+        let engine = CompletionEngine::new(catalog);
+        match engine.complete(&document, position).await {
+            Ok(Some(items)) => {
+                info!("Completion returned {} items", items.len());
+                Ok(Some(CompletionResponse::Array(items)))
+            }
+            Ok(None) => {
+                // No completion available (wrong context)
+                Ok(None)
+            }
+            Err(e) => {
+                error!("Completion error: {}", e);
+                if e.should_return_empty() {
+                    Ok(None)
+                } else {
+                    // Show error to user
+                    self.log_message(&format!("Completion error: {}", e), MessageType::ERROR)
+                        .await;
+                    Ok(None)
+                }
+            }
+        }
     }
 
     /// Hover request

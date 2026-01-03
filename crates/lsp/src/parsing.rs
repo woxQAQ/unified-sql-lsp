@@ -51,10 +51,9 @@
 //! }
 //! ```
 
-use std::sync::OnceLock;
 use std::time::{Duration, Instant};
 use tower_lsp::lsp_types::*;
-use tracing::{debug, warn};
+use tracing::debug;
 
 use unified_sql_lsp_ir::Dialect;
 use unified_sql_grammar::language_for_dialect;

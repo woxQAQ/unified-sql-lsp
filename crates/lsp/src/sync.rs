@@ -36,7 +36,7 @@ use tracing::{debug, info, warn};
 
 use crate::config::EngineConfig;
 use crate::document::{Document, ParseMetadata};
-use crate::parsing::{lsp_change_to_input_edit, ParseError, ParseResult, ParserManager};
+use crate::parsing::{ParseResult, ParserManager};
 use unified_sql_lsp_ir::Dialect;
 
 // Re-export ParseMetadata with a constructor
