@@ -7,4 +7,7 @@
 
 pub mod base;
 
+pub mod mysql;
+
 pub use base::DialectLoweringBase;
+pub use mysql::MySQLLowering;

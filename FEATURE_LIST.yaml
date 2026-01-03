@@ -107,11 +107,13 @@ meta:
     - 版本兼容（5.7 vs 8.0）
     - LIMIT/OFFSET 转换
   priority: P0
+  status: done
   dependencies: ["LOWERING-001", "GRAMMAR-002"]
   deliverables:
     - crates/lowering/src/dialect/mysql.rs
     - 单元测试
     - 版本测试矩阵
+    - Note: Fully implemented with MySQL-specific LIMIT syntax (3 forms), backtick identifiers, REPLACE statement support, and comprehensive error handling
 
 - id: LOWERING-003
   name: "PostgreSQL Lowering 实现"
