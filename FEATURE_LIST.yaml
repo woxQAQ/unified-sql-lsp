@@ -10,8 +10,8 @@
 meta:
   version: "1.0"
   last_updated: "2026-01-03"
-  total_features: 46
-  completed_features: 13
+  total_features: 48
+  completed_features: 14
 
 # =============================================================================
 # 阶段 0: 基础设施 (Foundation)
@@ -185,11 +185,13 @@ meta:
     - 解析表别名
     - 解析列引用归属
   priority: P0
+  status: done
   dependencies: ["SEMANTIC-001", "LOWERING-002", "LOWERING-003"]
   deliverables:
     - crates/semantic/src/analyzer.rs
     - 集成测试
     - 错误场景测试
+    - Note: Fully implemented with SemanticAnalyzer struct, table/column resolution, catalog integration, scope management, and comprehensive error handling. Includes TODOs for future features (CTEs, subqueries, function validation).
 
 - id: SEMANTIC-003
   name: "补全触发点判断"
@@ -216,6 +218,38 @@ meta:
   dependencies: ["SEMANTIC-002"]
   deliverables:
     - crates/semantic/src/resolution.rs
+    - 测试用例
+
+- id: SEMANTIC-005
+  name: "高级查询子句验证"
+  description: |
+    实现高级 SQL 子句的语义验证
+    - GROUP BY / HAVING 子句验证
+    - ORDER BY 子句验证
+    - Wildcard 展开 (table.*)
+    - 聚合函数上下文验证
+  priority: P1
+  dependencies: ["SEMANTIC-002"]
+  deliverables:
+    - GROUP BY / HAVING / ORDER BY 验证逻辑
+    - Wildcard 展开实现
+    - 聚合上下文跟踪
+    - 测试用例
+
+- id: SEMANTIC-006
+  name: "CTE 和集合操作支持"
+  description: |
+    实现 CTE 和集合操作的语义分析
+    - CTE 作用域创建和合成表
+    - CTE 输出列推断
+    - UNION / INTERSECT / EXCEPT 作用域处理
+    - 递归 CTE 支持
+  priority: P1
+  dependencies: ["SEMANTIC-002"]
+  deliverables:
+    - CTE 作用域层次结构
+    - 合成表创建逻辑
+    - 集合操作验证
     - 测试用例
 
 # =============================================================================

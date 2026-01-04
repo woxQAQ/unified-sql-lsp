@@ -112,11 +112,13 @@
 //! assert!(result.is_err());
 //! ```
 
+pub mod analyzer;
 pub mod error;
 pub mod scope;
 pub mod symbol;
 
 // Re-export commonly used types
+pub use analyzer::SemanticAnalyzer;
 pub use error::{SemanticError, SemanticResult};
 pub use scope::{Scope, ScopeManager, ScopeType};
 pub use symbol::{ColumnSymbol, TableSymbol};
