@@ -35,11 +35,11 @@ fn test_query_with_limit() {
 
 #[test]
 fn test_query_with_order_by() {
-    use unified_sql_lsp_ir::OrderBy;
+    use unified_sql_lsp_ir::query::SortDirection;
 
-    let order_by = vec![OrderBy {
+    let order_by = vec![unified_sql_lsp_ir::OrderBy {
         expr: Expr::Column(ColumnRef::new("id")),
-        direction: unified_sql_lsp_ir::SortDirection::Asc,
+        direction: Some(SortDirection::Asc),
     }];
 
     let query = Query::new(Dialect::PostgreSQL)
@@ -61,8 +61,8 @@ fn test_select_statement_default() {
 fn test_select_statement_with_projection() {
     let mut select = SelectStatement::default();
     select.projection = vec![
-        SelectItem::UnnamedExpr(Box::new(Expr::Column(ColumnRef::new("id")))),
-        SelectItem::UnnamedExpr(Box::new(Expr::Column(ColumnRef::new("name")))),
+        SelectItem::UnnamedExpr(Expr::Column(ColumnRef::new("id"))),
+        SelectItem::UnnamedExpr(Expr::Column(ColumnRef::new("name"))),
     ];
 
     assert_eq!(select.projection.len(), 2);
@@ -104,13 +104,17 @@ fn test_table_ref_with_alias() {
 }
 
 #[test]
-fn test_join_new() {
+fn test_join_construction() {
     let table_ref = TableRef {
         name: "orders".to_string(),
         alias: None,
         joins: Vec::new(),
     };
-    let join = Join::new(JoinType::Inner, table_ref);
+    let join = Join {
+        join_type: JoinType::Inner,
+        table: table_ref,
+        condition: JoinCondition::Natural,
+    };
 
     assert!(matches!(join.join_type, JoinType::Inner));
     assert_eq!(join.table.name, "orders");
@@ -124,20 +128,23 @@ fn test_join_with_condition() {
         joins: Vec::new(),
     };
 
-    let mut join = Join::new(JoinType::Inner, table_ref);
-    join.condition = Some(JoinCondition::On(Box::new(Expr::BinaryOp {
-        left: Box::new(Expr::Column(ColumnRef {
-            table: Some("users".to_string()),
-            column: "id".to_string(),
-        })),
-        op: BinaryOp::Eq,
-        right: Box::new(Expr::Column(ColumnRef {
-            table: Some("orders".to_string()),
-            column: "user_id".to_string(),
-        })),
-    })));
+    let join = Join {
+        join_type: JoinType::Inner,
+        table: table_ref,
+        condition: JoinCondition::On(Expr::BinaryOp {
+            left: Box::new(Expr::Column(ColumnRef {
+                table: Some("users".to_string()),
+                column: "id".to_string(),
+            })),
+            op: BinaryOp::Eq,
+            right: Box::new(Expr::Column(ColumnRef {
+                table: Some("orders".to_string()),
+                column: "user_id".to_string(),
+            })),
+        }),
+    };
 
-    assert!(matches!(join.condition, Some(JoinCondition::On(_))));
+    assert!(matches!(join.condition, JoinCondition::On(_)));
 }
 
 #[test]
@@ -148,19 +155,39 @@ fn test_join_types() {
         joins: Vec::new(),
     };
 
-    let inner_join = Join::new(JoinType::Inner, table.clone());
+    let inner_join = Join {
+        join_type: JoinType::Inner,
+        table: table.clone(),
+        condition: JoinCondition::Natural,
+    };
     assert!(matches!(inner_join.join_type, JoinType::Inner));
 
-    let left_join = Join::new(JoinType::Left, table.clone());
+    let left_join = Join {
+        join_type: JoinType::Left,
+        table: table.clone(),
+        condition: JoinCondition::Natural,
+    };
     assert!(matches!(left_join.join_type, JoinType::Left));
 
-    let right_join = Join::new(JoinType::Right, table.clone());
+    let right_join = Join {
+        join_type: JoinType::Right,
+        table: table.clone(),
+        condition: JoinCondition::Natural,
+    };
     assert!(matches!(right_join.join_type, JoinType::Right));
 
-    let full_join = Join::new(JoinType::Full, table.clone());
+    let full_join = Join {
+        join_type: JoinType::Full,
+        table: table.clone(),
+        condition: JoinCondition::Natural,
+    };
     assert!(matches!(full_join.join_type, JoinType::Full));
 
-    let cross_join = Join::new(JoinType::Cross, table);
+    let cross_join = Join {
+        join_type: JoinType::Cross,
+        table,
+        condition: JoinCondition::Natural,
+    };
     assert!(matches!(cross_join.join_type, JoinType::Cross));
 }
 
@@ -172,23 +199,25 @@ fn test_table_ref_with_joins() {
         joins: Vec::new(),
     };
 
-    let join1 = Join::new(
-        JoinType::Inner,
-        TableRef {
+    let join1 = Join {
+        join_type: JoinType::Inner,
+        table: TableRef {
             name: "orders".to_string(),
             alias: Some("o".to_string()),
             joins: Vec::new(),
         },
-    );
+        condition: JoinCondition::Natural,
+    };
 
-    let join2 = Join::new(
-        JoinType::Left,
-        TableRef {
+    let join2 = Join {
+        join_type: JoinType::Left,
+        table: TableRef {
             name: "products".to_string(),
             alias: Some("p".to_string()),
             joins: Vec::new(),
         },
-    );
+        condition: JoinCondition::Natural,
+    };
 
     table.joins.push(join1);
     table.joins.push(join2);
@@ -213,13 +242,16 @@ fn test_select_item_qualified_wildcard() {
 
 #[test]
 fn test_select_item_aliased_expr() {
-    let expr = Box::new(Expr::Column(ColumnRef::new("id")));
-    let aliased = SelectItem::AliasedExpr(expr, "user_id".to_string());
+    let expr = Expr::Column(ColumnRef::new("id"));
+    let aliased = SelectItem::AliasedExpr {
+        expr,
+        alias: "user_id".to_string(),
+    };
 
-    assert!(matches!(aliased, SelectItem::AliasedExpr(_, _)));
-    if let SelectItem::AliasedExpr(e, alias) = aliased {
+    assert!(matches!(aliased, SelectItem::AliasedExpr { .. }));
+    if let SelectItem::AliasedExpr { expr: e, alias } = aliased {
         assert_eq!(alias, "user_id");
-        assert!(matches!(*e, Expr::Column(_)));
+        assert!(matches!(e, Expr::Column(_)));
     }
 }
 
@@ -257,7 +289,7 @@ fn test_select_statement_with_group_by() {
 
 #[test]
 fn test_query_with_ctes() {
-    use unified_sql_lsp_ir::{CommonTableExpr, SetOp};
+    use unified_sql_lsp_ir::CommonTableExpr;
 
     let mut query = Query::new(Dialect::PostgreSQL);
     query.ctes = vec![CommonTableExpr {
