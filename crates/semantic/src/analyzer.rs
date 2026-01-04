@@ -14,10 +14,11 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use unified_sql_lsp_catalog::Catalog;
-use unified_sql_lsp_ir::{ColumnRef, Expr, Query, SelectItem, SelectStatement, SetOp, TableRef};
 use unified_sql_lsp_ir::Dialect;
+use unified_sql_lsp_ir::{ColumnRef, Expr, Query, SelectItem, SelectStatement, SetOp, TableRef};
 
 use crate::error::{SemanticError, SemanticResult};
+use crate::resolution::ColumnResolver;
 use crate::scope::{ScopeManager, ScopeType};
 use crate::symbol::{ColumnSymbol, TableSymbol};
 
@@ -158,7 +159,9 @@ impl SemanticAnalyzer {
     ) -> SemanticResult<(&TableSymbol, &ColumnSymbol)> {
         // Qualified reference: u.id
         if let Some(table_qualifier) = &column_ref.table {
-            let table = self.scope_manager.resolve_table(table_qualifier, scope_id)?;
+            let table = self
+                .scope_manager
+                .resolve_table(table_qualifier, scope_id)?;
 
             return table
                 .find_column(&column_ref.column)
@@ -204,6 +207,62 @@ impl SemanticAnalyzer {
     /// Get reference to scope manager for external queries
     pub fn scope_manager(&self) -> &ScopeManager {
         &self.scope_manager
+    }
+
+    /// Get a column resolver for enhanced resolution with fuzzy matching
+    ///
+    /// # Examples
+    ///
+    /// ```rust,ignore
+    /// use unified_sql_lsp_semantic::ColumnResolver;
+    ///
+    /// let resolver = analyzer.column_resolver();
+    /// let result = resolver.resolve_column(&column_ref, scope_id);
+    /// ```
+    pub fn column_resolver(&self) -> ColumnResolver {
+        ColumnResolver::new(self.scope_manager.clone())
+    }
+
+    /// Resolve a column with enhanced error reporting and suggestions
+    ///
+    /// This method provides richer results than the basic `resolve_column`,
+    /// including fuzzy matching and candidate suggestions for typos.
+    ///
+    /// # Arguments
+    ///
+    /// * `column_ref` - Column reference to resolve
+    /// * `scope_id` - Scope ID for resolution
+    ///
+    /// # Returns
+    ///
+    /// Enhanced resolution result with suggestions if not found
+    ///
+    /// # Examples
+    ///
+    /// ```rust,ignore
+    /// let result = analyzer.resolve_column_with_suggestions(&column_ref, scope_id);
+    /// match result {
+    ///     ColumnResolutionResult::Found { table, column } => {
+    ///         println!("Found {} in {}", column.name, table.display_name());
+    ///     }
+    ///     ColumnResolutionResult::NotFoundWithSuggestions { suggestions } => {
+    ///         println!("Did you mean: {}", suggestions[0].column.name);
+    ///     }
+    ///     ColumnResolutionResult::Ambiguous { candidates } => {
+    ///         println!("Ambiguous, specify one of:");
+    ///         for c in candidates {
+    ///             println!("  - {}.{}", c.table.display_name(), c.column.name);
+    ///         }
+    ///     }
+    /// }
+    /// ```
+    pub fn resolve_column_with_suggestions(
+        &self,
+        column_ref: &unified_sql_lsp_ir::ColumnRef,
+        scope_id: usize,
+    ) -> crate::resolution::ColumnResolutionResult {
+        let resolver = self.column_resolver();
+        resolver.resolve_column(column_ref, scope_id)
     }
 
     // -------------------------------------------------------------------------
@@ -376,7 +435,11 @@ impl SemanticAnalyzer {
     }
 
     /// Validate projection (SELECT clause)
-    fn validate_projection(&self, projection: &[SelectItem], scope_id: usize) -> SemanticResult<()> {
+    fn validate_projection(
+        &self,
+        projection: &[SelectItem],
+        scope_id: usize,
+    ) -> SemanticResult<()> {
         for item in projection {
             match item {
                 SelectItem::UnnamedExpr(expr) => {

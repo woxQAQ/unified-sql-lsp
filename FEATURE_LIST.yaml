@@ -11,7 +11,7 @@ meta:
   version: "1.0"
   last_updated: "2026-01-04"
   total_features: 48
-  completed_features: 15
+  completed_features: 16
 
 # =============================================================================
 # 阶段 0: 基础设施 (Foundation)
@@ -217,10 +217,12 @@ meta:
     - 检测歧义列
     - 提供候选项
   priority: P0
+  status: done
   dependencies: ["SEMANTIC-002"]
   deliverables:
     - crates/semantic/src/resolution.rs
     - 测试用例
+    - Note: Fully implemented with ColumnResolver, fuzzy matching (Levenshtein distance), candidate suggestions, ambiguity detection, and 11 comprehensive unit tests. Integrated with SemanticAnalyzer for enhanced resolution with "did you mean?" functionality.
 
 - id: SEMANTIC-005
   name: "高级查询子句验证"

@@ -114,11 +114,15 @@
 
 pub mod analyzer;
 pub mod error;
+pub mod resolution;
 pub mod scope;
 pub mod symbol;
 
 // Re-export commonly used types
 pub use analyzer::SemanticAnalyzer;
 pub use error::{SemanticError, SemanticResult};
+pub use resolution::{
+    ColumnCandidate, ColumnResolutionResult, ColumnResolver, MatchKind, ResolutionConfig,
+};
 pub use scope::{Scope, ScopeManager, ScopeType};
 pub use symbol::{ColumnSymbol, TableSymbol};
