@@ -34,6 +34,32 @@ This project provides a comprehensive LSP server for SQL that supports multiple 
 └─────────────────────────────────────────────────────────────────┘
 ```
 
+## Quick Start
+
+### Building
+
+```bash
+# Build all crates
+cargo build --workspace
+
+# Or build specific crates
+cargo build -p unified-sql-grammar
+cargo build -p unified-sql-lsp-lsp
+```
+
+### Testing
+
+```bash
+# Run all tests
+cargo test --workspace
+
+# Run specific test suites
+cargo test -p unified-sql-grammar
+cargo test -p unified-sql-lsp-lsp
+```
+
+See [TESTING.md](TESTING.md) for comprehensive testing documentation.
+
 ## Project Structure
 
 ```
@@ -47,7 +73,9 @@ unified-sql-lsp/
 │   └── catalog/          # Database schema abstraction
 ├── scripts/              # Build and utility scripts
 ├── FEATURE_LIST.yaml     # Feature tracking and milestones
-└── DESIGN.md             # Detailed architecture documentation
+├── DESIGN.md             # Detailed architecture documentation
+├── TESTING.md            # Comprehensive testing guide
+└── flake.nix             # Nix flake configuration
 ```
 
 ## Supported Dialects

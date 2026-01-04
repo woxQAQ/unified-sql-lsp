@@ -90,7 +90,7 @@ impl ParserManager {
         let mut parser = tree_sitter::Parser::new();
 
         parser
-            .set_language(*language)
+            .set_language(language)
             .map_err(|e| ParseError::Generic {
                 message: format!("Failed to set language: {}", e),
             })?;

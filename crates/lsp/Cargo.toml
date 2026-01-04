@@ -40,3 +40,4 @@ tree-sitter = "0.26"
 
 [dev-dependencies]
 tokio-test = "0.4"
+unified-sql-lsp-test-utils = { path = "../test-utils" }

@@ -1045,6 +1045,7 @@ dependencies = [
  "unified-sql-lsp-ir",
  "unified-sql-lsp-lowering",
  "unified-sql-lsp-semantic",
+ "unified-sql-lsp-test-utils",
 ]
 
 [[package]]

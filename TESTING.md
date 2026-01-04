@@ -16,7 +16,7 @@ This guide covers how to run, write, and extend tests in the unified-sql-lsp pro
 ### Run All Tests
 
 ```bash
-# Run all workspace tests
+# Run all tests
 cargo test --workspace
 
 # Run tests with output
@@ -37,29 +37,40 @@ cargo test -p unified-sql-lsp-catalog
 
 # Test only the lowering crate
 cargo test -p unified-sql-lsp-lowering
+
+# Test only the LSP crate
+cargo test -p unified-sql-lsp-lsp
+
+# Test only the grammar crate
+cargo test -p unified-sql-grammar
 ```
 
 ### Run Grammar Tests
 
 ```bash
-# Test all dialects
-cd crates/grammar
-npm test
+# Test grammar API
+cargo test -p unified-sql-grammar
 
-# Test specific dialect
+# Test specific dialect using tree-sitter CLI
+cd crates/grammar/src/grammar
 DIALECT=mysql tree-sitter test
 DIALECT=postgresql tree-sitter test
 DIALECT=base tree-sitter test
 ```
 
-### Run Integration Tests
+### Run LSP Integration Tests
 
 ```bash
-# Run all integration tests
-cargo test --workspace --test '*'
+# Run all LSP integration tests
+cargo test -p unified-sql-lsp-lsp --test '*'
 
-# Run specific integration test
-cargo test --test integration_test
+# Run specific test suites
+cargo test -p unified-sql-lsp-lsp --test completion_tests
+cargo test -p unified-sql-lsp-lsp --test parser_manager_tests
+cargo test -p unified-sql-lsp-lsp --test document_sync_tests
+cargo test -p unified-sql-lsp-lsp --test e2e_completion_tests
+cargo test -p unified-sql-lsp-lsp --test dialect_matrix_tests
+cargo test -p unified-sql-lsp-lsp --test error_handling_tests
 ```
 
 ## Test Organization
@@ -72,18 +83,47 @@ tests/
 │   ├── ir/            # IR type tests
 │   ├── lowering/      # Lowering conversion tests
 │   ├── semantic/      # Semantic analysis tests
-│   ├── catalog/       # Catalog metadata tests
-│   ├── lsp/           # LSP server tests
 │   └── grammar/       # Parser utility tests
-├── integration/       # Cross-crate integration tests
-├── matrix/           # Dialect/version test matrix
-└── fixtures/         # Test SQL queries and schemas
 
-crates/test-utils/    # Shared testing utilities
+crates/grammar/tests/
+├── api_tests.rs       # Grammar API integration tests
+                      # Tests language_for_dialect(), parsing with real trees
+                      # Tests dialect-specific syntax (MySQL LIMIT, PostgreSQL DISTINCT ON)
+
+crates/lsp/tests/
+├── completion_tests.rs        # Completion engine integration tests
+├── parser_manager_tests.rs    # ParserManager functionality tests
+├── document_sync_tests.rs     # DocumentSync orchestration tests
+├── e2e_completion_tests.rs    # End-to-end pipeline tests (parse → complete)
+├── dialect_matrix_tests.rs    # Multi-dialect macro-based tests
+└── error_handling_tests.rs    # Error scenarios and edge cases
 ```
 
-### Unit Tests
+## Coverage Goals
 
+The project aims for comprehensive test coverage:
+
+- **Grammar crate**: >80% coverage
+  - Grammar API integration tests
+  - Dialect-specific syntax tests
+  - Error detection tests
+
+- **LSP crate**: >80% coverage
+  - ParserManager tests
+  - DocumentSync tests
+  - Completion engine tests
+  - End-to-end integration tests
+  - Multi-dialect matrix tests
+  - Error handling tests
+
+To generate coverage reports:
+```bash
+cargo tarpaulin --workspace --lib --out Html
+```
+
+## Test Types
+
+#### Unit Tests
 Unit tests focus on single crates and test specific functionality in isolation:
 
 - **IR tests**: Verify query and expression construction, serialization
@@ -92,8 +132,7 @@ Unit tests focus on single crates and test specific functionality in isolation:
 - **Catalog tests**: Metadata types, serialization
 - **LSP tests**: Document sync, completion flow
 
-### Integration Tests
-
+#### Integration Tests
 Integration tests verify end-to-end functionality across multiple crates:
 
 - Completion flow: parse → lower → analyze → complete
