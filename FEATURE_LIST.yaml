@@ -11,7 +11,7 @@ meta:
   version: "1.0"
   last_updated: "2026-01-05"
   total_features: 48
-  completed_features: 17
+  completed_features: 18
 
 # =============================================================================
 # 阶段 0: 基础设施 (Foundation)
@@ -375,6 +375,7 @@ meta:
     - cursor position → syntax context → semantic context → catalog → candidates
     - 仅支持基础 SELECT 补全
   priority: P0
+  status: done
   dependencies:
     - "LSP-001"
     - "SEMANTIC-003"
@@ -383,9 +384,18 @@ meta:
     - "LOWERING-002"
     - "LOWERING-003"
   deliverables:
-    - crates/lsp/src/completion.rs
-    - 集成测试
-    - E2E 测试
+    - crates/lsp/src/completion/mod.rs (CompletionEngine)
+    - crates/lsp/src/completion/context.rs (context detection)
+    - crates/lsp/src/completion/scopes.rs (scope building)
+    - crates/lsp/src/completion/catalog_integration.rs (catalog integration)
+    - crates/lsp/src/completion/render.rs (LSP rendering)
+    - crates/lsp/src/backend.rs (LSP completion handler)
+    - 集成测试 (tests/completion_tests.rs)
+    - E2E 测试 (tests/e2e_completion_tests.rs)
+    - Note: Fully implemented end-to-end completion flow with context detection,
+      scope building, catalog integration, and LSP rendering. Supports SELECT
+      projection, FROM clause, qualified/unqualified column completion. WHERE
+      and JOIN completion have stubs for future features (COMPLETION-003, COMPLETION-005).
 
 - id: LSP-004
   name: "Go-to-Definition 支持"
