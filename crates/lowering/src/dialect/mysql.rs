@@ -708,21 +708,97 @@ impl MySQLLowering {
     }
 
     /// Lower CASE expression
+    ///
+    /// CASE expressions have the form:
+    /// CASE
+    ///   WHEN condition THEN result
+    ///   [WHEN condition THEN result ...]
+    ///   [ELSE else_result]
+    /// END
+    ///
+    /// Grammar: case_expression: seq('CASE', repeat(seq('WHEN', $.expression, 'THEN', $.expression)), optional(seq('ELSE', $.expression)), 'END')
     fn lower_case_expr<N>(&self, ctx: &mut LoweringContext, node: &N) -> LoweringResult<Expr>
     where
         N: CstNode,
     {
-        // TODO: (LOWERING-005) Implement CASE expression lowering
-        // - Parse WHEN-THEN-ELSE clause structure from CST
-        // - Handle both simple CASE and searched CASE forms
-        // - Support multiple WHEN clauses with proper evaluation order
-        // - Handle ELSE clause and NULL result
-        ctx.add_error(LoweringError::UnsupportedSyntax {
-            dialect: "MySQL".to_string(),
-            feature: "CASE expression".to_string(),
-            suggestion: "CASE support will be added in a future update".to_string(),
-        });
-        Ok(ctx.create_placeholder())
+        let children = node.all_children();
+        let mut conditions = Vec::new();
+        let mut results = Vec::new();
+        let mut else_result = None;
+
+        for child in children.iter() {
+            let kind = child.kind();
+
+            match kind {
+                "when_clause" => {
+                    // Process WHEN clause: WHEN <condition> THEN <result>
+                    let when_children = child.all_children();
+
+                    // when_clause should have: WHEN, condition, THEN, result
+                    if when_children.len() < 4 {
+                        ctx.add_error(LoweringError::MissingChild {
+                            context: "when_clause".to_string(),
+                            expected: "condition or result".to_string(),
+                        });
+                        return Ok(ctx.create_placeholder());
+                    }
+
+                    // Lower condition (after WHEN keyword, index 1)
+                    let condition = self.lower_expr(ctx, when_children[1])?;
+
+                    // Lower result (after THEN keyword, index 3)
+                    let result = self.lower_expr(ctx, when_children[3])?;
+
+                    conditions.push(condition);
+                    results.push(result);
+                }
+                "else_clause" => {
+                    // Process ELSE clause: ELSE <expression>
+                    let else_children = child.all_children();
+
+                    if else_children.len() < 2 {
+                        ctx.add_error(LoweringError::MissingChild {
+                            context: "else_clause".to_string(),
+                            expected: "expression".to_string(),
+                        });
+                        return Ok(ctx.create_placeholder());
+                    }
+
+                    // Lower ELSE expression (index 1)
+                    let expr = self.lower_expr(ctx, else_children[1])?;
+                    else_result = Some(Box::new(expr));
+                }
+                // Skip CASE, END, and other keyword nodes
+                _ => {
+                    // Keywords like "CASE", "END", "WHEN", "THEN", "ELSE" - skip
+                    continue;
+                }
+            }
+        }
+
+        // Validate that conditions and results match
+        if conditions.len() != results.len() {
+            ctx.add_error(LoweringError::InvalidLiteral {
+                value: "Mismatched conditions and results in CASE expression".to_string(),
+                type_name: "Case".to_string(),
+            });
+            return Ok(ctx.create_placeholder());
+        }
+
+        // At least one WHEN clause is required
+        if conditions.is_empty() {
+            ctx.add_error(LoweringError::MissingChild {
+                context: "case_expression".to_string(),
+                expected: "when_clause".to_string(),
+            });
+            return Ok(ctx.create_placeholder());
+        }
+
+        Ok(Expr::Case {
+            conditions,
+            results,
+            else_result,
+        })
     }
 
     /// Normalize identifier by removing backticks

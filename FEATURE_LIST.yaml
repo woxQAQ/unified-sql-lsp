@@ -9,9 +9,9 @@
 
 meta:
   version: "1.0"
-  last_updated: "2026-01-04"
+  last_updated: "2026-01-05"
   total_features: 48
-  completed_features: 16
+  completed_features: 17
 
 # =============================================================================
 # 阶段 0: 基础设施 (Foundation)
@@ -153,10 +153,12 @@ meta:
     - 支持多个 WHEN 子句，保证正确的求值顺序
     - 处理 ELSE 子句和 NULL 结果
   priority: P1
+  status: done
   dependencies: ["LOWERING-001"]
   deliverables:
     - CASE 表达式 lowering 逻辑
     - 测试用例
+    - Note: Fully implemented for MySQL and PostgreSQL with comprehensive test coverage including nested CASE expressions, multiple WHEN clauses, optional ELSE, and error handling
 
 # =============================================================================
 # 阶段 1: 语义分析 (Semantic Analysis)
