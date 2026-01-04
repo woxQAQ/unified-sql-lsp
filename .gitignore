@@ -50,7 +50,6 @@ node_modules/
 
 # Claude Code files
 AGENT_LOGGING.yaml
-.claude/
 
 # Test fixtures (except examples)
 test/fixtures/local/
