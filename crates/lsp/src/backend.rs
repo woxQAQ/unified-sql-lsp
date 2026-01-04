@@ -292,12 +292,14 @@ impl LanguageServer for LspBackend {
                                 false,
                                 0,
                             );
-                            if let Err(e) = self
-                                .documents
-                                .update_document_tree(&uri, tree, metadata)
-                                .await
-                            {
-                                error!("Failed to update document tree: {}", e);
+                            if let Some(tree) = tree {
+                                if let Err(e) = self
+                                    .documents
+                                    .update_document_tree(&uri, tree, metadata)
+                                    .await
+                                {
+                                    error!("Failed to update document tree: {}", e);
+                                }
                             }
                         }
                         crate::parsing::ParseResult::Partial { tree, errors } => {
@@ -308,12 +310,14 @@ impl LanguageServer for LspBackend {
                                 true,
                                 errors.len(),
                             );
-                            if let Err(e) = self
-                                .documents
-                                .update_document_tree(&uri, tree, metadata)
-                                .await
-                            {
-                                error!("Failed to update document tree: {}", e);
+                            if let Some(tree) = tree {
+                                if let Err(e) = self
+                                    .documents
+                                    .update_document_tree(&uri, tree, metadata)
+                                    .await
+                                {
+                                    error!("Failed to update document tree: {}", e);
+                                }
                             }
                             // TODO: (DIAG-002) Publish diagnostics
                         }
@@ -376,12 +380,14 @@ impl LanguageServer for LspBackend {
                                 false,
                                 0,
                             );
-                            if let Err(e) = self
-                                .documents
-                                .update_document_tree(&uri, tree, metadata)
-                                .await
-                            {
-                                error!("Failed to update document tree: {}", e);
+                            if let Some(tree) = tree {
+                                if let Err(e) = self
+                                    .documents
+                                    .update_document_tree(&uri, tree, metadata)
+                                    .await
+                                {
+                                    error!("Failed to update document tree: {}", e);
+                                }
                             }
                         }
                         crate::parsing::ParseResult::Partial { tree, errors } => {
@@ -392,12 +398,14 @@ impl LanguageServer for LspBackend {
                                 true,
                                 errors.len(),
                             );
-                            if let Err(e) = self
-                                .documents
-                                .update_document_tree(&uri, tree, metadata)
-                                .await
-                            {
-                                error!("Failed to update document tree: {}", e);
+                            if let Some(tree) = tree {
+                                if let Err(e) = self
+                                    .documents
+                                    .update_document_tree(&uri, tree, metadata)
+                                    .await
+                                {
+                                    error!("Failed to update document tree: {}", e);
+                                }
                             }
                             // TODO: (DIAG-002) Publish diagnostics
                         }

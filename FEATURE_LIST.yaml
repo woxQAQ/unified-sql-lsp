@@ -9,9 +9,9 @@
 
 meta:
   version: "1.0"
-  last_updated: "2026-01-03"
+  last_updated: "2026-01-04"
   total_features: 48
-  completed_features: 14
+  completed_features: 15
 
 # =============================================================================
 # 阶段 0: 基础设施 (Foundation)
@@ -202,10 +202,12 @@ meta:
     - QualifiedColumn (table. 后)
     - JoinCondition (JOIN ON)
   priority: P0
+  status: done
   dependencies: ["SEMANTIC-002", "GRAMMAR-002", "GRAMMAR-003"]
   deliverables:
-    - crates/semantic/src/context.rs
+    - crates/lsp/src/completion/context.rs
     - 单元测试
+    - Note: Fully implemented with SelectProjection, FromClause, WhereClause, and JoinCondition context detection. Includes comprehensive unit tests for all context types.
 
 - id: SEMANTIC-004
   name: "列引用解析"

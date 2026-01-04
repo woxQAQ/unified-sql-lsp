@@ -140,9 +140,15 @@ impl ParserManager {
         let errors = self.collect_errors(&tree, text);
 
         if errors.is_empty() {
-            ParseResult::Success { tree, parse_time }
+            ParseResult::Success {
+                tree: Some(tree),
+                parse_time,
+            }
         } else {
-            ParseResult::Partial { tree, errors }
+            ParseResult::Partial {
+                tree: Some(tree),
+                errors,
+            }
         }
     }
 
@@ -203,9 +209,15 @@ impl ParserManager {
         let errors = self.collect_errors(&tree, text);
 
         if errors.is_empty() {
-            ParseResult::Success { tree, parse_time }
+            ParseResult::Success {
+                tree: Some(tree),
+                parse_time,
+            }
         } else {
-            ParseResult::Partial { tree, errors }
+            ParseResult::Partial {
+                tree: Some(tree),
+                errors,
+            }
         }
     }
 
@@ -261,7 +273,8 @@ pub enum ParseResult {
     /// Successful parse with no errors
     Success {
         /// Parsed syntax tree
-        tree: tree_sitter::Tree,
+        /// Optional to support testing without compiled grammars
+        tree: Option<tree_sitter::Tree>,
 
         /// Time taken to parse
         parse_time: Duration,
@@ -272,7 +285,8 @@ pub enum ParseResult {
     /// The tree is still valid and contains ERROR nodes marking the problematic areas.
     Partial {
         /// Parsed syntax tree (contains ERROR nodes)
-        tree: tree_sitter::Tree,
+        /// Optional to support testing without compiled grammars
+        tree: Option<tree_sitter::Tree>,
 
         /// List of parse errors
         errors: Vec<ParseError>,
@@ -306,8 +320,8 @@ impl ParseResult {
     /// Get the tree if available
     pub fn tree(&self) -> Option<&tree_sitter::Tree> {
         match self {
-            ParseResult::Success { tree, .. } => Some(tree),
-            ParseResult::Partial { tree, .. } => Some(tree),
+            ParseResult::Success { tree, .. } => tree.as_ref(),
+            ParseResult::Partial { tree, .. } => tree.as_ref(),
             ParseResult::Failed { .. } => None,
         }
     }
@@ -323,7 +337,7 @@ impl ParseResult {
     /// Extract success result
     pub fn into_success(self) -> Option<(tree_sitter::Tree, Duration)> {
         match self {
-            ParseResult::Success { tree, parse_time } => Some((tree, parse_time)),
+            ParseResult::Success { tree, parse_time } => tree.map(|t| (t, parse_time)),
             _ => None,
         }
     }

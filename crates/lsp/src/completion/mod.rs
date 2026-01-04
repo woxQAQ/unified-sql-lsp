@@ -191,6 +191,12 @@ impl CompletionEngine {
             }
             CompletionContext::WhereClause => {
                 // WHERE clause completion (COMPLETION-005) - not implemented yet
+                // TODO: (COMPLETION-005) Implement WHERE clause column completion
+                Ok(None)
+            }
+            CompletionContext::JoinCondition { .. } => {
+                // JOIN ON condition completion (COMPLETION-003) - not implemented yet
+                // TODO: (COMPLETION-003) Implement JOIN ON condition column completion
                 Ok(None)
             }
             CompletionContext::Unknown => Ok(None),

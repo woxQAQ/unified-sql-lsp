@@ -37,6 +37,16 @@ pub enum CompletionContext {
     /// User is typing in the WHERE clause, e.g., `SELECT * FROM users WHERE |`
     WhereClause,
 
+    /// JOIN ON condition
+    ///
+    /// User is typing in the JOIN ON condition, e.g., `SELECT * FROM users JOIN orders ON |`
+    JoinCondition {
+        /// Left table in the join
+        left_table: Option<String>,
+        /// Right table in the join
+        right_table: Option<String>,
+    },
+
     /// Unknown context
     ///
     /// Cursor is in a position that doesn't match known completion contexts
@@ -57,6 +67,11 @@ impl CompletionContext {
     /// Check if this is a WHERE clause context
     pub fn is_where_clause(&self) -> bool {
         matches!(self, CompletionContext::WhereClause)
+    }
+
+    /// Check if this is a JOIN ON condition context
+    pub fn is_join_condition(&self) -> bool {
+        matches!(self, CompletionContext::JoinCondition { .. })
     }
 }
 
@@ -125,6 +140,16 @@ pub fn detect_completion_context(
             // WHERE clause
             "where_clause" => {
                 return CompletionContext::WhereClause;
+            }
+
+            // JOIN ON clause
+            "join_clause" => {
+                // Extract left and right table names from the join
+                let (left_table, right_table) = extract_join_tables(&n, source);
+                return CompletionContext::JoinCondition {
+                    left_table,
+                    right_table,
+                };
             }
 
             _ => {}
@@ -239,6 +264,52 @@ fn extract_qualifier(node: &Node, source: &str, position: Position) -> Option<St
     None
 }
 
+/// Extract left and right table names from a join clause
+///
+/// For a JOIN like `users JOIN orders ON users.id = orders.user_id`,
+/// this extracts ("users", "orders")
+fn extract_join_tables(join_node: &Node, source: &str) -> (Option<String>, Option<String>) {
+    // Get parent from_clause to find the left table
+    let mut left_table = None;
+    let mut right_table = None;
+
+    // First, try to get the right table (the table being joined)
+    // In the join_clause node, the table_name is typically the second child (after JOIN keyword)
+    let mut walk = join_node.walk();
+    let mut children = join_node.children(&mut walk);
+    let mut found_join_keyword = false;
+
+    for child in &mut children {
+        match child.kind() {
+            "JOIN" | "INNER" | "LEFT" | "RIGHT" | "FULL" => {
+                found_join_keyword = true;
+            }
+            "table_name" | "table_reference" if found_join_keyword => {
+                if let Some(name) = extract_identifier(&child, source) {
+                    right_table = Some(name);
+                    break;
+                }
+            }
+            _ => {}
+        }
+    }
+
+    // Now, try to get the left table from the parent context
+    // Walk up to find the from_clause and get tables before this join
+    if let Some(parent) = join_node.parent() {
+        if parent.kind() == "from_clause" || parent.kind() == "select_statement" {
+            // Look for table_reference nodes that come before this join
+            let from_tables = extract_tables_from_from_clause(&parent, source);
+            if !from_tables.is_empty() {
+                // The last table before the join is typically the left table
+                left_table = from_tables.into_iter().next();
+            }
+        }
+    }
+
+    (left_table, right_table)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -253,6 +324,7 @@ mod tests {
         assert!(ctx.is_select_projection());
         assert!(!ctx.is_from_clause());
         assert!(!ctx.is_where_clause());
+        assert!(!ctx.is_join_condition());
     }
 
     #[test]
@@ -261,6 +333,7 @@ mod tests {
         assert!(!ctx.is_select_projection());
         assert!(ctx.is_from_clause());
         assert!(!ctx.is_where_clause());
+        assert!(!ctx.is_join_condition());
     }
 
     #[test]
@@ -269,6 +342,19 @@ mod tests {
         assert!(!ctx.is_select_projection());
         assert!(!ctx.is_from_clause());
         assert!(ctx.is_where_clause());
+        assert!(!ctx.is_join_condition());
+    }
+
+    #[test]
+    fn test_completion_context_is_join_condition() {
+        let ctx = CompletionContext::JoinCondition {
+            left_table: Some("users".to_string()),
+            right_table: Some("orders".to_string()),
+        };
+        assert!(!ctx.is_select_projection());
+        assert!(!ctx.is_from_clause());
+        assert!(!ctx.is_where_clause());
+        assert!(ctx.is_join_condition());
     }
 
     // Note: Full integration tests with real tree-sitter parsing
