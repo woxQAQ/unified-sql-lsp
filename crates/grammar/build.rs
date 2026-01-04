@@ -23,7 +23,9 @@ fn main() {
 
         // Run tree-sitter generate
         let status = Command::new("tree-sitter")
-            .args(["generate", "--no-bindings"])
+            .arg("generate")
+            .arg("-o")
+            .arg("gen")
             .current_dir(grammar_dir)
             .status();
 
@@ -48,21 +50,26 @@ fn main() {
             }
         }
 
-        // Copy generated parser.c to dialect-specific file
-        let parser_c = grammar_dir.join("src/parser.c");
+        // Rename generated parser.c to dialect-specific file
+        let parser_c = grammar_dir.join("gen/parser.c");
+        let dialect_parser_c = grammar_dir.join(format!("gen/parser-{}.c", dialect));
+
         if parser_c.exists() {
-            let dest_path = Path::new(&out_dir).join(format!("parser-{}.c", dialect));
-            fs::copy(&parser_c, &dest_path).expect("Failed to copy parser.c");
+            // Rename to dialect-specific file in gen/
+            fs::rename(&parser_c, &dialect_parser_c).expect("Failed to rename parser.c");
             println!(
-                "cargo:warning=Copied {} parser to {}",
-                dialect,
-                dest_path.display()
+                "cargo:warning=Saved {} parser as gen/parser-{}.c",
+                dialect, dialect
             );
+
+            // Also copy to out_dir for compilation
+            let dest_path = Path::new(&out_dir).join(format!("parser-{}.c", dialect));
+            fs::copy(&dialect_parser_c, &dest_path).expect("Failed to copy parser.c");
 
             // Compile the parser
             cc::Build::new()
                 .file(&dest_path)
-                .include(grammar_dir.join("src"))
+                .include(grammar_dir.join("gen"))
                 .compile(&format!("parser-{}", dialect));
 
             println!("cargo:warning=Compiled {} parser", dialect);

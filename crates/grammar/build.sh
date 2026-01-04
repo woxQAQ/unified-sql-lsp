@@ -21,23 +21,15 @@ for DIALECT in "${DIALECTS[@]}"; do
 
   export DIALECT=$DIALECT
 
-  if [ -f "src/parser.c" ]; then
-    rm src/parser.c
-  fi
+  tree-sitter generate -o gen
 
-  if [ -f "src/parser.h" ]; then
-    rm src/parser.h
-  fi
-
-  tree-sitter generate --no-bindings
-
-  if [ -f "src/parser.c" ]; then
+  if [ -f "gen/parser.c" ]; then
     echo "✓ Successfully built $DIALECT grammar"
 
-    # Copy the parser to a dialect-specific file
-    cp src/parser.c "src/parser-${DIALECT}.c"
+    # Rename to dialect-specific file to avoid overwriting
+    mv gen/parser.c "gen/parser-${DIALECT}.c"
 
-    echo "  → Saved as src/parser-${DIALECT}.c"
+    echo "  → Saved as gen/parser-${DIALECT}.c"
   else
     echo "✗ Failed to build $DIALECT grammar"
     exit 1
@@ -49,5 +41,5 @@ echo "======================================"
 echo "All grammars built successfully!"
 echo ""
 echo "Generated files:"
-ls -lh src/parser-*.c 2>/dev/null || echo "  No parser files found"
+ls -lh gen/parser-*.c 2>/dev/null || echo "  No parser files found"
 echo ""
