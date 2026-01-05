@@ -24,7 +24,7 @@
 use crate::dialect::DialectLoweringBase;
 use crate::{CstNode, Lowering, LoweringContext, LoweringError, LoweringResult};
 use unified_sql_lsp_ir::expr::{BinaryOp, ColumnRef, Literal, UnaryOp};
-use unified_sql_lsp_ir::query::{OrderBy, SelectItem, SelectStatement, TableRef};
+use unified_sql_lsp_ir::query::{OrderBy, SelectItem, SelectStatement, SortDirection, TableRef};
 use unified_sql_lsp_ir::{Dialect, Expr, Query};
 
 /// PostgreSQL CST → IR lowering implementation
@@ -531,13 +531,23 @@ impl PostgreSQLLowering {
                 let expr = self.lower_expr(ctx, child)?;
                 order_by.push(OrderBy {
                     expr,
-                    direction: None, // Default ASC
+                    direction: None, // Will be set if ASC/DESC follows
                 });
-            } else if child.kind() == "order_by_direction" {
-                // TODO: (LOWERING-004) Implement ORDER BY direction parsing
-                // - Parse ASC/DESC keywords from CST
-                // - Associate direction with the previous expression in order_by
+            } else if matches!(child.kind(), "ASC" | "DESC") {
+                // ASC/DESC are direct children of order_by_element in the CST
+                // Associate direction with the most recent expression
+                if let Some(last) = order_by.last_mut() {
+                    last.direction = if child.kind() == "DESC" {
+                        Some(SortDirection::Desc)
+                    } else {
+                        Some(SortDirection::Asc)
+                    };
+                }
+                // If no previous expression exists, this is a syntax error
+                // but we handle it gracefully by ignoring the stray direction keyword
             }
+            // Note: ORDER, BY keywords and commas are not processed here
+            // They are structural CST nodes that don't need lowering to IR
         }
 
         Ok(order_by)

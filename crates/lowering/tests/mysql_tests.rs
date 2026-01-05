@@ -9,6 +9,7 @@
 //! covering major features including SELECT statements, LIMIT clauses, expressions,
 //! and MySQL-specific syntax.
 
+use unified_sql_lsp_ir::query::SortDirection;
 use unified_sql_lsp_ir::{BinaryOp, Dialect, Expr, Literal};
 use unified_sql_lsp_lowering::cst::MockCstNode;
 use unified_sql_lsp_lowering::dialect::MySQLLowering;
@@ -753,4 +754,302 @@ fn test_mysql_case_expression_malformed_when_error() {
         ctx.has_errors(),
         "Should have error for malformed WHEN clause"
     );
+}
+
+// =============================================================================
+// ORDER BY Direction Tests (LOWERING-004)
+// =============================================================================
+
+#[test]
+fn test_mysql_order_by_default_direction() {
+    let lowering = MySQLLowering;
+    let mut ctx = LoweringContext::new(Dialect::MySQL);
+
+    // SELECT id FROM users ORDER BY name
+    let id_column = MockCstNode::new("column_ref").with_text("id");
+    let projection = MockCstNode::new("projection").with_child(None, id_column);
+
+    let table = MockCstNode::new("table_name").with_text("users");
+    let from = MockCstNode::new("from_clause").with_child(Some("table"), table);
+
+    // ORDER BY name (no direction specified)
+    let name_column = MockCstNode::new("column_ref").with_text("name");
+    let order_by = MockCstNode::new("order_by_clause")
+        .with_child(None, MockCstNode::new("ORDER"))
+        .with_child(None, MockCstNode::new("BY"))
+        .with_child(None, name_column);
+
+    let cst = MockCstNode::new("select_statement")
+        .with_child(Some("projection"), projection)
+        .with_child(Some("from"), from)
+        .with_child(Some("order_by_clause"), order_by);
+
+    let result = lowering.lower_query(&mut ctx, &cst);
+
+    assert!(result.is_ok(), "Lowering should succeed");
+    let query = result.unwrap();
+
+    assert!(
+        query.order_by.is_some(),
+        "Query should have ORDER BY clause"
+    );
+    let order_by_items = query.order_by.unwrap();
+    assert_eq!(order_by_items.len(), 1, "Should have one ORDER BY item");
+
+    // Default direction is None (which means ASC in SQL)
+    assert_eq!(
+        order_by_items[0].direction, None,
+        "Default direction should be None (ASC)"
+    );
+    assert!(!ctx.has_errors(), "Should have no errors");
+}
+
+#[test]
+fn test_mysql_order_by_with_asc() {
+    let lowering = MySQLLowering;
+    let mut ctx = LoweringContext::new(Dialect::MySQL);
+
+    // SELECT id FROM users ORDER BY name ASC
+    let id_column = MockCstNode::new("column_ref").with_text("id");
+    let projection = MockCstNode::new("projection").with_child(None, id_column);
+
+    let table = MockCstNode::new("table_name").with_text("users");
+    let from = MockCstNode::new("from_clause").with_child(Some("table"), table);
+
+    // ORDER BY name ASC
+    let name_column = MockCstNode::new("column_ref").with_text("name");
+    let order_by = MockCstNode::new("order_by_clause")
+        .with_child(None, MockCstNode::new("ORDER"))
+        .with_child(None, MockCstNode::new("BY"))
+        .with_child(None, name_column)
+        .with_child(None, MockCstNode::new("ASC"));
+
+    let cst = MockCstNode::new("select_statement")
+        .with_child(Some("projection"), projection)
+        .with_child(Some("from"), from)
+        .with_child(Some("order_by_clause"), order_by);
+
+    let result = lowering.lower_query(&mut ctx, &cst);
+
+    assert!(result.is_ok(), "Lowering should succeed");
+    let query = result.unwrap();
+
+    assert!(
+        query.order_by.is_some(),
+        "Query should have ORDER BY clause"
+    );
+    let order_by_items = query.order_by.unwrap();
+    assert_eq!(order_by_items.len(), 1, "Should have one ORDER BY item");
+
+    assert_eq!(
+        order_by_items[0].direction,
+        Some(SortDirection::Asc),
+        "Direction should be ASC"
+    );
+    assert!(!ctx.has_errors(), "Should have no errors");
+}
+
+#[test]
+fn test_mysql_order_by_with_desc() {
+    let lowering = MySQLLowering;
+    let mut ctx = LoweringContext::new(Dialect::MySQL);
+
+    // SELECT id FROM users ORDER BY name DESC
+    let id_column = MockCstNode::new("column_ref").with_text("id");
+    let projection = MockCstNode::new("projection").with_child(None, id_column);
+
+    let table = MockCstNode::new("table_name").with_text("users");
+    let from = MockCstNode::new("from_clause").with_child(Some("table"), table);
+
+    // ORDER BY name DESC
+    let name_column = MockCstNode::new("column_ref").with_text("name");
+    let order_by = MockCstNode::new("order_by_clause")
+        .with_child(None, MockCstNode::new("ORDER"))
+        .with_child(None, MockCstNode::new("BY"))
+        .with_child(None, name_column)
+        .with_child(None, MockCstNode::new("DESC"));
+
+    let cst = MockCstNode::new("select_statement")
+        .with_child(Some("projection"), projection)
+        .with_child(Some("from"), from)
+        .with_child(Some("order_by_clause"), order_by);
+
+    let result = lowering.lower_query(&mut ctx, &cst);
+
+    assert!(result.is_ok(), "Lowering should succeed");
+    let query = result.unwrap();
+
+    assert!(
+        query.order_by.is_some(),
+        "Query should have ORDER BY clause"
+    );
+    let order_by_items = query.order_by.unwrap();
+    assert_eq!(order_by_items.len(), 1, "Should have one ORDER BY item");
+
+    assert_eq!(
+        order_by_items[0].direction,
+        Some(SortDirection::Desc),
+        "Direction should be DESC"
+    );
+    assert!(!ctx.has_errors(), "Should have no errors");
+}
+
+#[test]
+fn test_mysql_order_by_multiple_columns_mixed_directions() {
+    let lowering = MySQLLowering;
+    let mut ctx = LoweringContext::new(Dialect::MySQL);
+
+    // SELECT id FROM users ORDER BY name ASC, id DESC
+    let id_column = MockCstNode::new("column_ref").with_text("id");
+    let projection = MockCstNode::new("projection").with_child(None, id_column);
+
+    let table = MockCstNode::new("table_name").with_text("users");
+    let from = MockCstNode::new("from_clause").with_child(Some("table"), table);
+
+    // ORDER BY name ASC, id DESC
+    let name_column = MockCstNode::new("column_ref").with_text("name");
+    let id_order_column = MockCstNode::new("column_ref").with_text("id");
+    let order_by = MockCstNode::new("order_by_clause")
+        .with_child(None, MockCstNode::new("ORDER"))
+        .with_child(None, MockCstNode::new("BY"))
+        .with_child(None, name_column)
+        .with_child(None, MockCstNode::new("ASC"))
+        .with_child(None, MockCstNode::new(","))
+        .with_child(None, id_order_column)
+        .with_child(None, MockCstNode::new("DESC"));
+
+    let cst = MockCstNode::new("select_statement")
+        .with_child(Some("projection"), projection)
+        .with_child(Some("from"), from)
+        .with_child(Some("order_by_clause"), order_by);
+
+    let result = lowering.lower_query(&mut ctx, &cst);
+
+    assert!(result.is_ok(), "Lowering should succeed");
+    let query = result.unwrap();
+
+    assert!(
+        query.order_by.is_some(),
+        "Query should have ORDER BY clause"
+    );
+    let order_by_items = query.order_by.unwrap();
+    assert_eq!(order_by_items.len(), 2, "Should have two ORDER BY items");
+
+    assert_eq!(
+        order_by_items[0].direction,
+        Some(SortDirection::Asc),
+        "First item should be ASC"
+    );
+    assert_eq!(
+        order_by_items[1].direction,
+        Some(SortDirection::Desc),
+        "Second item should be DESC"
+    );
+    assert!(!ctx.has_errors(), "Should have no errors");
+}
+
+#[test]
+fn test_mysql_order_by_partial_directions() {
+    let lowering = MySQLLowering;
+    let mut ctx = LoweringContext::new(Dialect::MySQL);
+
+    // SELECT id FROM users ORDER BY name, id DESC
+    let id_column = MockCstNode::new("column_ref").with_text("id");
+    let projection = MockCstNode::new("projection").with_child(None, id_column);
+
+    let table = MockCstNode::new("table_name").with_text("users");
+    let from = MockCstNode::new("from_clause").with_child(Some("table"), table);
+
+    // ORDER BY name, id DESC (first has no direction, second is DESC)
+    let name_column = MockCstNode::new("column_ref").with_text("name");
+    let id_order_column = MockCstNode::new("column_ref").with_text("id");
+    let order_by = MockCstNode::new("order_by_clause")
+        .with_child(None, MockCstNode::new("ORDER"))
+        .with_child(None, MockCstNode::new("BY"))
+        .with_child(None, name_column)
+        .with_child(None, MockCstNode::new(","))
+        .with_child(None, id_order_column)
+        .with_child(None, MockCstNode::new("DESC"));
+
+    let cst = MockCstNode::new("select_statement")
+        .with_child(Some("projection"), projection)
+        .with_child(Some("from"), from)
+        .with_child(Some("order_by_clause"), order_by);
+
+    let result = lowering.lower_query(&mut ctx, &cst);
+
+    assert!(result.is_ok(), "Lowering should succeed");
+    let query = result.unwrap();
+
+    assert!(
+        query.order_by.is_some(),
+        "Query should have ORDER BY clause"
+    );
+    let order_by_items = query.order_by.unwrap();
+    assert_eq!(order_by_items.len(), 2, "Should have two ORDER BY items");
+
+    assert_eq!(
+        order_by_items[0].direction, None,
+        "First item should have no direction (default ASC)"
+    );
+    assert_eq!(
+        order_by_items[1].direction,
+        Some(SortDirection::Desc),
+        "Second item should be DESC"
+    );
+    assert!(!ctx.has_errors(), "Should have no errors");
+}
+
+#[test]
+fn test_mysql_order_by_with_limit() {
+    let lowering = MySQLLowering;
+    let mut ctx = LoweringContext::new(Dialect::MySQL);
+
+    // SELECT id FROM users ORDER BY name DESC LIMIT 10
+    let id_column = MockCstNode::new("column_ref").with_text("id");
+    let projection = MockCstNode::new("projection").with_child(None, id_column);
+
+    let table = MockCstNode::new("table_name").with_text("users");
+    let from = MockCstNode::new("from_clause").with_child(Some("table"), table);
+
+    // ORDER BY name DESC
+    let name_column = MockCstNode::new("column_ref").with_text("name");
+    let order_by = MockCstNode::new("order_by_clause")
+        .with_child(None, MockCstNode::new("ORDER"))
+        .with_child(None, MockCstNode::new("BY"))
+        .with_child(None, name_column)
+        .with_child(None, MockCstNode::new("DESC"));
+
+    // LIMIT 10
+    let limit_literal = MockCstNode::new("literal").with_text("10");
+    let limit = MockCstNode::new("limit_clause")
+        .with_child(None, MockCstNode::new("LIMIT"))
+        .with_child(None, limit_literal);
+
+    let cst = MockCstNode::new("select_statement")
+        .with_child(Some("projection"), projection)
+        .with_child(Some("from"), from)
+        .with_child(Some("order_by_clause"), order_by)
+        .with_child(Some("limit_clause"), limit);
+
+    let result = lowering.lower_query(&mut ctx, &cst);
+
+    assert!(result.is_ok(), "Lowering should succeed");
+    let query = result.unwrap();
+
+    assert!(
+        query.order_by.is_some(),
+        "Query should have ORDER BY clause"
+    );
+    let order_by_items = query.order_by.unwrap();
+    assert_eq!(order_by_items.len(), 1, "Should have one ORDER BY item");
+
+    assert_eq!(
+        order_by_items[0].direction,
+        Some(SortDirection::Desc),
+        "Direction should be DESC"
+    );
+
+    assert!(query.limit.is_some(), "Query should have LIMIT clause");
+    assert!(!ctx.has_errors(), "Should have no errors");
 }

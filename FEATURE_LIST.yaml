@@ -11,7 +11,7 @@ meta:
   version: "1.0"
   last_updated: "2026-01-05"
   total_features: 48
-  completed_features: 18
+  completed_features: 19
 
 # =============================================================================
 # 阶段 0: 基础设施 (Foundation)
@@ -139,10 +139,12 @@ meta:
     - 将方向与 order_by 中的表达式关联
     - 处理多个带有不同方向的排序表达式
   priority: P1
+  status: done
   dependencies: ["LOWERING-001"]
   deliverables:
     - ORDER BY 方向解析逻辑
     - 测试用例
+    - Note: Fully implemented for MySQL and PostgreSQL with ASC/DESC keyword parsing, direction association with expressions, support for multiple ORDER BY columns with mixed directions, and comprehensive unit tests (6 tests per dialect)
 
 - id: LOWERING-005
   name: "CASE 表达式 Lowering"
