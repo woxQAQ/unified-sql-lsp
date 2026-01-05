@@ -120,6 +120,31 @@ impl CatalogCompletionFetcher {
         Ok(())
     }
 
+    /// Populate a single table from the catalog
+    ///
+    /// # Arguments
+    ///
+    /// * `table_name` - The name of the table to fetch
+    ///
+    /// # Returns
+    ///
+    /// Ok(TableSymbol) with columns populated, Err if catalog query fails
+    ///
+    /// # Examples
+    ///
+    /// ```ignore
+    /// let table = fetcher.populate_single_table("users").await?;
+    /// assert!(!table.columns.is_empty());
+    /// ```
+    pub async fn populate_single_table(
+        &self,
+        table_name: &str,
+    ) -> Result<TableSymbol, CompletionError> {
+        let mut table = TableSymbol::new(table_name);
+        self.populate_table_columns(&mut table).await?;
+        Ok(table)
+    }
+
     /// Convert ColumnMetadata to ColumnSymbol
     ///
     /// # Arguments
@@ -131,7 +156,17 @@ impl CatalogCompletionFetcher {
     ///
     /// A ColumnSymbol with the same information
     fn metadata_to_symbol(meta: &ColumnMetadata, table_name: &str) -> ColumnSymbol {
-        ColumnSymbol::new(meta.name.clone(), meta.data_type.clone(), table_name)
+        let mut symbol = ColumnSymbol::new(meta.name.clone(), meta.data_type.clone(), table_name);
+
+        // Copy PK/FK metadata
+        if meta.is_primary_key {
+            symbol = symbol.with_primary_key();
+        }
+        if meta.is_foreign_key {
+            symbol = symbol.with_foreign_key();
+        }
+
+        symbol
     }
 }
 
@@ -199,6 +234,92 @@ mod tests {
         assert_eq!(table.columns.len(), 2);
         assert_eq!(table.columns[0].name, "id");
         assert_eq!(table.columns[1].name, "name");
+    }
+
+    #[tokio::test]
+    async fn test_populate_table_columns_with_pk_fk() {
+        let mut tables = std::collections::HashMap::new();
+        tables.insert(
+            "users".to_string(),
+            vec![
+                ColumnMetadata::new("id", DataType::Integer).with_primary_key(),
+                ColumnMetadata::new("name", DataType::Text),
+            ],
+        );
+        tables.insert(
+            "orders".to_string(),
+            vec![
+                ColumnMetadata::new("id", DataType::Integer).with_primary_key(),
+                ColumnMetadata::new("user_id", DataType::Integer)
+                    .with_foreign_key("users", "id"),
+            ],
+        );
+
+        let catalog = Arc::new(MockCatalog { tables });
+        let fetcher = CatalogCompletionFetcher::new(catalog);
+
+        // Test users table
+        let mut users_table = TableSymbol::new("users");
+        fetcher.populate_table_columns(&mut users_table).await.unwrap();
+
+        assert_eq!(users_table.columns.len(), 2);
+        assert_eq!(users_table.columns[0].name, "id");
+        assert!(users_table.columns[0].is_primary_key);
+        assert!(!users_table.columns[0].is_foreign_key);
+
+        assert_eq!(users_table.columns[1].name, "name");
+        assert!(!users_table.columns[1].is_primary_key);
+        assert!(!users_table.columns[1].is_foreign_key);
+
+        // Test orders table
+        let mut orders_table = TableSymbol::new("orders");
+        fetcher.populate_table_columns(&mut orders_table).await.unwrap();
+
+        assert_eq!(orders_table.columns.len(), 2);
+        assert_eq!(orders_table.columns[0].name, "id");
+        assert!(orders_table.columns[0].is_primary_key);
+
+        assert_eq!(orders_table.columns[1].name, "user_id");
+        assert!(!orders_table.columns[1].is_primary_key);
+        assert!(orders_table.columns[1].is_foreign_key);
+    }
+
+    #[tokio::test]
+    async fn test_populate_single_table() {
+        let mut tables = std::collections::HashMap::new();
+        tables.insert(
+            "users".to_string(),
+            vec![
+                ColumnMetadata::new("id", DataType::Integer).with_primary_key(),
+                ColumnMetadata::new("name", DataType::Text),
+            ],
+        );
+
+        let catalog = Arc::new(MockCatalog { tables });
+        let fetcher = CatalogCompletionFetcher::new(catalog);
+
+        let table = fetcher.populate_single_table("users").await.unwrap();
+
+        assert_eq!(table.table_name, "users");
+        assert_eq!(table.columns.len(), 2);
+        assert_eq!(table.columns[0].name, "id");
+        assert!(table.columns[0].is_primary_key);
+    }
+
+    #[tokio::test]
+    async fn test_populate_single_table_not_found() {
+        let catalog = Arc::new(MockCatalog {
+            tables: std::collections::HashMap::new(),
+        });
+        let fetcher = CatalogCompletionFetcher::new(catalog);
+
+        let result = fetcher.populate_single_table("nonexistent").await;
+
+        assert!(result.is_err());
+        assert!(matches!(
+            result.unwrap_err(),
+            CompletionError::Catalog(CatalogError::TableNotFound(_, _))
+        ));
     }
 
     #[tokio::test]

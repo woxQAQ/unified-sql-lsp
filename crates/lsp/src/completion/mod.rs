@@ -194,10 +194,55 @@ impl CompletionEngine {
                 // TODO: (COMPLETION-005) Implement WHERE clause column completion
                 Ok(None)
             }
-            CompletionContext::JoinCondition { .. } => {
-                // JOIN ON condition completion (COMPLETION-003) - not implemented yet
-                // TODO: (COMPLETION-003) Implement JOIN ON condition column completion
-                Ok(None)
+            CompletionContext::JoinCondition {
+                left_table,
+                right_table,
+            } => {
+                // Handle incomplete context (still typing table names)
+                let (left_name, right_name) = match (left_table, right_table) {
+                    (Some(l), Some(r)) => (l, r),
+                    _ => return Ok(None), // Not ready for completion yet
+                };
+
+                // Fetch both tables from catalog
+                let left_table_symbol = match self
+                    .catalog_fetcher
+                    .populate_single_table(&left_name)
+                    .await
+                {
+                    Ok(table) => table,
+                    Err(e) => {
+                        eprintln!(
+                            "Warning: Failed to load left table '{}': {}",
+                            left_name, e
+                        );
+                        return Ok(None);
+                    }
+                };
+
+                let right_table_symbol = match self
+                    .catalog_fetcher
+                    .populate_single_table(&right_name)
+                    .await
+                {
+                    Ok(table) => table,
+                    Err(e) => {
+                        eprintln!(
+                            "Warning: Failed to load right table '{}': {}",
+                            right_name, e
+                        );
+                        return Ok(None);
+                    }
+                };
+
+                // Always force qualification for JOINs (best practice)
+                let force_qualifier = true;
+
+                // Render with PK/FK prioritization
+                let items =
+                    CompletionRenderer::render_join_columns(&[left_table_symbol, right_table_symbol], force_qualifier);
+
+                Ok(Some(items))
             }
             CompletionContext::Unknown => Ok(None),
         }

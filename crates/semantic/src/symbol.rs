@@ -159,6 +159,14 @@ pub struct ColumnSymbol {
 
     /// Table this column belongs to
     pub table_name: String,
+
+    /// Whether this column is a primary key
+    #[serde(default)]
+    pub is_primary_key: bool,
+
+    /// Whether this column is a foreign key
+    #[serde(default)]
+    pub is_foreign_key: bool,
 }
 
 impl ColumnSymbol {
@@ -189,7 +197,43 @@ impl ColumnSymbol {
             name: name.into(),
             data_type,
             table_name: table_name.into(),
+            is_primary_key: false,
+            is_foreign_key: false,
         }
+    }
+
+    /// Mark this column as a primary key
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use unified_sql_lsp_semantic::ColumnSymbol;
+    /// use unified_sql_lsp_catalog::DataType;
+    ///
+    /// let column = ColumnSymbol::new("id", DataType::Integer, "users")
+    ///     .with_primary_key();
+    /// assert!(column.is_primary_key);
+    /// ```
+    pub fn with_primary_key(mut self) -> Self {
+        self.is_primary_key = true;
+        self
+    }
+
+    /// Mark this column as a foreign key
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use unified_sql_lsp_semantic::ColumnSymbol;
+    /// use unified_sql_lsp_catalog::DataType;
+    ///
+    /// let column = ColumnSymbol::new("user_id", DataType::Integer, "orders")
+    ///     .with_foreign_key();
+    /// assert!(column.is_foreign_key);
+    /// ```
+    pub fn with_foreign_key(mut self) -> Self {
+        self.is_foreign_key = true;
+        self
     }
 }
 
@@ -246,5 +290,50 @@ mod tests {
         let deserialized: TableSymbol = serde_json::from_str(&json).unwrap();
 
         assert_eq!(table, deserialized);
+    }
+
+    #[test]
+    fn test_column_symbol_primary_key() {
+        let column = ColumnSymbol::new("id", DataType::Integer, "users")
+            .with_primary_key();
+        assert!(column.is_primary_key);
+        assert!(!column.is_foreign_key);
+    }
+
+    #[test]
+    fn test_column_symbol_foreign_key() {
+        let column = ColumnSymbol::new("user_id", DataType::Integer, "orders")
+            .with_foreign_key();
+        assert!(column.is_foreign_key);
+        assert!(!column.is_primary_key);
+    }
+
+    #[test]
+    fn test_column_symbol_both_keys() {
+        let column = ColumnSymbol::new("id", DataType::Integer, "users")
+            .with_primary_key()
+            .with_foreign_key();
+        assert!(column.is_primary_key);
+        assert!(column.is_foreign_key);
+    }
+
+    #[test]
+    fn test_column_symbol_defaults() {
+        let column = ColumnSymbol::new("name", DataType::Text, "users");
+        assert!(!column.is_primary_key);
+        assert!(!column.is_foreign_key);
+    }
+
+    #[test]
+    fn test_column_symbol_pk_fk_serialization() {
+        let column = ColumnSymbol::new("id", DataType::Integer, "users")
+            .with_primary_key();
+
+        let json = serde_json::to_string(&column).unwrap();
+        let deserialized: ColumnSymbol = serde_json::from_str(&json).unwrap();
+
+        assert_eq!(column, deserialized);
+        assert!(deserialized.is_primary_key);
+        assert!(!deserialized.is_foreign_key);
     }
 }

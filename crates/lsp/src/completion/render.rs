@@ -70,6 +70,71 @@ impl CompletionRenderer {
         items
     }
 
+    /// Render JOIN condition column completion items with PK/FK prioritization
+    ///
+    /// # Arguments
+    ///
+    /// * `tables` - Tables with their columns (typically 2 tables for JOIN)
+    /// * `force_qualifier` - Whether to force table qualifier (always true for JOINs)
+    ///
+    /// # Returns
+    ///
+    /// Vector of completion items sorted by PK/FK priority
+    ///
+    /// # Sorting Strategy
+    ///
+    /// - Tier 1: Primary keys (sort: "00_pk_<name>", preselect: true)
+    /// - Tier 2: Foreign keys (sort: "01_fk_<name>", preselect: true)
+    /// - Tier 3: Regular columns (sort: "02_<name>", alphabetical)
+    ///
+    /// # Examples
+    ///
+    /// ```ignore
+    /// let items = CompletionRenderer::render_join_columns(&[left_table, right_table], true);
+    /// assert!(items[0].preselect.unwrap()); // PK/FK columns should be preselected
+    /// ```
+    pub fn render_join_columns(tables: &[TableSymbol], force_qualifier: bool) -> Vec<CompletionItem> {
+        let mut pk_columns: Vec<CompletionItem> = Vec::new();
+        let mut fk_columns: Vec<CompletionItem> = Vec::new();
+        let mut regular_columns: Vec<CompletionItem> = Vec::new();
+
+        for table in tables {
+            for column in &table.columns {
+                let item = Self::column_item(column, table, force_qualifier);
+
+                if column.is_primary_key {
+                    // Mark as preselect (top suggestion)
+                    let mut item = item;
+                    item.preselect = Some(true);
+                    item.sort_text = Some(format!("00_pk_{}", column.name));
+                    pk_columns.push(item);
+                } else if column.is_foreign_key {
+                    // Mark as preselect (top suggestion)
+                    let mut item = item;
+                    item.preselect = Some(true);
+                    item.sort_text = Some(format!("01_fk_{}", column.name));
+                    fk_columns.push(item);
+                } else {
+                    // Regular columns
+                    let mut item = item;
+                    item.sort_text = Some(format!("02_{}", column.name));
+                    regular_columns.push(item);
+                }
+            }
+        }
+
+        // Concatenate in priority order: PK → FK → Regular
+        let mut items = Vec::new();
+        items.extend(pk_columns);
+        items.extend(fk_columns);
+
+        // Sort regular columns alphabetically by label
+        regular_columns.sort_by(|a, b| a.label.cmp(&b.label));
+        items.extend(regular_columns);
+
+        items
+    }
+
     /// Render table completion items
     ///
     /// # Arguments
@@ -538,5 +603,130 @@ mod tests {
         // Items should be sorted alphabetically
         assert_eq!(items[0].label, "apple");
         assert_eq!(items[1].label, "zebra");
+    }
+
+    #[test]
+    fn test_render_join_columns_basic() {
+        let left = TableSymbol::new("users").with_columns(vec![
+            ColumnSymbol::new("id", DataType::Integer, "users").with_primary_key(),
+            ColumnSymbol::new("name", DataType::Text, "users"),
+        ]);
+
+        let right = TableSymbol::new("orders").with_columns(vec![
+            ColumnSymbol::new("id", DataType::Integer, "orders").with_primary_key(),
+            ColumnSymbol::new("user_id", DataType::Integer, "orders").with_foreign_key(),
+        ]);
+
+        let items = CompletionRenderer::render_join_columns(&[left, right], true);
+
+        // Should have 4 columns total (no wildcard for JOINs)
+        assert_eq!(items.len(), 4);
+
+        // First items should be PK columns (preselect: true)
+        assert!(items[0].preselect.unwrap());
+        assert!(items[1].preselect.unwrap());
+
+        // PK/FK columns should come before regular columns
+        assert!(items[0].sort_text.as_ref().unwrap().starts_with("00_pk_"));
+        assert!(items[1].sort_text.as_ref().unwrap().starts_with("00_pk_"));
+        assert!(items[2].sort_text.as_ref().unwrap().starts_with("01_fk_"));
+        assert!(items[3].sort_text.as_ref().unwrap().starts_with("02_"));
+
+        // All columns should be qualified
+        assert!(items.iter().all(|i| i.label.contains('.')));
+    }
+
+    #[test]
+    fn test_render_join_columns_pk_fk_priority() {
+        let users = TableSymbol::new("users").with_columns(vec![
+            ColumnSymbol::new("id", DataType::Integer, "users").with_primary_key(),
+            ColumnSymbol::new("name", DataType::Text, "users"),
+        ]);
+
+        let orders = TableSymbol::new("orders").with_columns(vec![
+            ColumnSymbol::new("id", DataType::Integer, "orders").with_primary_key(),
+            ColumnSymbol::new("user_id", DataType::Integer, "orders")
+                .with_foreign_key(),
+            ColumnSymbol::new("total", DataType::Decimal, "orders"),
+        ]);
+
+        let items = CompletionRenderer::render_join_columns(&[users, orders], true);
+
+        // Verify ordering: PKs first, then FKs, then regular
+        let pk_items: Vec<_> = items
+            .iter()
+            .filter(|i| i.sort_text.as_ref().unwrap().starts_with("00_pk_"))
+            .collect();
+        let fk_items: Vec<_> = items
+            .iter()
+            .filter(|i| i.sort_text.as_ref().unwrap().starts_with("01_fk_"))
+            .collect();
+        let regular_items: Vec<_> = items
+            .iter()
+            .filter(|i| i.sort_text.as_ref().unwrap().starts_with("02_"))
+            .collect();
+
+        assert_eq!(pk_items.len(), 2); // users.id, orders.id
+        assert_eq!(fk_items.len(), 1); // orders.user_id
+        assert_eq!(regular_items.len(), 2); // users.name, orders.total (sorted alphabetically)
+
+        // Verify PK/FK items are preselected
+        assert!(pk_items.iter().all(|i| i.preselect.unwrap()));
+        assert!(fk_items.iter().all(|i| i.preselect.unwrap()));
+        assert!(!regular_items.iter().all(|i| i.preselect.unwrap()));
+    }
+
+    #[test]
+    fn test_render_join_columns_qualified() {
+        let table = TableSymbol::new("users").with_columns(vec![
+            ColumnSymbol::new("id", DataType::Integer, "users").with_primary_key(),
+            ColumnSymbol::new("name", DataType::Text, "users"),
+        ]);
+
+        let items = CompletionRenderer::render_join_columns(&[table], true);
+
+        // All items should be qualified
+        assert!(items.iter().all(|i| i.label.contains('.')));
+        assert!(items.iter().any(|i| i.label == "users.id"));
+        assert!(items.iter().any(|i| i.label == "users.name"));
+    }
+
+    #[test]
+    fn test_render_join_columns_with_alias() {
+        let table = TableSymbol::new("users")
+            .with_alias("u")
+            .with_columns(vec![
+                ColumnSymbol::new("id", DataType::Integer, "users").with_primary_key(),
+                ColumnSymbol::new("name", DataType::Text, "users"),
+            ]);
+
+        let items = CompletionRenderer::render_join_columns(&[table], true);
+
+        // Should use alias instead of table name
+        assert!(items.iter().any(|i| i.label == "u.id"));
+        assert!(items.iter().any(|i| i.label == "u.name"));
+        assert!(!items.iter().any(|i| i.label.starts_with("users.")));
+    }
+
+    #[test]
+    fn test_render_join_columns_composite_pk() {
+        let table = TableSymbol::new("order_items").with_columns(vec![
+            ColumnSymbol::new("order_id", DataType::Integer, "order_items")
+                .with_primary_key(),
+            ColumnSymbol::new("item_id", DataType::Integer, "order_items")
+                .with_primary_key(),
+            ColumnSymbol::new("quantity", DataType::Integer, "order_items"),
+        ]);
+
+        let items = CompletionRenderer::render_join_columns(&[table], true);
+
+        // Both PK columns should be marked as preselect
+        let pk_items: Vec<_> = items
+            .iter()
+            .filter(|i| i.preselect.unwrap())
+            .collect();
+
+        assert_eq!(pk_items.len(), 2);
+        assert!(pk_items.iter().all(|i| i.sort_text.as_ref().unwrap().starts_with("00_pk_")));
     }
 }

@@ -465,10 +465,12 @@ meta:
     - 显示相关表的列
     - 优先显示主键/外键列
   priority: P1
+  status: done
   dependencies: ["COMPLETION-001", "SEMANTIC-004"]
   deliverables:
     - JOIN 补全逻辑
     - 测试用例
+    - Note: Fully implemented with PK/FK-aware column prioritization, three-tier sorting (PK → FK → regular), qualified references, comprehensive error handling, and unit tests for all scenarios
 
 - id: COMPLETION-004
   name: "限定符补全 (table.*)"
