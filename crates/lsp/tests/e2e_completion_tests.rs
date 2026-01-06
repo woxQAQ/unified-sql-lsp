@@ -153,3 +153,163 @@ async fn test_e2e_document_sync_flow() {
     let change_result = sync.on_document_change(&doc, None, &changes);
     assert!(!change_result.is_failed(), "Failed to parse on change");
 }
+
+// =============================================================================
+// WHERE Clause Completion Tests (COMPLETION-005)
+// =============================================================================
+
+#[tokio::test]
+async fn test_e2e_completion_where_clause_unqualified() {
+    let catalog = MockCatalogBuilder::new()
+        .with_table(
+            TableMetadata::new("users", "public").with_columns(vec![
+                ColumnMetadata::new("id", DataType::Integer),
+                ColumnMetadata::new("name", DataType::Varchar(None)),
+                ColumnMetadata::new("email", DataType::Varchar(None)),
+            ]),
+        )
+        .build();
+
+    let engine = CompletionEngine::new(Arc::new(catalog));
+    let sql = "SELECT * FROM users WHERE |";
+    let document = create_and_parse_document(sql, "mysql").await;
+
+    let position = Position::new(0, 28);
+    let result = engine.complete(&document, position).await;
+
+    assert!(result.is_ok(), "Completion failed: {:?}", result.err());
+    let items = result.unwrap().expect("Expected completion items");
+
+    assert!(items.len() >= 3, "Expected at least 3 columns, got {}", items.len());
+    let column_names: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
+    assert!(column_names.contains(&"id"));
+    assert!(column_names.contains(&"name"));
+    assert!(column_names.contains(&"email"));
+}
+
+#[tokio::test]
+async fn test_e2e_completion_where_clause_qualified() {
+    let catalog = MockCatalogBuilder::new()
+        .with_table(
+            TableMetadata::new("users", "public").with_columns(vec![
+                ColumnMetadata::new("id", DataType::Integer),
+                ColumnMetadata::new("name", DataType::Varchar(None)),
+            ]),
+        )
+        .build();
+
+    let engine = CompletionEngine::new(Arc::new(catalog));
+    let sql = "SELECT * FROM users WHERE users.|";
+    let document = create_and_parse_document(sql, "mysql").await;
+
+    let position = Position::new(0, 34);
+    let result = engine.complete(&document, position).await;
+
+    assert!(result.is_ok(), "Completion failed: {:?}", result.err());
+    let items = result.unwrap().expect("Expected completion items");
+
+    assert!(items.len() >= 2, "Expected at least 2 columns, got {}", items.len());
+    let column_names: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
+    assert!(column_names.contains(&"id"));
+    assert!(column_names.contains(&"name"));
+
+    // Verify that items are properly qualified
+    for item in &items {
+        assert!(
+            item.label.starts_with("users."),
+            "Expected qualified column name, got: {}",
+            item.label
+        );
+    }
+}
+
+#[tokio::test]
+async fn test_e2e_completion_where_clause_multiple_tables() {
+    let catalog = MockCatalogBuilder::new()
+        .with_table(
+            TableMetadata::new("users", "public").with_columns(vec![
+                ColumnMetadata::new("id", DataType::Integer),
+                ColumnMetadata::new("name", DataType::Varchar(None)),
+            ]),
+        )
+        .with_table(
+            TableMetadata::new("orders", "public").with_columns(vec![
+                ColumnMetadata::new("id", DataType::Integer),
+                ColumnMetadata::new("user_id", DataType::Integer),
+                ColumnMetadata::new("total", DataType::Decimal(None, None)),
+            ]),
+        )
+        .build();
+
+    let engine = CompletionEngine::new(Arc::new(catalog));
+    let sql = "SELECT * FROM users JOIN orders ON users.id = orders.user_id WHERE |";
+    let document = create_and_parse_document(sql, "mysql").await;
+
+    let position = Position::new(0, 70);
+    let result = engine.complete(&document, position).await;
+
+    assert!(result.is_ok(), "Completion failed: {:?}", result.err());
+    let items = result.unwrap().expect("Expected completion items");
+
+    // Should have columns from both tables
+    assert!(items.len() >= 5, "Expected at least 5 columns, got {}", items.len());
+    let column_names: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
+
+    // Verify we have columns from both tables
+    assert!(column_names.contains(&"users.id") || column_names.contains(&"id"));
+    assert!(column_names.contains(&"orders.id") || column_names.contains(&"id"));
+}
+
+#[tokio::test]
+async fn test_e2e_completion_where_clause_invalid_qualifier() {
+    let catalog = MockCatalogBuilder::new()
+        .with_table(
+            TableMetadata::new("users", "public").with_columns(vec![
+                ColumnMetadata::new("id", DataType::Integer),
+            ]),
+        )
+        .build();
+
+    let engine = CompletionEngine::new(Arc::new(catalog));
+    let sql = "SELECT * FROM users WHERE nonexistent.|";
+    let document = create_and_parse_document(sql, "mysql").await;
+
+    let position = Position::new(0, 41);
+    let result = engine.complete(&document, position).await;
+
+    assert!(result.is_ok(), "Completion failed: {:?}", result.err());
+    let items = result.unwrap();
+
+    // Should return empty completion for invalid qualifier
+    assert_eq!(items.len(), 0, "Expected empty completion for invalid qualifier");
+}
+
+#[tokio::test]
+async fn test_e2e_completion_where_clause_with_postgresql() {
+    let catalog = MockCatalogBuilder::new()
+        .with_table(
+            TableMetadata::new("products", "public").with_columns(vec![
+                ColumnMetadata::new("id", DataType::Integer),
+                ColumnMetadata::new("price", DataType::Decimal(None, None)),
+                ColumnMetadata::new("name", DataType::Varchar(None)),
+            ]),
+        )
+        .build();
+
+    let engine = CompletionEngine::new(Arc::new(catalog));
+    let sql = "SELECT * FROM products WHERE |";
+    let document = create_and_parse_document(sql, "postgresql").await;
+
+    let position = Position::new(0, 30);
+    let result = engine.complete(&document, position).await;
+
+    assert!(result.is_ok(), "Completion failed: {:?}", result.err());
+    let items = result.unwrap().expect("Expected completion items");
+
+    assert!(items.len() >= 3, "Expected at least 3 columns, got {}", items.len());
+    let column_names: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
+    assert!(column_names.contains(&"id"));
+    assert!(column_names.contains(&"price"));
+    assert!(column_names.contains(&"name"));
+}
+

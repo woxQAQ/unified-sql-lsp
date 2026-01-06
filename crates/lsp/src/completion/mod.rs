@@ -122,7 +122,7 @@ impl CompletionEngine {
 
             // Build scope synchronously if needed
             let scope_manager = match &ctx {
-                CompletionContext::SelectProjection { .. } => {
+                CompletionContext::SelectProjection { .. } | CompletionContext::WhereClause { .. } => {
                     Some(ScopeBuilder::build_from_select(&root_node, &source)?)
                 }
                 _ => None,
@@ -189,10 +189,48 @@ impl CompletionEngine {
                 let items = CompletionRenderer::render_tables(&tables, show_schema);
                 Ok(Some(items))
             }
-            CompletionContext::WhereClause => {
-                // WHERE clause completion (COMPLETION-005) - not implemented yet
-                // TODO: (COMPLETION-005) Implement WHERE clause column completion
-                Ok(None)
+            CompletionContext::WhereClause { qualifier } => {
+                if let Some(mut scope_manager) = scope_manager {
+                    let scope_id = 0; // Main query scope
+
+                    // Populate all tables with columns from catalog
+                    {
+                        let scope = scope_manager.get_scope_mut(scope_id).unwrap();
+                        self.catalog_fetcher
+                            .populate_all_tables(&mut scope.tables)
+                            .await?;
+                    }
+
+                    // Resolve qualifier if present to filter tables
+                    let tables_to_render = if let Some(q) = &qualifier {
+                        // Resolve qualifier to actual table
+                        let scope = scope_manager.get_scope(scope_id).unwrap();
+                        match scope.find_table(q) {
+                            Some(qualified_table) => {
+                                // Found the table - create filtered list with just this table
+                                vec![qualified_table.clone()]
+                            }
+                            None => {
+                                // Invalid qualifier - return empty completion
+                                // User might be typing a wrong table name
+                                return Ok(Some(vec![]));
+                            }
+                        }
+                    } else {
+                        // No qualifier - show all columns from all tables
+                        let scope = scope_manager.get_scope(scope_id).unwrap();
+                        scope.tables.clone()
+                    };
+
+                    // Render completion items
+                    let force_qualifier = qualifier.is_some();
+                    let items =
+                        CompletionRenderer::render_columns(&tables_to_render, force_qualifier);
+
+                    Ok(Some(items))
+                } else {
+                    Ok(None)
+                }
             }
             CompletionContext::JoinCondition {
                 left_table,
