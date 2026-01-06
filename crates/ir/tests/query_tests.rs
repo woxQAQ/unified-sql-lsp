@@ -6,8 +6,8 @@
 //! Unit tests for IR Query representation
 
 use unified_sql_lsp_ir::{
-    BinaryOp, ColumnRef, Dialect, Expr, Join, JoinCondition, JoinType, Literal, Query,
-    SelectItem, SelectStatement, SetOp, TableRef,
+    BinaryOp, ColumnRef, Dialect, Expr, Join, JoinCondition, JoinType, Literal, Query, SelectItem,
+    SelectStatement, SetOp, TableRef,
 };
 
 #[test]
@@ -42,8 +42,7 @@ fn test_query_with_order_by() {
         direction: Some(SortDirection::Asc),
     }];
 
-    let query = Query::new(Dialect::PostgreSQL)
-        .with_order_by(order_by);
+    let query = Query::new(Dialect::PostgreSQL).with_order_by(order_by);
 
     assert!(query.order_by.is_some());
     assert_eq!(query.order_by.as_ref().unwrap().len(), 1);

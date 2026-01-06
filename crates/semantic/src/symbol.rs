@@ -294,16 +294,14 @@ mod tests {
 
     #[test]
     fn test_column_symbol_primary_key() {
-        let column = ColumnSymbol::new("id", DataType::Integer, "users")
-            .with_primary_key();
+        let column = ColumnSymbol::new("id", DataType::Integer, "users").with_primary_key();
         assert!(column.is_primary_key);
         assert!(!column.is_foreign_key);
     }
 
     #[test]
     fn test_column_symbol_foreign_key() {
-        let column = ColumnSymbol::new("user_id", DataType::Integer, "orders")
-            .with_foreign_key();
+        let column = ColumnSymbol::new("user_id", DataType::Integer, "orders").with_foreign_key();
         assert!(column.is_foreign_key);
         assert!(!column.is_primary_key);
     }
@@ -326,8 +324,7 @@ mod tests {
 
     #[test]
     fn test_column_symbol_pk_fk_serialization() {
-        let column = ColumnSymbol::new("id", DataType::Integer, "users")
-            .with_primary_key();
+        let column = ColumnSymbol::new("id", DataType::Integer, "users").with_primary_key();
 
         let json = serde_json::to_string(&column).unwrap();
         let deserialized: ColumnSymbol = serde_json::from_str(&json).unwrap();

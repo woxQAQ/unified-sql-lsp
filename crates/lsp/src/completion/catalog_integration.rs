@@ -250,8 +250,7 @@ mod tests {
             "orders".to_string(),
             vec![
                 ColumnMetadata::new("id", DataType::Integer).with_primary_key(),
-                ColumnMetadata::new("user_id", DataType::Integer)
-                    .with_foreign_key("users", "id"),
+                ColumnMetadata::new("user_id", DataType::Integer).with_foreign_key("users", "id"),
             ],
         );
 
@@ -260,7 +259,10 @@ mod tests {
 
         // Test users table
         let mut users_table = TableSymbol::new("users");
-        fetcher.populate_table_columns(&mut users_table).await.unwrap();
+        fetcher
+            .populate_table_columns(&mut users_table)
+            .await
+            .unwrap();
 
         assert_eq!(users_table.columns.len(), 2);
         assert_eq!(users_table.columns[0].name, "id");
@@ -273,7 +275,10 @@ mod tests {
 
         // Test orders table
         let mut orders_table = TableSymbol::new("orders");
-        fetcher.populate_table_columns(&mut orders_table).await.unwrap();
+        fetcher
+            .populate_table_columns(&mut orders_table)
+            .await
+            .unwrap();
 
         assert_eq!(orders_table.columns.len(), 2);
         assert_eq!(orders_table.columns[0].name, "id");

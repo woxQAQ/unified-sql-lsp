@@ -56,6 +56,7 @@ use crate::catalog_manager::CatalogManager;
 use crate::completion::CompletionEngine;
 use crate::config::EngineConfig;
 use crate::document::{DocumentError, DocumentStore, ParseMetadata};
+use crate::symbols::{SymbolBuilder, SymbolCatalogFetcher, SymbolError, SymbolRenderer};
 use crate::sync::DocumentSync;
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -594,10 +595,93 @@ impl LanguageServer for LspBackend {
 
         info!("Document symbols requested: uri={}", uri);
 
-        // TODO: (LSP-005) Implement document symbols (tables, columns, etc.)
-        // This feature is not yet tracked in FEATURE_LIST.yaml
-        // Would enable outline view showing tables, columns, aliases in the query
-        Ok(None)
+        // 1. Get document from store
+        let document = match self.documents.get_document(&uri).await {
+            Some(doc) => doc,
+            None => {
+                warn!("Document not found: {}", uri);
+                return Ok(None);
+            }
+        };
+
+        // 2. Get parse tree
+        let tree = match document.tree() {
+            Some(t) => t,
+            None => {
+                warn!("Document not parsed: {}", uri);
+                return Ok(None); // Graceful degradation
+            }
+        };
+
+        // 3. Get catalog (optional for graceful degradation)
+        let catalog = match self.get_config().await {
+            Some(config) => {
+                match self
+                    .catalog_manager
+                    .write()
+                    .await
+                    .get_catalog(&config)
+                    .await
+                {
+                    Ok(cat) => Some(cat),
+                    Err(e) => {
+                        warn!("Catalog unavailable for symbols: {}", e);
+                        None
+                    }
+                }
+            }
+            None => None,
+        };
+
+        // 4. Lock parse tree and extract source
+        let tree_lock = match tree.try_lock() {
+            Ok(lock) => lock,
+            Err(_) => {
+                error!("Failed to acquire tree lock for document symbols");
+                return Ok(None);
+            }
+        };
+
+        let root_node = tree_lock.root_node();
+        let source = document.get_content();
+
+        // 5. Build symbols from CST
+        let mut queries = match SymbolBuilder::build_from_cst(&root_node, source.as_str()) {
+            Ok(queries) => queries,
+            Err(SymbolError::InvalidSyntax(e)) => {
+                warn!("Symbol extraction failed due to syntax error: {}", e);
+                return Ok(None);
+            }
+            Err(SymbolError::NotParsed) => {
+                warn!("Symbol extraction failed: document not parsed");
+                return Ok(None);
+            }
+            Err(e) => {
+                error!("Symbol extraction failed: {}", e);
+                return Ok(None);
+            }
+        };
+
+        // 6. Enrich with catalog metadata (if available)
+        if let Some(cat) = catalog {
+            for query in &mut queries {
+                let fetcher = SymbolCatalogFetcher::new(cat.clone());
+                if let Err(e) = fetcher.populate_columns(&mut query.tables).await {
+                    // Log warning but continue with partial results
+                    warn!("Failed to populate columns for some tables: {}", e);
+                }
+            }
+        }
+
+        // 7. Render to LSP format
+        let document_symbols = SymbolRenderer::render_document(queries);
+
+        info!(
+            "Document symbols returned: {} symbols",
+            document_symbols.len()
+        );
+
+        Ok(Some(DocumentSymbolResponse::Nested(document_symbols)))
     }
 
     /// Configuration change notification

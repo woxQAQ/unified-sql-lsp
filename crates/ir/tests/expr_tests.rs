@@ -73,28 +73,52 @@ fn test_expr_binary_op_arithmetic() {
         op: BinaryOp::Add,
         right: Box::new(Expr::Literal(Literal::Integer(5))),
     };
-    assert!(matches!(add, Expr::BinaryOp { op: BinaryOp::Add, .. }));
+    assert!(matches!(
+        add,
+        Expr::BinaryOp {
+            op: BinaryOp::Add,
+            ..
+        }
+    ));
 
     let sub = Expr::BinaryOp {
         left: Box::new(Expr::Literal(Literal::Integer(10))),
         op: BinaryOp::Sub,
         right: Box::new(Expr::Literal(Literal::Integer(5))),
     };
-    assert!(matches!(sub, Expr::BinaryOp { op: BinaryOp::Sub, .. }));
+    assert!(matches!(
+        sub,
+        Expr::BinaryOp {
+            op: BinaryOp::Sub,
+            ..
+        }
+    ));
 
     let mul = Expr::BinaryOp {
         left: Box::new(Expr::Literal(Literal::Integer(10))),
         op: BinaryOp::Mul,
         right: Box::new(Expr::Literal(Literal::Integer(5))),
     };
-    assert!(matches!(mul, Expr::BinaryOp { op: BinaryOp::Mul, .. }));
+    assert!(matches!(
+        mul,
+        Expr::BinaryOp {
+            op: BinaryOp::Mul,
+            ..
+        }
+    ));
 
     let div = Expr::BinaryOp {
         left: Box::new(Expr::Literal(Literal::Integer(10))),
         op: BinaryOp::Div,
         right: Box::new(Expr::Literal(Literal::Integer(5))),
     };
-    assert!(matches!(div, Expr::BinaryOp { op: BinaryOp::Div, .. }));
+    assert!(matches!(
+        div,
+        Expr::BinaryOp {
+            op: BinaryOp::Div,
+            ..
+        }
+    ));
 }
 
 #[test]
@@ -104,21 +128,39 @@ fn test_expr_binary_op_comparison() {
         op: BinaryOp::Eq,
         right: Box::new(Expr::Literal(Literal::Integer(1))),
     };
-    assert!(matches!(eq, Expr::BinaryOp { op: BinaryOp::Eq, .. }));
+    assert!(matches!(
+        eq,
+        Expr::BinaryOp {
+            op: BinaryOp::Eq,
+            ..
+        }
+    ));
 
     let lt = Expr::BinaryOp {
         left: Box::new(Expr::Column(ColumnRef::new("age"))),
         op: BinaryOp::Lt,
         right: Box::new(Expr::Literal(Literal::Integer(18))),
     };
-    assert!(matches!(lt, Expr::BinaryOp { op: BinaryOp::Lt, .. }));
+    assert!(matches!(
+        lt,
+        Expr::BinaryOp {
+            op: BinaryOp::Lt,
+            ..
+        }
+    ));
 
     let gt_eq = Expr::BinaryOp {
         left: Box::new(Expr::Column(ColumnRef::new("price"))),
         op: BinaryOp::GtEq,
         right: Box::new(Expr::Literal(Literal::Float(100.0))),
     };
-    assert!(matches!(gt_eq, Expr::BinaryOp { op: BinaryOp::GtEq, .. }));
+    assert!(matches!(
+        gt_eq,
+        Expr::BinaryOp {
+            op: BinaryOp::GtEq,
+            ..
+        }
+    ));
 }
 
 #[test]
@@ -128,14 +170,26 @@ fn test_expr_binary_op_logical() {
         op: BinaryOp::And,
         right: Box::new(Expr::Column(ColumnRef::new("is_verified"))),
     };
-    assert!(matches!(and, Expr::BinaryOp { op: BinaryOp::And, .. }));
+    assert!(matches!(
+        and,
+        Expr::BinaryOp {
+            op: BinaryOp::And,
+            ..
+        }
+    ));
 
     let or = Expr::BinaryOp {
         left: Box::new(Expr::Column(ColumnRef::new("status"))),
         op: BinaryOp::Or,
         right: Box::new(Expr::Literal(Literal::String("pending".to_string()))),
     };
-    assert!(matches!(or, Expr::BinaryOp { op: BinaryOp::Or, .. }));
+    assert!(matches!(
+        or,
+        Expr::BinaryOp {
+            op: BinaryOp::Or,
+            ..
+        }
+    ));
 }
 
 #[test]
@@ -144,13 +198,25 @@ fn test_expr_unary_op() {
         op: UnaryOp::Neg,
         expr: Box::new(Expr::Literal(Literal::Integer(10))),
     };
-    assert!(matches!(neg, Expr::UnaryOp { op: UnaryOp::Neg, .. }));
+    assert!(matches!(
+        neg,
+        Expr::UnaryOp {
+            op: UnaryOp::Neg,
+            ..
+        }
+    ));
 
     let not = Expr::UnaryOp {
         op: UnaryOp::Not,
         expr: Box::new(Expr::Column(ColumnRef::new("is_active"))),
     };
-    assert!(matches!(not, Expr::UnaryOp { op: UnaryOp::Not, .. }));
+    assert!(matches!(
+        not,
+        Expr::UnaryOp {
+            op: UnaryOp::Not,
+            ..
+        }
+    ));
 }
 
 #[test]
@@ -189,7 +255,12 @@ fn test_expr_function_distinct() {
         distinct: true,
     };
     assert!(matches!(func, Expr::Function { .. }));
-    if let Expr::Function { name, args, distinct } = func {
+    if let Expr::Function {
+        name,
+        args,
+        distinct,
+    } = func
+    {
         assert_eq!(name, "COUNT");
         assert!(distinct);
         assert_eq!(args.len(), 1);
@@ -226,7 +297,13 @@ fn test_expr_nested_binary_ops() {
         }),
     };
 
-    assert!(matches!(expr, Expr::BinaryOp { op: BinaryOp::And, .. }));
+    assert!(matches!(
+        expr,
+        Expr::BinaryOp {
+            op: BinaryOp::And,
+            ..
+        }
+    ));
 }
 
 #[test]
@@ -239,13 +316,11 @@ fn test_expr_paren() {
 #[test]
 fn test_expr_case() {
     let expr = Expr::Case {
-        conditions: vec![
-            Expr::BinaryOp {
-                left: Box::new(Expr::Column(ColumnRef::new("score"))),
-                op: BinaryOp::Gt,
-                right: Box::new(Expr::Literal(Literal::Integer(90))),
-            },
-        ],
+        conditions: vec![Expr::BinaryOp {
+            left: Box::new(Expr::Column(ColumnRef::new("score"))),
+            op: BinaryOp::Gt,
+            right: Box::new(Expr::Literal(Literal::Integer(90))),
+        }],
         results: vec![Expr::Literal(Literal::String("A".to_string()))],
         else_result: Some(Box::new(Expr::Literal(Literal::String("F".to_string())))),
     };

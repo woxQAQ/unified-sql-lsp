@@ -122,7 +122,8 @@ impl CompletionEngine {
 
             // Build scope synchronously if needed
             let scope_manager = match &ctx {
-                CompletionContext::SelectProjection { .. } | CompletionContext::WhereClause { .. } => {
+                CompletionContext::SelectProjection { .. }
+                | CompletionContext::WhereClause { .. } => {
                     Some(ScopeBuilder::build_from_select(&root_node, &source)?)
                 }
                 _ => None,
@@ -243,20 +244,14 @@ impl CompletionEngine {
                 };
 
                 // Fetch both tables from catalog
-                let left_table_symbol = match self
-                    .catalog_fetcher
-                    .populate_single_table(&left_name)
-                    .await
-                {
-                    Ok(table) => table,
-                    Err(e) => {
-                        eprintln!(
-                            "Warning: Failed to load left table '{}': {}",
-                            left_name, e
-                        );
-                        return Ok(None);
-                    }
-                };
+                let left_table_symbol =
+                    match self.catalog_fetcher.populate_single_table(&left_name).await {
+                        Ok(table) => table,
+                        Err(e) => {
+                            eprintln!("Warning: Failed to load left table '{}': {}", left_name, e);
+                            return Ok(None);
+                        }
+                    };
 
                 let right_table_symbol = match self
                     .catalog_fetcher
@@ -277,8 +272,10 @@ impl CompletionEngine {
                 let force_qualifier = true;
 
                 // Render with PK/FK prioritization
-                let items =
-                    CompletionRenderer::render_join_columns(&[left_table_symbol, right_table_symbol], force_qualifier);
+                let items = CompletionRenderer::render_join_columns(
+                    &[left_table_symbol, right_table_symbol],
+                    force_qualifier,
+                );
 
                 Ok(Some(items))
             }

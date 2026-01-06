@@ -421,10 +421,12 @@ meta:
     - 显示表别名
     - 支持大纲视图导航
   priority: P2
+  status: done
   dependencies: ["LSP-003", "SEMANTIC-002"]
   deliverables:
     - crates/lsp/src/symbols.rs
-    - 测试用例
+    - crates/lsp/src/backend.rs (document_symbol handler implementation)
+    - Note: Fully implemented with SymbolBuilder for CST extraction, SymbolCatalogFetcher for column metadata, SymbolRenderer for LSP format conversion, and graceful degradation when catalog is unavailable. Shows tables with columns as children, displays data types, PK/FK indicators, and supports table aliases.
 
 # =============================================================================
 # 阶段 4: Completion 功能完善

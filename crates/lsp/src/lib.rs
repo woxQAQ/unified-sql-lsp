@@ -170,6 +170,7 @@ pub mod completion;
 pub mod config;
 pub mod document;
 pub mod parsing;
+pub mod symbols;
 pub mod sync;
 
 // Re-exports for convenience
@@ -179,6 +180,7 @@ pub use completion::CompletionEngine;
 pub use config::{ConfigError, ConnectionPoolConfig, DialectVersion, EngineConfig, SchemaFilter};
 pub use document::{Document, DocumentError, DocumentMetadata, DocumentStore, ParseMetadata};
 pub use parsing::{ParseError, ParseResult, ParserManager};
+pub use symbols::{SymbolBuilder, SymbolCatalogFetcher, SymbolError, SymbolRenderer};
 pub use sync::DocumentSync;
 
 /// Version information

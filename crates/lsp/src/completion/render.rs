@@ -93,7 +93,10 @@ impl CompletionRenderer {
     /// let items = CompletionRenderer::render_join_columns(&[left_table, right_table], true);
     /// assert!(items[0].preselect.unwrap()); // PK/FK columns should be preselected
     /// ```
-    pub fn render_join_columns(tables: &[TableSymbol], force_qualifier: bool) -> Vec<CompletionItem> {
+    pub fn render_join_columns(
+        tables: &[TableSymbol],
+        force_qualifier: bool,
+    ) -> Vec<CompletionItem> {
         let mut pk_columns: Vec<CompletionItem> = Vec::new();
         let mut fk_columns: Vec<CompletionItem> = Vec::new();
         let mut regular_columns: Vec<CompletionItem> = Vec::new();
@@ -645,8 +648,7 @@ mod tests {
 
         let orders = TableSymbol::new("orders").with_columns(vec![
             ColumnSymbol::new("id", DataType::Integer, "orders").with_primary_key(),
-            ColumnSymbol::new("user_id", DataType::Integer, "orders")
-                .with_foreign_key(),
+            ColumnSymbol::new("user_id", DataType::Integer, "orders").with_foreign_key(),
             ColumnSymbol::new("total", DataType::Decimal, "orders"),
         ]);
 
@@ -693,12 +695,10 @@ mod tests {
 
     #[test]
     fn test_render_join_columns_with_alias() {
-        let table = TableSymbol::new("users")
-            .with_alias("u")
-            .with_columns(vec![
-                ColumnSymbol::new("id", DataType::Integer, "users").with_primary_key(),
-                ColumnSymbol::new("name", DataType::Text, "users"),
-            ]);
+        let table = TableSymbol::new("users").with_alias("u").with_columns(vec![
+            ColumnSymbol::new("id", DataType::Integer, "users").with_primary_key(),
+            ColumnSymbol::new("name", DataType::Text, "users"),
+        ]);
 
         let items = CompletionRenderer::render_join_columns(&[table], true);
 
@@ -711,22 +711,21 @@ mod tests {
     #[test]
     fn test_render_join_columns_composite_pk() {
         let table = TableSymbol::new("order_items").with_columns(vec![
-            ColumnSymbol::new("order_id", DataType::Integer, "order_items")
-                .with_primary_key(),
-            ColumnSymbol::new("item_id", DataType::Integer, "order_items")
-                .with_primary_key(),
+            ColumnSymbol::new("order_id", DataType::Integer, "order_items").with_primary_key(),
+            ColumnSymbol::new("item_id", DataType::Integer, "order_items").with_primary_key(),
             ColumnSymbol::new("quantity", DataType::Integer, "order_items"),
         ]);
 
         let items = CompletionRenderer::render_join_columns(&[table], true);
 
         // Both PK columns should be marked as preselect
-        let pk_items: Vec<_> = items
-            .iter()
-            .filter(|i| i.preselect.unwrap())
-            .collect();
+        let pk_items: Vec<_> = items.iter().filter(|i| i.preselect.unwrap()).collect();
 
         assert_eq!(pk_items.len(), 2);
-        assert!(pk_items.iter().all(|i| i.sort_text.as_ref().unwrap().starts_with("00_pk_")));
+        assert!(
+            pk_items
+                .iter()
+                .all(|i| i.sort_text.as_ref().unwrap().starts_with("00_pk_"))
+        );
     }
 }
