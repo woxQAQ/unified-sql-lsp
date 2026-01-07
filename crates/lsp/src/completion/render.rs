@@ -475,14 +475,10 @@ mod tests {
         assert_eq!(items[0].label, "users");
         assert_eq!(items[0].kind, Some(CompletionItemKind::CLASS));
         assert!(items[0].detail.as_ref().unwrap().contains("TABLE"));
-        assert!(
-            items[0]
-                .documentation
-                .as_ref()
-                .unwrap()
-                .to_string()
-                .contains("2 columns")
-        );
+        match items[0].documentation.as_ref().unwrap() {
+            Documentation::String(s) => assert!(s.contains("2 columns")),
+            Documentation::MarkupContent(m) => assert!(m.value.contains("2 columns")),
+        }
     }
 
     #[test]
@@ -550,14 +546,10 @@ mod tests {
         let items = CompletionRenderer::render_tables(&[table], false);
 
         assert_eq!(items.len(), 1);
-        assert!(
-            items[0]
-                .documentation
-                .as_ref()
-                .unwrap()
-                .to_string()
-                .contains("User accounts table")
-        );
+        match items[0].documentation.as_ref().unwrap() {
+            Documentation::String(s) => assert!(s.contains("User accounts table")),
+            Documentation::MarkupContent(m) => assert!(m.value.contains("User accounts table")),
+        }
     }
 
     #[test]
@@ -571,8 +563,10 @@ mod tests {
         let items = CompletionRenderer::render_tables(&[table], false);
 
         assert_eq!(items.len(), 1);
-        let doc = items[0].documentation.as_ref().unwrap().to_string();
-        assert!(doc.contains("id, name, email"));
+        match items[0].documentation.as_ref().unwrap() {
+            Documentation::String(s) => assert!(s.contains("id, name, email")),
+            Documentation::MarkupContent(m) => assert!(m.value.contains("id, name, email")),
+        }
     }
 
     #[test]
@@ -587,10 +581,17 @@ mod tests {
         let items = CompletionRenderer::render_tables(&[table], false);
 
         assert_eq!(items.len(), 1);
-        let doc = items[0].documentation.as_ref().unwrap().to_string();
-        assert!(doc.contains("10 columns"));
         // Should not list column names for wide tables
-        assert!(!doc.contains("col0"));
+        match items[0].documentation.as_ref().unwrap() {
+            Documentation::String(s) => {
+                assert!(s.contains("10 columns"));
+                assert!(!s.contains("col0"));
+            }
+            Documentation::MarkupContent(m) => {
+                assert!(m.value.contains("10 columns"));
+                assert!(!m.value.contains("col0"));
+            }
+        }
     }
 
     #[test]

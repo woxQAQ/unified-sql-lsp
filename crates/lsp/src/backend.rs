@@ -550,19 +550,78 @@ impl LanguageServer for LspBackend {
 
     /// Definition request
     ///
-    /// Called when the user requests go-to-definition.
+    /// Called when the user requests go-to-definition (F12 in most editors).
+    /// This allows users to jump from symbol references (tables, columns) to their definitions.
+    ///
+    /// # Examples
+    ///
+    /// ```sql
+    /// SELECT u.id, u.name FROM users u WHERE u.id = 1
+    /// ```
+    ///
+    /// Invoking go-to-definition on `u.id` in the WHERE clause will jump to `u.id` in the SELECT clause.
     async fn goto_definition(
         &self,
         params: GotoDefinitionParams,
     ) -> Result<Option<GotoDefinitionResponse>> {
+        use crate::Definition;
+        use crate::definition::DefinitionFinder;
+
         let uri = params.text_document_position_params.text_document.uri;
+        let position = params.text_document_position_params.position;
 
-        info!("Go to definition requested: uri={}", uri);
+        info!(
+            "Go to definition requested: uri={}, pos={:?}",
+            uri, position
+        );
 
-        // TODO: (LSP-004) Implement go-to-definition
-        // This feature is not yet tracked in FEATURE_LIST.yaml
-        // Would enable users to jump to table/column definitions
-        Ok(None)
+        // 1. Get document from store
+        let document = match self.documents.get_document(&uri).await {
+            Some(doc) => doc,
+            None => {
+                warn!("Document not found: {}", uri);
+                return Ok(None);
+            }
+        };
+
+        // 2. Get parse tree
+        let tree = match document.tree() {
+            Some(t) => t,
+            None => {
+                info!("Document not parsed: {}", uri);
+                return Ok(None); // Graceful degradation
+            }
+        };
+
+        // 3. Find definition using DefinitionFinder
+        let tree_lock = match tree.try_lock() {
+            Ok(lock) => lock,
+            Err(_) => {
+                warn!("Failed to acquire tree lock for go-to-definition");
+                return Ok(None);
+            }
+        };
+        let root_node = tree_lock.root_node();
+        let source = document.get_content();
+
+        match DefinitionFinder::find_at_position(&root_node, source.as_str(), position, &uri) {
+            Ok(Some(definition)) => {
+                let location = match definition {
+                    Definition::Table(def) => def.location,
+                    Definition::Column(def) => def.location,
+                };
+                info!("Definition found: {:?}", location);
+                Ok(Some(GotoDefinitionResponse::Scalar(location)))
+            }
+            Ok(None) => {
+                info!("No definition found at position");
+                Ok(None)
+            }
+            Err(e) => {
+                warn!("Error finding definition: {:?}", e);
+                Ok(None) // Graceful degradation
+            }
+        }
     }
 
     /// Document formatting request

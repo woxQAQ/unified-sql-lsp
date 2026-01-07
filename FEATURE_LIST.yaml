@@ -414,10 +414,16 @@ meta:
     - 跳转到列定义
     - 支持跨文件跳转（如果表定义在其他文件）
   priority: P2
+  status: done
   dependencies: ["LSP-003", "SEMANTIC-004"]
   deliverables:
     - crates/lsp/src/definition.rs
     - 测试用例
+    - Note: Fully implemented with DefinitionFinder for table and column navigation,
+      support for qualified references (table.column), aliases, and expression aliases.
+      Uses CST-based approach without modifying semantic layer. Graceful degradation
+      for edge cases (not found, ambiguous, keywords). Cross-file support deferred
+      to future enhancement (would require tracking CREATE TABLE statements).
 
 - id: LSP-005
   name: "Document Symbols 支持"
