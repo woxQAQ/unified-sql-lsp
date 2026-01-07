@@ -147,3 +147,83 @@ async fn test_document_creation_with_tree() {
 // - test_from_clause_documentation_includes_columns
 // - test_from_clause_sort_order
 // - test_no_completion_in_select_clause
+
+// =============================================================================
+// WHERE Clause Completion Tests (COMPLETION-005)
+// =============================================================================
+
+#[tokio::test]
+async fn test_where_clause_basic_completion() {
+    let catalog = MockCatalogBuilder::new().with_standard_schema().build();
+
+    let engine = CompletionEngine::new(Arc::new(catalog));
+
+    // Create a document with cursor in WHERE clause
+    let sql = "SELECT * FROM users WHERE |";
+    let document = create_test_document(sql, "mysql").await;
+
+    // Request completion at cursor position
+    let position = Position::new(0, 28); // After "WHERE "
+    let result = engine.complete(&document, position).await;
+
+    // Verify we get completion items
+    assert!(result.is_ok());
+    let items = result.unwrap().expect("Should return completion items");
+
+    // Should have columns from users table
+    assert!(!items.is_empty(), "Expected column completions");
+
+    // Verify no wildcard in WHERE clause
+    assert!(
+        !items.iter().any(|i| i.label == "*"),
+        "Wildcard should not appear in WHERE clause"
+    );
+}
+
+#[tokio::test]
+async fn test_where_clause_with_join() {
+    let catalog = MockCatalogBuilder::new().with_standard_schema().build();
+
+    let engine = CompletionEngine::new(Arc::new(catalog));
+
+    // Test WHERE clause after JOIN (should see both tables)
+    let sql = "SELECT * FROM users JOIN orders ON users.id = orders.user_id WHERE |";
+    let document = create_test_document(sql, "mysql").await;
+
+    let position = Position::new(0, 76); // After "WHERE "
+    let result = engine.complete(&document, position).await;
+
+    assert!(result.is_ok());
+    let items = result.unwrap().expect("Should return completion items");
+
+    // Should have columns from both tables
+    assert!(
+        items
+            .iter()
+            .any(|i| i.label.contains("id") || i.label.contains("user_id")),
+        "Expected columns from both tables"
+    );
+}
+
+#[tokio::test]
+async fn test_where_clause_qualified() {
+    let catalog = MockCatalogBuilder::new().with_standard_schema().build();
+
+    let engine = CompletionEngine::new(Arc::new(catalog));
+
+    // Test qualified column reference in WHERE
+    let sql = "SELECT * FROM users u WHERE u.|";
+    let document = create_test_document(sql, "mysql").await;
+
+    let position = Position::new(0, 31); // After "u."
+    let result = engine.complete(&document, position).await;
+
+    assert!(result.is_ok());
+    let items = result.unwrap().expect("Should return completion items");
+
+    // All items should be qualified with "u."
+    assert!(
+        items.iter().all(|i| i.label.starts_with("u.")),
+        "All items should be qualified with alias 'u.'"
+    );
+}

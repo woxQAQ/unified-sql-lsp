@@ -11,7 +11,7 @@ meta:
   version: "1.0"
   last_updated: "2026-01-07"
   total_features: 48
-  completed_features: 20
+  completed_features: 21
 
 # =============================================================================
 # 阶段 0: 基础设施 (Foundation)
@@ -509,7 +509,8 @@ meta:
   deliverables:
     - WHERE 补全逻辑
     - 测试用例
-    - Note: Fully implemented with qualified/unqualified column completion, multi-table support, comprehensive tests for MySQL and PostgreSQL dialects, and error handling for invalid qualifiers
+    - Note: Fully implemented with unqualified/qualified completion, table alias support,
+      ambiguous column detection, wildcard filtering, and comprehensive unit/integration tests
 
 - id: COMPLETION-006
   name: "函数补全"

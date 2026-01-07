@@ -36,7 +36,7 @@ pub enum CompletionContext {
     ///
     /// User is typing in the WHERE clause, e.g., `SELECT * FROM users WHERE |`
     WhereClause {
-        /// Optional table qualifier (e.g., "users." if cursor is after "users.")
+        /// Optional table qualifier (e.g., "users" if cursor is after "users.")
         qualifier: Option<String>,
     },
 
@@ -142,7 +142,6 @@ pub fn detect_completion_context(
 
             // WHERE clause
             "where_clause" => {
-                // Check if cursor is after a table qualifier
                 return CompletionContext::WhereClause { qualifier };
             }
 
@@ -342,9 +341,7 @@ mod tests {
 
     #[test]
     fn test_completion_context_is_where_clause() {
-        let ctx = CompletionContext::WhereClause {
-            qualifier: Some("users".to_string()),
-        };
+        let ctx = CompletionContext::WhereClause { qualifier: None };
         assert!(!ctx.is_select_projection());
         assert!(!ctx.is_from_clause());
         assert!(ctx.is_where_clause());

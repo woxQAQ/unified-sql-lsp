@@ -16,7 +16,8 @@ use std::sync::Arc;
 use unified_sql_lsp_catalog::{Catalog, FunctionMetadata, FunctionType};
 use unified_sql_lsp_ir::Dialect;
 use unified_sql_lsp_ir::{
-    ColumnRef, Expr, BinaryOp, Literal, Query, SelectItem, SelectStatement, SetOp, TableRef, OrderBy,
+    BinaryOp, ColumnRef, Expr, Literal, OrderBy, Query, SelectItem, SelectStatement, SetOp,
+    TableRef,
 };
 
 use crate::error::{SemanticError, SemanticResult};
