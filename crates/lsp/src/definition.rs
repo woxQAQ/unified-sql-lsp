@@ -371,9 +371,9 @@ fn extract_identifier_name(node: &Node, source: &str) -> Option<String> {
         "table_name" | "column_name" | "identifier" => Some(extract_node_text(node, source)),
         _ => {
             // Try to find identifier child
-            if let Some(child) = node.find_child(|c| {
-                matches!(c.kind(), "table_name" | "column_name" | "identifier")
-            }) {
+            if let Some(child) =
+                node.find_child(|c| matches!(c.kind(), "table_name" | "column_name" | "identifier"))
+            {
                 Some(extract_node_text(&child, source))
             } else {
                 None
@@ -438,7 +438,9 @@ fn find_select_clause<'a>(select_node: &'a Node<'a>) -> Option<Node<'a>> {
 /// Extract alias from expression or function_call
 fn extract_alias(node: &Node, source: &str) -> Option<String> {
     if let Some(child) = node.find_child(|c| c.kind() == "alias") {
-        if let Some(alias_child) = child.find_child(|c| matches!(c.kind(), "identifier" | "column_name")) {
+        if let Some(alias_child) =
+            child.find_child(|c| matches!(c.kind(), "identifier" | "column_name"))
+        {
             return Some(extract_node_text(&alias_child, source));
         }
     }
@@ -531,7 +533,8 @@ mod tests {
         let root_node = tree.root_node();
 
         // Find table_reference node using helper function
-        let table_ref_node = find_table_reference_node(&root_node).expect("table_reference node not found");
+        let table_ref_node =
+            find_table_reference_node(&root_node).expect("table_reference node not found");
         let result = extract_table_name(&table_ref_node, sql);
         assert_eq!(result, Some("users".to_string()));
     }

@@ -71,7 +71,41 @@ cargo test -p unified-sql-lsp-lsp --test document_sync_tests
 cargo test -p unified-sql-lsp-lsp --test e2e_completion_tests
 cargo test -p unified-sql-lsp-lsp --test dialect_matrix_tests
 cargo test -p unified-sql-lsp-lsp --test error_handling_tests
+cargo test -p unified-sql-lsp-lsp --test integration_tests
+
+# Run integration tests only (TEST-002)
+cargo test -p unified-sql-lsp-lsp --test integration_tests
 ```
+
+#### Integration Tests (TEST-002)
+
+The `integration_tests.rs` file provides comprehensive integration tests covering:
+
+- **Completion Flow Tests** (10 tests): Full pipeline from parsing to rendering
+  - SELECT projection with/without qualifiers
+  - FROM clause table completion
+  - WHERE clause column completion
+  - JOIN condition completion
+  - Table aliases
+  - Error handling (parse errors, empty documents)
+  - Dialect-specific syntax (MySQL LIMIT, PostgreSQL DISTINCT ON)
+
+- **Multi-Document Concurrent Tests** (6 tests): Thread-safety and concurrent operations
+  - Concurrent document opening/closing
+  - Rapid open/close cycles (50 iterations)
+  - Parsing performance under load (20 concurrent parses)
+  - Completion latency measurements (p95 < 200ms)
+  - Error isolation in concurrent scenarios
+  - Concurrent read operations
+
+- **Catalog Integration Tests** (8 tests): Catalog integration and error handling
+  - Standard schema integration
+  - Custom table definitions
+  - Multiple schemas with schema qualifiers
+  - Function completion from catalog
+  - Error handling (non-existent tables)
+  - Metadata in completions (comments, row counts, column types)
+  - Cross-dialect compatibility (MySQL vs PostgreSQL)
 
 ## Test Organization
 
@@ -96,7 +130,10 @@ crates/lsp/tests/
 ├── document_sync_tests.rs     # DocumentSync orchestration tests
 ├── e2e_completion_tests.rs    # End-to-end pipeline tests (parse → complete)
 ├── dialect_matrix_tests.rs    # Multi-dialect macro-based tests
-└── error_handling_tests.rs    # Error scenarios and edge cases
+├── error_handling_tests.rs    # Error scenarios and edge cases
+└── integration_tests.rs       # Comprehensive integration tests (TEST-002)
+                              # 24 tests covering completion flow,
+                              # multi-document concurrency, and catalog integration
 ```
 
 ## Coverage Goals
