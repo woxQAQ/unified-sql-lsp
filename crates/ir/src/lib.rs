@@ -21,5 +21,5 @@ pub use dialect::{Dialect, DialectExtensions};
 pub use expr::{BinaryOp, ColumnRef, Expr, Literal, UnaryOp};
 pub use query::{
     CommonTableExpr, Join, JoinCondition, JoinType, OrderBy, Query, SelectItem, SelectStatement,
-    SetOp, TableRef, WindowDef,
+    SetOp, SortDirection, TableRef, WindowDef,
 };

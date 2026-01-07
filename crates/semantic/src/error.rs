@@ -34,6 +34,14 @@ pub enum SemanticError {
     /// Invalid scope reference (e.g., non-existent parent)
     #[error("Invalid scope reference: {0}")]
     InvalidScope(String),
+
+    /// HAVING clause contains non-aggregate column without GROUP BY
+    #[error("HAVING clause cannot contain non-aggregate column '{0}' without GROUP BY")]
+    NonAggregateColumnInHaving(String),
+
+    /// Wildcard table not found
+    #[error("Wildcard table '{0}' not found in FROM clause")]
+    WildcardTableNotFound(String),
 }
 
 #[cfg(test)]
@@ -75,5 +83,23 @@ mod tests {
         let msg = format!("{}", err);
         assert!(msg.contains("u"));
         assert!(msg.contains("Duplicate"));
+    }
+
+    #[test]
+    fn test_error_display_non_aggregate_column_in_having() {
+        let err = SemanticError::NonAggregateColumnInHaving("user_id".to_string());
+        let msg = format!("{}", err);
+        assert!(msg.contains("user_id"));
+        assert!(msg.contains("HAVING"));
+        assert!(msg.contains("GROUP BY"));
+    }
+
+    #[test]
+    fn test_error_display_wildcard_table_not_found() {
+        let err = SemanticError::WildcardTableNotFound("users".to_string());
+        let msg = format!("{}", err);
+        assert!(msg.contains("users"));
+        assert!(msg.contains("not found"));
+        assert!(msg.contains("FROM"));
     }
 }

@@ -9,7 +9,7 @@
 
 meta:
   version: "1.0"
-  last_updated: "2026-01-06"
+  last_updated: "2026-01-07"
   total_features: 48
   completed_features: 20
 
@@ -237,12 +237,19 @@ meta:
     - Wildcard 展开 (table.*)
     - 聚合函数上下文验证
   priority: P1
+  status: done
   dependencies: ["SEMANTIC-002"]
   deliverables:
     - GROUP BY / HAVING / ORDER BY 验证逻辑
     - Wildcard 展开实现
     - 聚合上下文跟踪
     - 测试用例
+    - Note: Fully implemented with GROUP BY validation, HAVING validation (with/without GROUP BY),
+      ORDER BY validation at Query level, wildcard expansion functionality (expand_wildcard and
+      expand_projection_wildcards methods), catalog-based aggregate function detection using
+      FunctionMetadata from catalog instead of hardcoded list, and comprehensive unit tests
+      (15 new tests: 10 for validation, 5 for wildcard expansion, 3 for catalog aggregates).
+      Added new error types: NonAggregateColumnInHaving, WildcardTableNotFound.
 
 - id: SEMANTIC-006
   name: "CTE 和集合操作支持"
