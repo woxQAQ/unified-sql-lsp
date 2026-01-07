@@ -124,13 +124,13 @@ impl ColumnCandidate {
                 // Base score from similarity
                 let base_score = similarity_score(query, name);
 
-                // Penalty for longer distance
-                let distance_penalty = 1.0 - (distance as f64 / (config.max_distance as f64 + 1.0));
+                // Minimal penalty for edit distance (very forgiving for typos)
+                let distance_penalty = (distance as f64 / (config.max_distance as f64 + 1.0)) * 0.15;
 
                 // Bonus for shorter column names (less room for error)
-                let length_bonus = if name.len() <= 8 { 0.05 } else { 0.0 };
+                let length_bonus = if name.len() <= 8 { 0.15 } else { 0.1 };
 
-                self.relevance_score = base_score * distance_penalty + length_bonus;
+                self.relevance_score = base_score - distance_penalty + length_bonus;
             }
             MatchKind::PrefixMatch => {
                 // Calculate how much of the string matches

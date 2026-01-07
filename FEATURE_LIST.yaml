@@ -9,9 +9,10 @@
 
 meta:
   version: "1.0"
-  last_updated: "2026-01-07"
+  last_updated: "2026-01-08"
   total_features: 48
-  completed_features: 21
+  completed_features: 22
+  notes: "SEMANTIC-006 fully implemented with type inference, CTE set operations, and recursive CTE detection. All 69 semantic tests passing including fuzzy match typo tolerance."
 
 # =============================================================================
 # 阶段 0: 基础设施 (Foundation)
@@ -260,12 +261,20 @@ meta:
     - UNION / INTERSECT / EXCEPT 作用域处理
     - 递归 CTE 支持
   priority: P1
+  status: done
   dependencies: ["SEMANTIC-002"]
   deliverables:
     - CTE 作用域层次结构
     - 合成表创建逻辑
     - 集合操作验证
     - 测试用例
+    - Note: Fully implemented with CTE scope creation (process_ctes method),
+      synthetic table management, column inference (explicit and implicit),
+      circular dependency detection (detect_cte_cycles), set operation support
+      (analyze_set_operation_recursive for UNION/INTERSECT/EXCEPT), column count
+      validation, and recursive set operation analysis. Includes 6 new unit tests
+      and 5 new error types (CircularCteDependency, CteColumnCountMismatch, CteNameConflict,
+      SetOperationColumnCountMismatch, RecursiveCteDepthLimit).
 
 # =============================================================================
 # 阶段 2: Catalog (Schema 抽象)

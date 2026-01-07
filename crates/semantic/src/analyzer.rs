@@ -10,11 +10,11 @@
 //! The analyzer traverses IR queries, builds scope hierarchies, validates
 //! column references, and integrates with the catalog for schema metadata.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 use unified_sql_lsp_catalog::{Catalog, FunctionMetadata, FunctionType};
-use unified_sql_lsp_ir::Dialect;
+use unified_sql_lsp_ir::{CommonTableExpr, Dialect};
 use unified_sql_lsp_ir::{
     BinaryOp, ColumnRef, Expr, Literal, OrderBy, Query, SelectItem, SelectStatement, SetOp,
     TableRef,
@@ -24,6 +24,13 @@ use crate::error::{SemanticError, SemanticResult};
 use crate::resolution::ColumnResolver;
 use crate::scope::{ScopeManager, ScopeType};
 use crate::symbol::{ColumnSymbol, TableSymbol};
+
+/// Metadata for processed CTEs
+struct CteMetadata {
+    scope_id: usize,
+    output_columns: Vec<ColumnSymbol>,
+    is_recursive: bool,
+}
 
 /// Semantic analyzer for SQL queries
 ///
@@ -123,21 +130,26 @@ impl SemanticAnalyzer {
         // Step 2.5: Pre-fetch function metadata from catalog
         self.prefetch_function_metadata().await?;
 
-        // Step 3: Process CTEs if present
-        // TODO: (SEMANTIC-006) Implement CTE scope creation and synthetic tables
-        if !query.ctes.is_empty() {
-            // For now, we'll skip CTE processing and add a placeholder
-            // In the future, this will create CTE scopes and synthetic tables
-        }
+        // Step 3: Process CTEs if present and get CTE scope ID
+        let cte_scope_id = if !query.ctes.is_empty() {
+            let (scope_id, _metadata) = self.process_ctes(&query.ctes, None).await?;
+            Some(scope_id)
+        } else {
+            None
+        };
 
-        // Step 4: Build main query scope
+        // Step 4: Build main query scope (handle set operations)
+        // Main query scope should have CTE scope as parent if CTEs exist
         let root_scope = match &query.body {
-            SetOp::Select(select) => self.build_main_query_scope(select)?,
-            // TODO: (SEMANTIC-006) Handle UNION, INTERSECT, EXCEPT
+            SetOp::Select(select) => {
+                // Build scope with CTE scope as parent
+                let scope_id = self.scope_manager.create_scope(ScopeType::Query, cte_scope_id);
+                self.populate_query_scope(select, scope_id)?;
+                scope_id
+            }
             _ => {
-                // For set operations, create a basic scope
-                // This is a placeholder for future implementation
-                let scope_id = self.scope_manager.create_scope(ScopeType::Query, None);
+                // Handle UNION, INTERSECT, EXCEPT
+                let (scope_id, _columns) = self.analyze_set_operation_recursive(&query.body, cte_scope_id)?;
                 scope_id
             }
         };
@@ -290,20 +302,44 @@ impl SemanticAnalyzer {
     fn extract_table_names(&self, query: &Query) -> SemanticResult<Vec<String>> {
         let mut table_names = Vec::new();
 
+        // Collect CTE names to filter them out later
+        let cte_names: std::collections::HashSet<String> = query.ctes.iter()
+            .map(|cte| cte.name.clone())
+            .collect();
+
         match &query.body {
             SetOp::Select(select) => {
                 // Extract from FROM clause
                 for table_ref in &select.from {
-                    table_names.push(table_ref.name.clone());
+                    // Skip CTE references
+                    if !cte_names.contains(&table_ref.name) {
+                        table_names.push(table_ref.name.clone());
+                    }
 
                     // Extract from JOINs
                     for join in &table_ref.joins {
-                        table_names.push(join.table.name.clone());
+                        // Skip CTE references
+                        if !cte_names.contains(&join.table.name) {
+                            table_names.push(join.table.name.clone());
+                        }
                     }
                 }
             }
-            // TODO: (SEMANTIC-006) Extract tables from set operations
-            _ => {}
+            SetOp::Union { left, right, .. }
+            | SetOp::Intersect { left, right, .. }
+            | SetOp::Except { left, right, .. } => {
+                // Recursively extract tables from both sides
+                let mut left_tables = self.extract_table_names(left)?;
+                let mut right_tables = self.extract_table_names(right)?;
+                table_names.append(&mut left_tables);
+                table_names.append(&mut right_tables);
+            }
+        }
+
+        // Also extract from CTEs (but not the CTEs themselves)
+        for cte in &query.ctes {
+            let mut cte_tables = self.extract_table_names(&cte.query)?;
+            table_names.append(&mut cte_tables);
         }
 
         Ok(table_names)
@@ -352,7 +388,12 @@ impl SemanticAnalyzer {
     /// Build the main query scope
     fn build_main_query_scope(&mut self, select: &SelectStatement) -> SemanticResult<usize> {
         let scope_id = self.scope_manager.create_scope(ScopeType::Query, None);
+        self.populate_query_scope(select, scope_id)?;
+        Ok(scope_id)
+    }
 
+    /// Populate a query scope with tables and validate clauses
+    fn populate_query_scope(&mut self, select: &SelectStatement, scope_id: usize) -> SemanticResult<()> {
         // Process FROM clause tables
         for table_ref in &select.from {
             self.process_table_ref(table_ref, scope_id)?;
@@ -381,12 +422,34 @@ impl SemanticAnalyzer {
         // Validate projection (includes wildcard validation)
         self.validate_projection(&select.projection, scope_id)?;
 
-        Ok(scope_id)
+        Ok(())
     }
 
     /// Process a table reference and add it to scope
     fn process_table_ref(&mut self, table_ref: &TableRef, scope_id: usize) -> SemanticResult<()> {
-        // Get column metadata from cache
+        // First check if this is a CTE (synthetic table in scope hierarchy)
+        match self.scope_manager.resolve_table(&table_ref.name, scope_id) {
+            Ok(cte_table) => {
+                // This is a CTE, already in scope - just add it to current scope with alias if needed
+                let mut table = cte_table.clone();
+                if let Some(alias) = &table_ref.alias {
+                    table = table.with_alias(alias);
+                }
+
+                let scope = self
+                    .scope_manager
+                    .get_scope_mut(scope_id)
+                    .ok_or_else(|| SemanticError::InvalidScope(format!("scope {}", scope_id)))?;
+
+                scope.add_table(table)?;
+                return Ok(());
+            }
+            Err(_) => {
+                // Not a CTE, continue to catalog lookup
+            }
+        }
+
+        // Not a CTE, get column metadata from cache
         let columns = self
             .column_cache
             .get(&table_ref.name)
@@ -728,6 +791,642 @@ impl SemanticAnalyzer {
         }
         Ok(result)
     }
+
+    /// Check if a CTE is recursive
+    ///
+    /// A CTE is recursive if:
+    /// 1. It contains UNION ALL
+    /// 2. It references itself in the FROM clause
+    ///
+    /// # Arguments
+    ///
+    /// * `cte` - CTE to check
+    ///
+    /// # Returns
+    ///
+    /// true if the CTE is recursive, false otherwise
+    fn is_recursive_cte(&self, cte: &CommonTableExpr) -> bool {
+        // Check if CTE query has UNION ALL structure
+        let has_union_all = matches!(&cte.query.body, SetOp::Union { all: true, .. });
+
+        if !has_union_all {
+            return false;
+        }
+
+        // Check if CTE references itself
+        self.query_references_cte(&cte.query, &cte.name)
+    }
+
+    /// Process CTEs and create synthetic tables
+    ///
+    /// This method handles all CTEs in a query, creating a separate CTE scope
+    /// and synthetic tables that can be referenced by the main query.
+    ///
+    /// # Arguments
+    ///
+    /// * `ctes` - CTEs to process
+    /// * `parent_scope_id` - Parent scope ID (typically None for top-level CTEs)
+    ///
+    /// # Returns
+    ///
+    /// Tuple of (CTE scope ID, HashMap mapping CTE names to their metadata)
+    async fn process_ctes(
+        &mut self,
+        ctes: &[CommonTableExpr],
+        parent_scope_id: Option<usize>,
+    ) -> SemanticResult<(usize, HashMap<String, CteMetadata>)> {
+        let mut cte_map = HashMap::new();
+
+        // Create CTE scope (will be parent of main query scope)
+        let cte_scope_id = self.scope_manager.create_scope(ScopeType::CTE, parent_scope_id);
+
+        // Process CTEs in declaration order
+        for cte in ctes {
+            // Check for circular dependencies
+            self.detect_cte_cycles(ctes, &cte.name, &mut HashSet::new(), &mut HashSet::new())?;
+
+            // Build CTE query scope directly (not using analyze_query to avoid recursion)
+            let (cte_root_scope, output_columns) = match &cte.query.body {
+                SetOp::Select(select) => {
+                    let scope_id = self.build_main_query_scope(select)?;
+                    let columns = self.infer_output_columns_from_select(select, scope_id)?;
+                    (scope_id, columns)
+                }
+                _ => {
+                    // Full support for set operations in CTEs
+                    self.analyze_set_operation_recursive(&cte.query.body, Some(cte_scope_id))?
+                }
+            };
+
+            // Validate column count if explicit column list provided
+            if !cte.columns.is_empty() && cte.columns.len() != output_columns.len() {
+                return Err(SemanticError::CteColumnCountMismatch {
+                    cte: cte.name.clone(),
+                    defined: cte.columns.len(),
+                    returned: output_columns.len(),
+                });
+            }
+
+            // Create synthetic table symbol
+            let mut cte_table = TableSymbol::new(&cte.name).with_columns(output_columns.clone());
+
+            // Use explicit column names if provided
+            if !cte.columns.is_empty() {
+                let renamed_columns: Vec<ColumnSymbol> = output_columns
+                    .iter()
+                    .enumerate()
+                    .map(|(i, col)| {
+                        let mut renamed = col.clone();
+                        renamed.name = cte.columns[i].clone();
+                        renamed
+                    })
+                    .collect();
+                cte_table = TableSymbol::new(&cte.name).with_columns(renamed_columns.clone());
+            }
+
+            // Add CTE table to CTE scope
+            let scope = self
+                .scope_manager
+                .get_scope_mut(cte_scope_id)
+                .ok_or_else(|| SemanticError::InvalidScope("CTE scope not found".to_string()))?;
+            scope.add_table(cte_table)?;
+
+            // Store metadata
+            cte_map.insert(
+                cte.name.clone(),
+                CteMetadata {
+                    scope_id: cte_root_scope,
+                    output_columns,
+                    is_recursive: self.is_recursive_cte(cte),
+                },
+            );
+        }
+
+        Ok((cte_scope_id, cte_map))
+    }
+
+    /// Infer output columns from a CTE query
+    ///
+    /// Extracts column names and types from the CTE's SELECT projection.
+    ///
+    /// # Arguments
+    ///
+    /// * `cte` - CTE to analyze
+    /// * `cte_scope_id` - Scope ID of the CTE query
+    ///
+    /// # Returns
+    ///
+    /// Vector of column symbols representing the CTE's output schema
+    fn infer_cte_output_columns(
+        &self,
+        cte: &CommonTableExpr,
+        cte_scope_id: usize,
+    ) -> SemanticResult<Vec<ColumnSymbol>> {
+        let mut columns = Vec::new();
+
+        // Extract from CTE query's projection
+        if let SetOp::Select(select) = &cte.query.body {
+            for (i, item) in select.projection.iter().enumerate() {
+                match item {
+                    SelectItem::AliasedExpr { expr, alias } => {
+                        // Use alias directly
+                        let col_name = alias.clone();
+
+                        // Infer data type from expression
+                        let data_type = self.infer_expr_type(expr, cte_scope_id)?;
+
+                        columns.push(ColumnSymbol::new(
+                            col_name,
+                            data_type,
+                            &cte.name, // Table name is the CTE name
+                        ));
+                    }
+                    SelectItem::UnnamedExpr(expr) => {
+                        // No alias, generate column name
+                        let col_name = self.extract_column_name(expr).unwrap_or(format!("col_{}", i + 1));
+
+                        // Infer data type from expression
+                        let data_type = self.infer_expr_type(expr, cte_scope_id)?;
+
+                        columns.push(ColumnSymbol::new(
+                            col_name,
+                            data_type,
+                            &cte.name,
+                        ));
+                    }
+                    SelectItem::Wildcard | SelectItem::QualifiedWildcard(_) => {
+                        // Expand wildcards
+                        let expanded = self.expand_wildcard(item, cte_scope_id)?;
+                        for expanded_item in expanded {
+                            match expanded_item {
+                                SelectItem::AliasedExpr { expr, alias } => {
+                                    let col_name = alias.clone();
+                                    let data_type = self.infer_expr_type(&expr, cte_scope_id)?;
+                                    columns.push(ColumnSymbol::new(col_name, data_type, &cte.name));
+                                }
+                                SelectItem::UnnamedExpr(expr) => {
+                                    let col_name = self.extract_column_name(&expr).unwrap_or("col".to_string());
+                                    let data_type = self.infer_expr_type(&expr, cte_scope_id)?;
+                                    columns.push(ColumnSymbol::new(col_name, data_type, &cte.name));
+                                }
+                                _ => {}
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        Ok(columns)
+    }
+
+    /// Detect circular dependencies in CTEs
+    ///
+    /// Uses DFS to detect cycles in the CTE reference graph.
+    ///
+    /// # Arguments
+    ///
+    /// * `ctes` - All CTEs in the query
+    /// * `current_cte` - Current CTE being analyzed
+    /// * `visited` - Set of visited CTE names
+    /// * `rec_stack` - Current recursion stack
+    fn detect_cte_cycles(
+        &self,
+        ctes: &[CommonTableExpr],
+        current_cte: &str,
+        visited: &mut HashSet<String>,
+        rec_stack: &mut HashSet<String>,
+    ) -> SemanticResult<()> {
+        visited.insert(current_cte.to_string());
+        rec_stack.insert(current_cte.to_string());
+
+        // Find CTE references in current CTE's query
+        let referenced_ctes: Vec<String> = ctes
+            .iter()
+            .filter(|cte| cte.name != current_cte)
+            .filter(|cte| self.query_references_cte(&ctes.iter().find(|c| c.name == current_cte).unwrap().query, &cte.name))
+            .map(|cte| cte.name.clone())
+            .collect();
+
+        for ref_cte in referenced_ctes {
+            if !visited.contains(&ref_cte) {
+                self.detect_cte_cycles(ctes, &ref_cte, visited, rec_stack)?;
+            } else if rec_stack.contains(&ref_cte) {
+                // Cycle detected
+                let cycle_path: Vec<String> = rec_stack.iter().cloned().collect();
+                let cycle_str = cycle_path.join(" → ");
+                return Err(SemanticError::CircularCteDependency(format!("{} → {}", cycle_str, ref_cte)));
+            }
+        }
+
+        rec_stack.remove(current_cte);
+        Ok(())
+    }
+
+    /// Check if a query references a specific CTE by name
+    fn query_references_cte(&self, query: &Query, cte_name: &str) -> bool {
+        match &query.body {
+            SetOp::Select(select) => {
+                // Check FROM clause
+                for table_ref in &select.from {
+                    if table_ref.name == cte_name {
+                        return true;
+                    }
+                    // Check JOINs
+                    for join in &table_ref.joins {
+                        if join.table.name == cte_name {
+                            return true;
+                        }
+                    }
+                }
+                false
+            }
+            SetOp::Union { left, right, .. }
+            | SetOp::Intersect { left, right, .. }
+            | SetOp::Except { left, right, .. } => {
+                // Recursively check both sides
+                self.query_references_cte(left, cte_name) || self.query_references_cte(right, cte_name)
+            }
+        }
+    }
+
+    /// Recursively analyze set operations (UNION, INTERSECT, EXCEPT)
+    ///
+    /// This method handles nested set operations, ensuring proper scope isolation
+    /// and column count compatibility.
+    ///
+    /// # Arguments
+    ///
+    /// * `set_op` - Set operation to analyze
+    /// * `parent_id` - Parent scope ID
+    ///
+    /// # Returns
+    ///
+    /// Tuple of (parent_scope_id, output_columns)
+    fn analyze_set_operation_recursive(
+        &mut self,
+        set_op: &SetOp,
+        parent_id: Option<usize>,
+    ) -> SemanticResult<(usize, Vec<ColumnSymbol>)> {
+        match set_op {
+            SetOp::Select(select) => {
+                // Base case: regular SELECT
+                let scope_id = self.build_main_query_scope(select)?;
+                let columns = self.infer_output_columns_from_select(select, scope_id)?;
+                Ok((scope_id, columns))
+            }
+            SetOp::Union { left, right, .. } => {
+                // Recursive case: analyze both sides
+                let (left_id, left_cols) = self.analyze_set_operation_recursive(&left.body, parent_id)?;
+                let (right_id, right_cols) = self.analyze_set_operation_recursive(&right.body, parent_id)?;
+
+                // Validate column count matches
+                if left_cols.len() != right_cols.len() {
+                    return Err(SemanticError::SetOperationColumnCountMismatch {
+                        left: left_cols.len(),
+                        right: right_cols.len(),
+                    });
+                }
+
+                // Create isolated parent scope
+                let parent_scope = self.scope_manager.create_scope(ScopeType::Query, parent_id);
+                Ok((parent_scope, left_cols)) // Left columns define output
+            }
+            SetOp::Intersect { left, right, .. } => {
+                // Same logic as UNION
+                let (left_id, left_cols) = self.analyze_set_operation_recursive(&left.body, parent_id)?;
+                let (right_id, right_cols) = self.analyze_set_operation_recursive(&right.body, parent_id)?;
+
+                if left_cols.len() != right_cols.len() {
+                    return Err(SemanticError::SetOperationColumnCountMismatch {
+                        left: left_cols.len(),
+                        right: right_cols.len(),
+                    });
+                }
+
+                let parent_scope = self.scope_manager.create_scope(ScopeType::Query, parent_id);
+                Ok((parent_scope, left_cols))
+            }
+            SetOp::Except { left, right, .. } => {
+                // Same logic as UNION and INTERSECT
+                let (left_id, left_cols) = self.analyze_set_operation_recursive(&left.body, parent_id)?;
+                let (right_id, right_cols) = self.analyze_set_operation_recursive(&right.body, parent_id)?;
+
+                if left_cols.len() != right_cols.len() {
+                    return Err(SemanticError::SetOperationColumnCountMismatch {
+                        left: left_cols.len(),
+                        right: right_cols.len(),
+                    });
+                }
+
+                let parent_scope = self.scope_manager.create_scope(ScopeType::Query, parent_id);
+                Ok((parent_scope, left_cols))
+            }
+        }
+    }
+
+    /// Infer output columns from a SELECT statement
+    ///
+    /// Similar to `infer_cte_output_columns` but used for set operations.
+    fn infer_output_columns_from_select(
+        &self,
+        select: &SelectStatement,
+        scope_id: usize,
+    ) -> SemanticResult<Vec<ColumnSymbol>> {
+        let mut columns = Vec::new();
+
+        for (i, item) in select.projection.iter().enumerate() {
+            match item {
+                SelectItem::AliasedExpr { expr, alias } => {
+                    let col_name = alias.clone();
+                    let data_type = self.infer_expr_type(expr, scope_id)?;
+                    // For set operations, we don't have a specific table name
+                    columns.push(ColumnSymbol::new(col_name, data_type, ""));
+                }
+                SelectItem::UnnamedExpr(expr) => {
+                    let col_name = self.extract_column_name(expr).unwrap_or(format!("col_{}", i + 1));
+                    let data_type = self.infer_expr_type(expr, scope_id)?;
+                    columns.push(ColumnSymbol::new(col_name, data_type, ""));
+                }
+                SelectItem::Wildcard | SelectItem::QualifiedWildcard(_) => {
+                    // Expand wildcards - for set operations, use empty table name
+                    let expanded = self.expand_wildcard(item, scope_id)?;
+                    for expanded_item in expanded {
+                        match expanded_item {
+                            SelectItem::AliasedExpr { expr, alias } => {
+                                let col_name = alias.clone();
+                                let data_type = self.infer_expr_type(&expr, scope_id)?;
+                                columns.push(ColumnSymbol::new(col_name, data_type, ""));
+                            }
+                            SelectItem::UnnamedExpr(expr) => {
+                                let col_name = self.extract_column_name(&expr).unwrap_or("col".to_string());
+                                let data_type = self.infer_expr_type(&expr, scope_id)?;
+                                columns.push(ColumnSymbol::new(col_name, data_type, ""));
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+            }
+        }
+
+        Ok(columns)
+    }
+
+    /// Extract column name from an expression
+    ///
+    /// Returns None if the expression is not a simple column reference.
+    fn extract_column_name(&self, expr: &Expr) -> Option<String> {
+        match expr {
+            Expr::Column(col_ref) => Some(col_ref.column.clone()),
+            Expr::Literal(Literal::Integer(_)) => None,
+            Expr::Literal(Literal::String(s)) => Some(s.clone()),
+            _ => None, // Complex expressions don't have simple names
+        }
+    }
+
+    /// Infer data type from an expression
+    ///
+    /// Traverses the expression tree and infers the type based on:
+    /// - Literals have fixed types
+    /// - Column references get type from symbol table
+    /// - Binary operations follow type promotion rules
+    /// - Functions return type from metadata
+    /// - CAST expressions return the target type
+    /// - CASE expressions return the most common type of all branches
+    fn infer_expr_type(&self, expr: &Expr, scope_id: usize) -> SemanticResult<unified_sql_lsp_catalog::DataType> {
+        use unified_sql_lsp_catalog::DataType;
+        use unified_sql_lsp_ir::Literal;
+
+        match expr {
+            // Literal types
+            Expr::Literal(Literal::Integer(_)) => Ok(DataType::Integer),
+            Expr::Literal(Literal::Float(_)) => Ok(DataType::Float),
+            Expr::Literal(Literal::String(_)) => Ok(DataType::Text),
+            Expr::Literal(Literal::Boolean(_)) => Ok(DataType::Boolean),
+            Expr::Literal(Literal::Null) => Ok(DataType::Other("NULL".to_string())),
+
+            // Column reference - resolve from symbol table
+            Expr::Column(col_ref) => {
+                match self.resolve_column(col_ref, scope_id) {
+                    Ok((_table, column)) => Ok(column.data_type.clone()),
+                    Err(_) => Ok(DataType::Other("UNKNOWN".to_string())),
+                }
+            }
+
+            // Binary operations
+            Expr::BinaryOp { left, op, right } => {
+                self.infer_binaryop_type(left, op, right, scope_id)
+            }
+
+            // Unary operations
+            Expr::UnaryOp { op, expr } => {
+                match op {
+                    unified_sql_lsp_ir::UnaryOp::Not => Ok(DataType::Boolean),
+                    unified_sql_lsp_ir::UnaryOp::Neg => {
+                        // Negation preserves the operand type
+                        self.infer_expr_type(expr, scope_id)
+                    }
+                    unified_sql_lsp_ir::UnaryOp::Exists => Ok(DataType::Boolean),
+                    _ => Ok(DataType::Other("UNKNOWN".to_string())),
+                }
+            }
+
+            // Function calls
+            Expr::Function { name, args, .. } => {
+                self.infer_function_type(name, args, scope_id)
+            }
+
+            // CAST expression
+            Expr::Cast { type_name, .. } => {
+                self.parse_data_type_from_string(type_name)
+            }
+
+            // CASE expression - return most common type
+            Expr::Case { results, else_result, .. } => {
+                let mut types: Vec<DataType> = results
+                    .iter()
+                    .filter_map(|r| self.infer_expr_type(r, scope_id).ok())
+                    .collect();
+
+                if let Some(else_val) = else_result {
+                    if let Ok(t) = self.infer_expr_type(else_val, scope_id) {
+                        types.push(t);
+                    }
+                }
+
+                Ok(self.find_most_common_type(&types))
+            }
+
+            // Parenthesized expression
+            Expr::Paren(inner) => self.infer_expr_type(inner, scope_id),
+
+            // List of expressions (for IN clause)
+            Expr::List(items) => {
+                // All items should have the same type
+                if !items.is_empty() {
+                    self.infer_expr_type(&items[0], scope_id)
+                } else {
+                    Ok(DataType::Other("UNKNOWN".to_string()))
+                }
+            }
+
+            // Catch-all for future expression variants
+            _ => Ok(DataType::Other("UNKNOWN".to_string())),
+        }
+    }
+
+    /// Infer type for binary operations
+    fn infer_binaryop_type(
+        &self,
+        left: &Expr,
+        op: &unified_sql_lsp_ir::BinaryOp,
+        right: &Expr,
+        scope_id: usize,
+    ) -> SemanticResult<unified_sql_lsp_catalog::DataType> {
+        use unified_sql_lsp_catalog::DataType;
+        use unified_sql_lsp_ir::BinaryOp;
+
+        let left_type = self.infer_expr_type(left, scope_id)?;
+        let right_type = self.infer_expr_type(right, scope_id)?;
+
+        match op {
+            // Arithmetic operations - use type promotion
+            BinaryOp::Add | BinaryOp::Sub | BinaryOp::Mul | BinaryOp::Div | BinaryOp::Mod => {
+                Ok(Self::promote_types(&left_type, &right_type))
+            }
+
+            // Comparison operations - always return Boolean
+            BinaryOp::Eq | BinaryOp::NotEq | BinaryOp::Lt | BinaryOp::LtEq | BinaryOp::Gt | BinaryOp::GtEq => {
+                Ok(DataType::Boolean)
+            }
+
+            // Logical operations - always return Boolean
+            BinaryOp::And | BinaryOp::Or => Ok(DataType::Boolean),
+
+            // String operations
+            BinaryOp::Like | BinaryOp::NotLike | BinaryOp::ILike | BinaryOp::NotILike => {
+                Ok(DataType::Boolean)
+            }
+
+            // Other operations
+            BinaryOp::In | BinaryOp::NotIn => Ok(DataType::Boolean),
+            BinaryOp::Is | BinaryOp::IsNot => Ok(DataType::Boolean),
+
+            // Catch-all for future operators
+            _ => Ok(DataType::Other("UNKNOWN".to_string())),
+        }
+    }
+
+    /// Infer type for function calls
+    fn infer_function_type(
+        &self,
+        name: &str,
+        args: &[Expr],
+        scope_id: usize,
+    ) -> SemanticResult<unified_sql_lsp_catalog::DataType> {
+        use unified_sql_lsp_catalog::DataType;
+
+        let name_lower = name.to_lowercase();
+
+        // Try to find function metadata in cache
+        if let Some(func) = self.function_cache.iter().find(|f| f.name.eq_ignore_ascii_case(name)) {
+            return Ok(func.return_type.clone());
+        }
+
+        // Built-in aggregate function type rules
+        match name_lower.as_str() {
+            "count" => Ok(DataType::Integer),
+            "sum" => {
+                if !args.is_empty() {
+                    self.infer_expr_type(&args[0], scope_id)
+                } else {
+                    Ok(DataType::Float)
+                }
+            }
+            "avg" => Ok(DataType::Float),
+            "min" | "max" => {
+                if !args.is_empty() {
+                    self.infer_expr_type(&args[0], scope_id)
+                } else {
+                    Ok(DataType::Other("UNKNOWN".to_string()))
+                }
+            }
+            // String functions
+            "upper" | "lower" | "trim" | "substring" => Ok(DataType::Text),
+            // Date functions
+            "current_date" => Ok(DataType::Date),
+            "current_timestamp" => Ok(DataType::Timestamp),
+            _ => Ok(DataType::Other("UNKNOWN".to_string())),
+        }
+    }
+
+    /// Parse data type from CAST string
+    fn parse_data_type_from_string(&self, type_name: &str) -> SemanticResult<unified_sql_lsp_catalog::DataType> {
+        use unified_sql_lsp_catalog::DataType;
+
+        let type_lower = type_name.to_lowercase();
+
+        match type_lower.as_str() {
+            "int" | "integer" => Ok(DataType::Integer),
+            "bigint" => Ok(DataType::BigInt),
+            "smallint" => Ok(DataType::SmallInt),
+            "tinyint" => Ok(DataType::TinyInt),
+            "float" | "double" => Ok(DataType::Float),
+            "decimal" => Ok(DataType::Decimal),
+            "varchar" | "text" => Ok(DataType::Text),
+            "char" => Ok(DataType::Char(None)),
+            "boolean" | "bool" => Ok(DataType::Boolean),
+            "date" => Ok(DataType::Date),
+            "timestamp" => Ok(DataType::Timestamp),
+            "json" => Ok(DataType::Json),
+            _ => Ok(DataType::Other(type_name.to_string())),
+        }
+    }
+
+    /// Find the most common type from a list of types
+    fn find_most_common_type(&self, types: &[unified_sql_lsp_catalog::DataType]) -> unified_sql_lsp_catalog::DataType {
+        use unified_sql_lsp_catalog::DataType;
+
+        if types.is_empty() {
+            return DataType::Other("UNKNOWN".to_string());
+        }
+
+        // If all types are the same, return that type
+        if types.iter().all(|t| t == &types[0]) {
+            return types[0].clone();
+        }
+
+        // Type precedence: Float > Integer > Text > Unknown
+        if types.contains(&DataType::Float) {
+            return DataType::Float;
+        }
+        if types.contains(&DataType::Integer) {
+            return DataType::Integer;
+        }
+        if types.contains(&DataType::Text) {
+            return DataType::Text;
+        }
+
+        DataType::Other("UNKNOWN".to_string())
+    }
+
+    /// Promote types for binary operations (static helper method)
+    fn promote_types(
+        left: &unified_sql_lsp_catalog::DataType,
+        right: &unified_sql_lsp_catalog::DataType,
+    ) -> unified_sql_lsp_catalog::DataType {
+        use unified_sql_lsp_catalog::DataType;
+
+        match (left, right) {
+            (DataType::Float, _) | (_, DataType::Float) => DataType::Float,
+            (DataType::BigInt, _) | (_, DataType::BigInt) => DataType::BigInt,
+            (DataType::Integer, DataType::Integer) => DataType::Integer,
+            (DataType::Text, _) | (_, DataType::Text) => DataType::Text,
+            (DataType::Boolean, DataType::Boolean) => DataType::Boolean,
+            _ => DataType::Other("UNKNOWN".to_string()),
+        }
+    }
 }
 
 #[cfg(test)]
@@ -737,7 +1436,7 @@ mod tests {
     use unified_sql_lsp_catalog::{
         CatalogError, ColumnMetadata, DataType, FunctionMetadata, TableMetadata,
     };
-    use unified_sql_lsp_ir::{Join, JoinCondition, SortDirection};
+    use unified_sql_lsp_ir::{Join, JoinCondition, JoinType, SortDirection};
 
     // Mock catalog for testing
     struct MockCatalog {
@@ -1443,5 +2142,349 @@ mod tests {
         // Should not error - HAVING with aggregate is allowed
         let result = analyzer.analyze_query(&query).await;
         assert!(result.is_ok());
+    }
+
+    // =========================================================================
+    // CTE Tests (SEMANTIC-006)
+    // =========================================================================
+
+    #[tokio::test]
+    async fn test_simple_cte() {
+        let catalog = Arc::new(MockCatalog::new());
+        let mut analyzer = SemanticAnalyzer::new(catalog, Dialect::MySQL);
+
+        // Create a simple CTE query: WITH user_counts AS (SELECT user_id FROM orders) SELECT * FROM user_counts
+        let mut query = Query::new(Dialect::MySQL);
+
+        // Add CTE
+        let mut cte_query = Query::new(Dialect::MySQL);
+        let mut cte_select = SelectStatement::default();
+        cte_select.from.push(TableRef {
+            name: "orders".to_string(),
+            alias: None,
+            joins: Vec::new(),
+        });
+        cte_select.projection.push(SelectItem::UnnamedExpr(Expr::Column(ColumnRef {
+            table: None,
+            column: "user_id".to_string(),
+        })));
+
+        cte_query.body = SetOp::Select(Box::new(cte_select));
+
+        query.ctes.push(CommonTableExpr {
+            name: "user_counts".to_string(),
+            columns: Vec::new(),
+            query: Box::new(cte_query),
+            materialized: None,
+        });
+
+        // Main query selects from CTE
+        let mut main_select = SelectStatement::default();
+        main_select.from.push(TableRef {
+            name: "user_counts".to_string(),
+            alias: None,
+            joins: Vec::new(),
+        });
+        main_select.projection.push(SelectItem::Wildcard);
+
+        query.body = SetOp::Select(Box::new(main_select));
+
+        // Should analyze successfully
+        let result = analyzer.analyze_query(&query).await;
+        assert!(result.is_ok(), "CTE analysis should succeed: {:?}", result.err());
+    }
+
+    #[tokio::test]
+    async fn test_cte_with_column_list() {
+        let catalog = Arc::new(MockCatalog::new());
+        let mut analyzer = SemanticAnalyzer::new(catalog, Dialect::MySQL);
+
+        // CTE with explicit column list: WITH cte (col1, col2) AS (SELECT id, name FROM users) SELECT * FROM cte
+        let mut query = Query::new(Dialect::MySQL);
+
+        let mut cte_query = Query::new(Dialect::MySQL);
+        let mut cte_select = SelectStatement::default();
+        cte_select.from.push(TableRef {
+            name: "users".to_string(),
+            alias: None,
+            joins: Vec::new(),
+        });
+        cte_select.projection.push(SelectItem::UnnamedExpr(Expr::Column(ColumnRef {
+            table: None,
+            column: "id".to_string(),
+        })));
+        cte_select.projection.push(SelectItem::UnnamedExpr(Expr::Column(ColumnRef {
+            table: None,
+            column: "name".to_string(),
+        })));
+
+        cte_query.body = SetOp::Select(Box::new(cte_select));
+
+        query.ctes.push(CommonTableExpr {
+            name: "cte".to_string(),
+            columns: vec!["col1".to_string(), "col2".to_string()],
+            query: Box::new(cte_query),
+            materialized: None,
+        });
+
+        let mut main_select = SelectStatement::default();
+        main_select.from.push(TableRef {
+            name: "cte".to_string(),
+            alias: None,
+            joins: Vec::new(),
+        });
+        main_select.projection.push(SelectItem::Wildcard);
+
+        query.body = SetOp::Select(Box::new(main_select));
+
+        let result = analyzer.analyze_query(&query).await;
+        assert!(result.is_ok(), "CTE with column list should succeed");
+    }
+
+    #[tokio::test]
+    async fn test_multiple_ctes() {
+        let catalog = Arc::new(MockCatalog::new());
+        let mut analyzer = SemanticAnalyzer::new(catalog, Dialect::MySQL);
+
+        // Multiple CTEs: WITH cte1 AS (...), cte2 AS (...) SELECT * FROM cte1 JOIN cte2
+        let mut query = Query::new(Dialect::MySQL);
+
+        // CTE 1
+        let mut cte1_query = Query::new(Dialect::MySQL);
+        let mut cte1_select = SelectStatement::default();
+        cte1_select.from.push(TableRef {
+            name: "users".to_string(),
+            alias: None,
+            joins: Vec::new(),
+        });
+        cte1_select.projection.push(SelectItem::UnnamedExpr(Expr::Column(ColumnRef {
+            table: None,
+            column: "id".to_string(),
+        })));
+        cte1_query.body = SetOp::Select(Box::new(cte1_select));
+
+        query.ctes.push(CommonTableExpr {
+            name: "cte1".to_string(),
+            columns: Vec::new(),
+            query: Box::new(cte1_query),
+            materialized: None,
+        });
+
+        // CTE 2
+        let mut cte2_query = Query::new(Dialect::MySQL);
+        let mut cte2_select = SelectStatement::default();
+        cte2_select.from.push(TableRef {
+            name: "orders".to_string(),
+            alias: None,
+            joins: Vec::new(),
+        });
+        cte2_select.projection.push(SelectItem::UnnamedExpr(Expr::Column(ColumnRef {
+            table: None,
+            column: "id".to_string(),
+        })));
+        cte2_query.body = SetOp::Select(Box::new(cte2_select));
+
+        query.ctes.push(CommonTableExpr {
+            name: "cte2".to_string(),
+            columns: Vec::new(),
+            query: Box::new(cte2_query),
+            materialized: None,
+        });
+
+        // Main query joins both CTEs
+        let mut main_select = SelectStatement::default();
+        main_select.from.push(TableRef {
+            name: "cte1".to_string(),
+            alias: None,
+            joins: Vec::new(),
+        });
+        main_select.from[0].joins.push(Join {
+            join_type: JoinType::Inner,
+            table: TableRef {
+                name: "cte2".to_string(),
+                alias: None,
+                joins: Vec::new(),
+            },
+            condition: JoinCondition::On(Expr::Literal(Literal::Integer(1))), // Dummy condition
+        });
+        main_select.projection.push(SelectItem::Wildcard);
+
+        query.body = SetOp::Select(Box::new(main_select));
+
+        let result = analyzer.analyze_query(&query).await;
+        assert!(result.is_ok(), "Multiple CTEs should succeed");
+    }
+
+    #[tokio::test]
+    async fn test_cte_column_count_mismatch() {
+        let catalog = Arc::new(MockCatalog::new());
+        let mut analyzer = SemanticAnalyzer::new(catalog, Dialect::MySQL);
+
+        // CTE defines 2 columns but query returns 1
+        let mut query = Query::new(Dialect::MySQL);
+
+        let mut cte_query = Query::new(Dialect::MySQL);
+        let mut cte_select = SelectStatement::default();
+        cte_select.from.push(TableRef {
+            name: "users".to_string(),
+            alias: None,
+            joins: Vec::new(),
+        });
+        cte_select.projection.push(SelectItem::UnnamedExpr(Expr::Column(ColumnRef {
+            table: None,
+            column: "id".to_string(),
+        })));
+
+        cte_query.body = SetOp::Select(Box::new(cte_select));
+
+        query.ctes.push(CommonTableExpr {
+            name: "cte".to_string(),
+            columns: vec!["col1".to_string(), "col2".to_string()], // 2 columns defined
+            query: Box::new(cte_query),
+            materialized: None,
+        });
+
+        let mut main_select = SelectStatement::default();
+        main_select.from.push(TableRef {
+            name: "cte".to_string(),
+            alias: None,
+            joins: Vec::new(),
+        });
+        main_select.projection.push(SelectItem::Wildcard);
+
+        query.body = SetOp::Select(Box::new(main_select));
+
+        let result = analyzer.analyze_query(&query).await;
+        assert!(result.is_err(), "CTE column count mismatch should error");
+
+        if let Err(SemanticError::CteColumnCountMismatch { defined, returned, .. }) = result {
+            assert_eq!(defined, 2);
+            assert_eq!(returned, 1);
+        } else {
+            panic!("Expected CteColumnCountMismatch error");
+        }
+    }
+
+    // =========================================================================
+    // Set Operation Tests (SEMANTIC-006)
+    // =========================================================================
+
+    #[tokio::test]
+    async fn test_simple_union() {
+        let catalog = Arc::new(MockCatalog::new());
+        let mut analyzer = SemanticAnalyzer::new(catalog, Dialect::MySQL);
+
+        // SELECT id FROM users UNION SELECT id FROM orders
+        let mut query = Query::new(Dialect::MySQL);
+
+        let mut left_select = SelectStatement::default();
+        left_select.from.push(TableRef {
+            name: "users".to_string(),
+            alias: None,
+            joins: Vec::new(),
+        });
+        left_select.projection.push(SelectItem::UnnamedExpr(Expr::Column(ColumnRef {
+            table: None,
+            column: "id".to_string(),
+        })));
+
+        let mut right_select = SelectStatement::default();
+        right_select.from.push(TableRef {
+            name: "orders".to_string(),
+            alias: None,
+            joins: Vec::new(),
+        });
+        right_select.projection.push(SelectItem::UnnamedExpr(Expr::Column(ColumnRef {
+            table: None,
+            column: "id".to_string(),
+        })));
+
+        query.body = SetOp::Union {
+            left: Box::new(Query {
+                ctes: Vec::new(),
+                body: SetOp::Select(Box::new(left_select)),
+                order_by: None,
+                limit: None,
+                offset: None,
+                dialect: Dialect::MySQL,
+            }),
+            right: Box::new(Query {
+                ctes: Vec::new(),
+                body: SetOp::Select(Box::new(right_select)),
+                order_by: None,
+                limit: None,
+                offset: None,
+                dialect: Dialect::MySQL,
+            }),
+            all: false,
+        };
+
+        let result = analyzer.analyze_query(&query).await;
+        assert!(result.is_ok(), "UNION with matching columns should succeed");
+    }
+
+    #[tokio::test]
+    async fn test_set_operation_column_mismatch() {
+        let catalog = Arc::new(MockCatalog::new());
+        let mut analyzer = SemanticAnalyzer::new(catalog, Dialect::MySQL);
+
+        // SELECT id, name FROM users UNION SELECT id FROM orders (2 vs 1 columns)
+        let mut query = Query::new(Dialect::MySQL);
+
+        let mut left_select = SelectStatement::default();
+        left_select.from.push(TableRef {
+            name: "users".to_string(),
+            alias: None,
+            joins: Vec::new(),
+        });
+        left_select.projection.push(SelectItem::UnnamedExpr(Expr::Column(ColumnRef {
+            table: None,
+            column: "id".to_string(),
+        })));
+        left_select.projection.push(SelectItem::UnnamedExpr(Expr::Column(ColumnRef {
+            table: None,
+            column: "name".to_string(),
+        })));
+
+        let mut right_select = SelectStatement::default();
+        right_select.from.push(TableRef {
+            name: "orders".to_string(),
+            alias: None,
+            joins: Vec::new(),
+        });
+        right_select.projection.push(SelectItem::UnnamedExpr(Expr::Column(ColumnRef {
+            table: None,
+            column: "id".to_string(),
+        })));
+
+        query.body = SetOp::Union {
+            left: Box::new(Query {
+                ctes: Vec::new(),
+                body: SetOp::Select(Box::new(left_select)),
+                order_by: None,
+                limit: None,
+                offset: None,
+                dialect: Dialect::MySQL,
+            }),
+            right: Box::new(Query {
+                ctes: Vec::new(),
+                body: SetOp::Select(Box::new(right_select)),
+                order_by: None,
+                limit: None,
+                offset: None,
+                dialect: Dialect::MySQL,
+            }),
+            all: false,
+        };
+
+        let result = analyzer.analyze_query(&query).await;
+        assert!(result.is_err(), "UNION with column count mismatch should error");
+
+        if let Err(SemanticError::SetOperationColumnCountMismatch { left, right }) = result {
+            assert_eq!(left, 2);
+            assert_eq!(right, 1);
+        } else {
+            panic!("Expected SetOperationColumnCountMismatch error");
+        }
     }
 }
