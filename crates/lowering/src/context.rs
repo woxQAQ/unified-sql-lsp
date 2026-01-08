@@ -115,14 +115,38 @@ impl LoweringContext {
     /// This allows graceful degradation by inserting a placeholder
     /// when encountering unsupported or invalid syntax.
     ///
-    /// TODO: (LOWERING-001) Enhance placeholder system to preserve source location
-    /// and provide better error messages for diagnostics
-    pub fn create_placeholder(&mut self) -> Expr {
+    /// # Arguments
+    ///
+    /// * `location` - Optional source location where the placeholder was created
+    ///
+    /// # Returns
+    ///
+    /// A placeholder expression with a unique name
+    ///
+    /// # Example
+    ///
+    /// ```ignore
+    /// let placeholder = ctx.create_placeholder_with_location(Some(location));
+    /// ```
+    pub fn create_placeholder_with_location(&mut self, location: Option<SourceLocation>) -> Expr {
         let name = format!("__placeholder_{}", self.placeholder_counter);
         self.placeholder_counter += 1;
 
+        // Store source mapping if provided
+        if let Some(loc) = location {
+            self.add_source_mapping(name.clone(), loc);
+        }
+
         // Create a placeholder column reference
         Expr::Column(unified_sql_lsp_ir::ColumnRef::new(name))
+    }
+
+    /// Create a placeholder expression without source location
+    ///
+    /// Convenience method for creating placeholders when source location
+    /// is not available or not needed.
+    pub fn create_placeholder(&mut self) -> Expr {
+        self.create_placeholder_with_location(None)
     }
 
     /// Add a source mapping from an IR node to a CST location
@@ -159,6 +183,29 @@ impl LoweringContext {
         self.errors.clear();
     }
 }
+
+/// Create a SourceLocation from a tree-sitter node position
+///
+/// This utility function converts tree-sitter's Point structure
+/// into our SourceLocation type for consistent error reporting.
+///
+/// # Arguments
+///
+/// * `byte_offset` - Byte offset of the node in the source
+/// * `row` - Row number (0-based from tree-sitter)
+/// * `column` - Column number (0-based from tree-sitter)
+///
+/// # Returns
+///
+/// A SourceLocation with 1-based line and column numbers
+pub fn source_location_from_position(byte_offset: usize, row: usize, column: usize) -> SourceLocation {
+    SourceLocation {
+        byte_offset,
+        line: row + 1,  // Convert to 1-based
+        column: column + 1,  // Convert to 1-based
+    }
+}
+
 
 #[cfg(test)]
 mod tests {

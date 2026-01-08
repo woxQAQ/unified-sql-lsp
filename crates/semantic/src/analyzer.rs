@@ -325,6 +325,18 @@ impl SemanticAnalyzer {
                     }
                 }
             }
+            SetOp::Insert(insert) => {
+                // Extract target table
+                table_names.push(insert.table.name.clone());
+            }
+            SetOp::Update(update) => {
+                // Extract target table
+                table_names.push(update.table.name.clone());
+            }
+            SetOp::Delete(delete) => {
+                // Extract target table
+                table_names.push(delete.table.name.clone());
+            }
             SetOp::Union { left, right, .. }
             | SetOp::Intersect { left, right, .. }
             | SetOp::Except { left, right, .. } => {
@@ -489,11 +501,9 @@ impl SemanticAnalyzer {
                 self.validate_expr(expr, scope_id)?;
                 Ok(())
             }
-            Expr::Function { name: _, args, .. } => {
-                // TODO: (SEMANTIC-004) Validate function calls against catalog
-                for arg in args {
-                    self.validate_expr(arg, scope_id)?;
-                }
+            Expr::Function { name, args, filter, over, .. } => {
+                // Validate function exists in catalog
+                self.validate_function_call(name, args, filter, over, scope_id)?;
                 Ok(())
             }
             Expr::Case {
@@ -531,6 +541,137 @@ impl SemanticAnalyzer {
             // Catch-all for future Expr variants (non-exhaustive enum)
             _ => Ok(()),
         }
+    }
+
+    /// Validate a function call against the catalog
+    ///
+    /// Checks that:
+    /// - The function exists in the catalog
+    /// - The number of arguments matches the function signature
+    /// - Window functions have OVER clause
+    /// - Aggregate functions with FILTER are properly validated
+    fn validate_function_call(
+        &self,
+        name: &str,
+        args: &[Expr],
+        filter: &Option<Box<Expr>>,
+        over: &Option<unified_sql_lsp_ir::WindowSpec>,
+        scope_id: usize,
+    ) -> SemanticResult<()> {
+        // Find function in catalog
+        let func = self
+            .function_cache
+            .iter()
+            .find(|f| f.name.eq_ignore_ascii_case(name));
+
+        let func_metadata = match func {
+            Some(f) => f,
+            None => {
+                // Function not found in catalog - could be user-defined or unknown
+                // For now, we'll just validate the arguments recursively
+                for arg in args {
+                    self.validate_expr(arg, scope_id)?;
+                }
+
+                // Validate filter clause if present
+                if let Some(filter_expr) = filter {
+                    self.validate_expr(filter_expr, scope_id)?;
+                }
+
+                // Validate OVER clause if present
+                if let Some(window_spec) = over {
+                    for partition_expr in &window_spec.partition_by {
+                        self.validate_expr(partition_expr, scope_id)?;
+                    }
+                    for order_item in &window_spec.order_by {
+                        self.validate_expr(&order_item.expr, scope_id)?;
+                    }
+                }
+
+                return Ok(());
+            }
+        };
+
+        // Validate argument count matches function signature
+        let expected_min_args = func_metadata.parameters.len();
+        let actual_args = args.len();
+
+        // Some functions like COUNT(*) accept variable arguments
+        let is_variadic = func_metadata
+            .name
+            .eq_ignore_ascii_case("COUNT")
+            || func_metadata.name.eq_ignore_ascii_case("GROUP_CONCAT")
+            || func_metadata.name.eq_ignore_ascii_case("STRING_AGG")
+            || func_metadata.name.eq_ignore_ascii_case("ARRAY_AGG");
+
+        if !is_variadic && actual_args != expected_min_args {
+            return Err(SemanticError::FunctionArgumentCountMismatch {
+                function: name.to_string(),
+                expected: expected_min_args,
+                found: actual_args,
+            });
+        }
+
+        // Validate each argument expression
+        for arg in args {
+            self.validate_expr(arg, scope_id)?;
+        }
+
+        // Validate FILTER clause (only for aggregate functions)
+        if let Some(filter_expr) = filter {
+            if func_metadata.function_type != FunctionType::Aggregate {
+                return Err(SemanticError::FilterOnNonAggregateFunction {
+                    function: name.to_string(),
+                });
+            }
+            self.validate_expr(filter_expr, scope_id)?;
+        }
+
+        // Validate OVER clause (only for window functions)
+        if let Some(window_spec) = over {
+            if func_metadata.function_type != FunctionType::Window {
+                return Err(SemanticError::OverClauseOnNonWindowFunction {
+                    function: name.to_string(),
+                });
+            }
+
+            // Validate PARTITION BY expressions
+            for partition_expr in &window_spec.partition_by {
+                self.validate_expr(partition_expr, scope_id)?;
+            }
+
+            // Validate ORDER BY expressions
+            for order_item in &window_spec.order_by {
+                self.validate_expr(&order_item.expr, scope_id)?;
+            }
+
+            // Window frame validation would go here
+            if let Some(window_frame) = &window_spec.window_frame {
+                match window_frame.units {
+                    unified_sql_lsp_ir::WindowFrameUnits::Rows => {
+                        // ROWS is always valid
+                    }
+                    unified_sql_lsp_ir::WindowFrameUnits::Range => {
+                        // RANGE requires ORDER BY with single numeric column
+                        if window_spec.order_by.is_empty() {
+                            return Err(SemanticError::InvalidWindowFrame {
+                                reason: "RANGE frame requires ORDER BY clause".to_string(),
+                            });
+                        }
+                    }
+                    unified_sql_lsp_ir::WindowFrameUnits::Groups => {
+                        // GROUPS requires ORDER BY
+                        if window_spec.order_by.is_empty() {
+                            return Err(SemanticError::InvalidWindowFrame {
+                                reason: "GROUPS frame requires ORDER BY clause".to_string(),
+                            });
+                        }
+                    }
+                }
+            }
+        }
+
+        Ok(())
     }
 
     /// Validate projection (SELECT clause)
@@ -1041,10 +1182,12 @@ impl SemanticAnalyzer {
                 }
                 false
             }
+            SetOp::Insert(insert) => insert.table.name == cte_name,
+            SetOp::Update(update) => update.table.name == cte_name,
+            SetOp::Delete(delete) => delete.table.name == cte_name,
             SetOp::Union { left, right, .. }
             | SetOp::Intersect { left, right, .. }
             | SetOp::Except { left, right, .. } => {
-                // Recursively check both sides
                 self.query_references_cte(left, cte_name) || self.query_references_cte(right, cte_name)
             }
         }
@@ -1121,6 +1264,21 @@ impl SemanticAnalyzer {
 
                 let parent_scope = self.scope_manager.create_scope(ScopeType::Query, parent_id);
                 Ok((parent_scope, left_cols))
+            }
+            SetOp::Insert(_insert) => {
+                // INSERT statements don't produce output columns (unless using RETURNING, which is dialect-specific)
+                let parent_scope = self.scope_manager.create_scope(ScopeType::Query, parent_id);
+                Ok((parent_scope, Vec::new()))
+            }
+            SetOp::Update(_update) => {
+                // UPDATE statements don't produce output columns (unless using RETURNING, which is dialect-specific)
+                let parent_scope = self.scope_manager.create_scope(ScopeType::Query, parent_id);
+                Ok((parent_scope, Vec::new()))
+            }
+            SetOp::Delete(_delete) => {
+                // DELETE statements don't produce output columns (unless using RETURNING, which is dialect-specific)
+                let parent_scope = self.scope_manager.create_scope(ScopeType::Query, parent_id);
+                Ok((parent_scope, Vec::new()))
             }
         }
     }
@@ -1604,6 +1762,8 @@ mod tests {
                 name: "COUNT".to_string(),
                 args: vec![Expr::Literal(Literal::Integer(1))],
                 distinct: false,
+                filter: None,
+                over: None,
             }),
             op: BinaryOp::Gt,
             right: Box::new(Expr::Literal(Literal::Integer(5))),
@@ -1634,6 +1794,8 @@ mod tests {
                 name: "COUNT".to_string(),
                 args: vec![Expr::Literal(Literal::Integer(1))],
                 distinct: false,
+                filter: None,
+                over: None,
             }),
             op: BinaryOp::Gt,
             right: Box::new(Expr::Literal(Literal::Integer(5))),
@@ -2092,6 +2254,8 @@ mod tests {
             name: "count".to_string(),
             args: vec![Expr::Literal(Literal::Integer(1))],
             distinct: false,
+            filter: None,
+            over: None,
         };
         assert!(analyzer.expr_contains_aggregate(&count_expr));
 
@@ -2100,6 +2264,8 @@ mod tests {
             name: "abs".to_string(),
             args: vec![Expr::Literal(Literal::Integer(-5))],
             distinct: false,
+            filter: None,
+            over: None,
         };
         assert!(!analyzer.expr_contains_aggregate(&abs_expr));
 
@@ -2109,6 +2275,8 @@ mod tests {
                 name: "sum".to_string(),
                 args: vec![Expr::Column(ColumnRef::new("amount"))],
                 distinct: false,
+                filter: None,
+                over: None,
             }),
             op: BinaryOp::Add,
             right: Box::new(Expr::Literal(Literal::Integer(10))),
@@ -2135,6 +2303,8 @@ mod tests {
             name: "count".to_string(),
             args: vec![Expr::Literal(Literal::Integer(1))],
             distinct: false,
+            filter: None,
+            over: None,
         });
 
         query.body = SetOp::Select(Box::new(select));

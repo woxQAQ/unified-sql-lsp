@@ -37,10 +37,13 @@
 //! ```
 
 use crate::error::{CatalogError, CatalogResult};
-use crate::metadata::{ColumnMetadata, DataType, FunctionMetadata, FunctionType, TableMetadata};
+use crate::metadata::{ColumnMetadata, DataType, FunctionMetadata, FunctionType, TableMetadata, TableType};
 use crate::r#trait::Catalog;
 
 use async_trait::async_trait;
+
+#[cfg(feature = "postgresql")]
+use sqlx::{Postgres, Pool};
 
 /// Default connection pool size
 const DEFAULT_POOL_SIZE: u32 = 10;
@@ -55,6 +58,20 @@ const HEALTH_CHECK_INTERVAL_SECS: u64 = 60;
 ///
 /// This catalog connects to a live PostgreSQL database and queries schema information
 /// from the information_schema and pg_catalog databases.
+#[cfg(feature = "postgresql")]
+pub struct LivePostgreSQLCatalog {
+    /// PostgreSQL connection string
+    connection_string: String,
+    /// Connection pool size
+    pool_size: u32,
+    /// Query timeout in seconds
+    timeout_secs: u64,
+    /// Connection pool
+    pool: Option<Pool<Postgres>>,
+}
+
+/// Live PostgreSQL Catalog implementation (stub when feature is disabled)
+#[cfg(not(feature = "postgresql"))]
 pub struct LivePostgreSQLCatalog {
     /// PostgreSQL connection string
     connection_string: String,
@@ -87,11 +104,29 @@ impl LivePostgreSQLCatalog {
         let conn_str = connection_string.into();
         Self::validate_connection_string(&conn_str)?;
 
-        Ok(Self {
-            connection_string: conn_str,
-            pool_size: DEFAULT_POOL_SIZE,
-            timeout_secs: DEFAULT_TIMEOUT_SECS,
-        })
+        #[cfg(feature = "postgresql")]
+        {
+            let pool = Some(
+                Pool::<Postgres>::connect(&conn_str)
+                    .await
+                    .map_err(|e| CatalogError::ConnectionFailed(format!("Failed to connect to PostgreSQL: {}", e)))?
+            );
+            Ok(Self {
+                connection_string: conn_str,
+                pool_size: DEFAULT_POOL_SIZE,
+                timeout_secs: DEFAULT_TIMEOUT_SECS,
+                pool,
+            })
+        }
+
+        #[cfg(not(feature = "postgresql"))]
+        {
+            Ok(Self {
+                connection_string: conn_str,
+                pool_size: DEFAULT_POOL_SIZE,
+                timeout_secs: DEFAULT_TIMEOUT_SECS,
+            })
+        }
     }
 
     /// Create a new LivePostgreSQLCatalog with custom configuration
@@ -131,11 +166,29 @@ impl LivePostgreSQLCatalog {
             ));
         }
 
-        Ok(Self {
-            connection_string: conn_str,
-            pool_size,
-            timeout_secs,
-        })
+        #[cfg(feature = "postgresql")]
+        {
+            let pool = Some(
+                Pool::<Postgres>::connect(&conn_str)
+                    .await
+                    .map_err(|e| CatalogError::ConnectionFailed(format!("Failed to connect to PostgreSQL: {}", e)))?
+            );
+            Ok(Self {
+                connection_string: conn_str,
+                pool_size,
+                timeout_secs,
+                pool,
+            })
+        }
+
+        #[cfg(not(feature = "postgresql"))]
+        {
+            Ok(Self {
+                connection_string: conn_str,
+                pool_size,
+                timeout_secs,
+            })
+        }
     }
 
     /// Validate the connection string format
@@ -296,101 +349,173 @@ impl Catalog for LivePostgreSQLCatalog {
     ///
     /// Queries information_schema.tables to get all tables, views, and materialized views.
     async fn list_tables(&self) -> CatalogResult<Vec<TableMetadata>> {
-        // HACK: Placeholder implementation - returns error instead of actual data
-        // This is a workaround to avoid adding PostgreSQL driver dependency (e.g., sqlx)
-        // which would significantly increase binary size and complexity
-        //
-        // TODO: (CATALOG-003) Implement actual database connection and query
-        // In a real implementation, you would:
-        // 1. Add sqlx or tokio-postgres dependency
-        // 2. Establish connection pool
-        // 3. Query information_schema.tables and pg_catalog.pg_class
-        // 4. Parse results into TableMetadata
-        //
-        // Example query:
-        // SELECT
-        //     t.table_name,
-        //     t.table_schema,
-        //     CASE
-        //         WHEN t.table_type = 'BASE TABLE' THEN 'table'
-        //         WHEN t.table_type = 'VIEW' THEN 'view'
-        //         WHEN t.table_type = 'MATERIALIZED VIEW' THEN 'materialized'
-        //         ELSE 'other'
-        //     END as table_type,
-        //     obj_description((t.table_schema||'.'||t.table_name)::regclass, 'pg_class') as table_comment
-        // FROM information_schema.tables t
-        // WHERE t.table_schema NOT IN ('pg_catalog', 'information_schema')
-        //   AND t.table_type IN ('BASE TABLE', 'VIEW', 'MATERIALIZED VIEW')
-        // ORDER BY t.table_schema, t.table_name
+        #[cfg(feature = "postgresql")]
+        if let Some(pool) = &self.pool {
+            let query = r#"
+                SELECT
+                    t.table_name,
+                    t.table_schema,
+                    CASE
+                        WHEN t.table_type = 'BASE TABLE' THEN 'table'
+                        WHEN t.table_type = 'VIEW' THEN 'view'
+                        WHEN t.table_type = 'MATERIALIZED VIEW' THEN 'materialized'
+                        ELSE 'other'
+                    END as table_type,
+                    obj_description((t.table_schema||'.'||t.table_name)::regclass, 'pg_class') as table_comment
+                FROM information_schema.tables t
+                WHERE t.table_schema NOT IN ('pg_catalog', 'information_schema')
+                  AND t.table_type IN ('BASE TABLE', 'VIEW', 'MATERIALIZED VIEW')
+                ORDER BY t.table_schema, t.table_name
+            "#;
 
-        Err(CatalogError::NotSupported(
-            "LivePostgreSQLCatalog::list_tables not yet implemented - requires PostgreSQL driver dependency".to_string(),
-        ))
+            let rows = sqlx::query_as::<_, (String, String, String, Option<String>)>(query)
+                .fetch_all(pool)
+                .await
+                .map_err(|e| CatalogError::QueryFailed(format!("Failed to list tables: {}", e)))?;
+
+            let tables = rows.into_iter().map(|(name, schema, table_type, comment)| {
+                let table_type = match table_type.as_str() {
+                    "table" => TableType::Table,
+                    "view" => TableType::View,
+                    "materialized" => TableType::MaterializedView,
+                    _ => TableType::Other(table_type),
+                };
+
+                TableMetadata::new(&name, &schema)
+                    .with_type(table_type)
+                    .with_comment(comment.unwrap_or_default())
+            }).collect();
+
+            return Ok(tables);
+        }
+
+        #[cfg(not(feature = "postgresql"))]
+        return Err(CatalogError::NotSupported(
+            "list_tables requires 'postgresql' feature enabled".to_string()
+        ));
+
+        #[cfg(all(feature = "postgresql", not(feature = "postgresql")))]
+        unreachable!()
     }
 
     /// Get column metadata for a specific table
     ///
     /// Queries information_schema.columns and pg_catalog to get column information.
-    async fn get_columns(&self, _table: &str) -> CatalogResult<Vec<ColumnMetadata>> {
-        // HACK: Placeholder implementation - returns error instead of actual data
-        // This is a workaround to avoid adding PostgreSQL driver dependency (e.g., sqlx)
-        //
-        // TODO: (CATALOG-003) Implement actual database connection and query
-        //
-        // Example query:
-        // SELECT
-        //     c.column_name,
-        //     c.data_type,
-        //     c.is_nullable,
-        //     c.column_default,
-        //     pgd.description as column_comment,
-        //     CASE
-        //         WHEN pk.column_name IS NOT NULL THEN 'YES'
-        //         ELSE 'NO'
-        //     END as is_primary_key
-        // FROM information_schema.columns c
-        // LEFT JOIN pg_catalog.pg_description pgd
-        //     ON pgd.objoid = (c.table_schema||'.'||c.table_name)::regclass
-        //     AND pgd.objsubid = c.ordinal_position
-        // LEFT JOIN (
-        //     SELECT ku.column_name
-        //     FROM information_schema.table_constraints tc
-        //     JOIN information_schema.key_column_usage ku
-        //         ON tc.constraint_name = ku.constraint_name
-        //     WHERE tc.constraint_type = 'PRIMARY KEY'
-        //         AND tc.table_schema = ?
-        //         AND tc.table_name = ?
-        // ) pk ON pk.column_name = c.column_name
-        // WHERE c.table_schema NOT IN ('pg_catalog', 'information_schema')
-        //   AND c.table_name = ?
-        // ORDER BY c.ordinal_position
+    async fn get_columns(&self, table: &str) -> CatalogResult<Vec<ColumnMetadata>> {
+        #[cfg(feature = "postgresql")]
+        if let Some(pool) = &self.pool {
+            let query = r#"
+                SELECT
+                    c.column_name,
+                    c.data_type,
+                    c.is_nullable,
+                    c.column_default,
+                    pgd.description as column_comment,
+                    CASE
+                        WHEN pk.column_name IS NOT NULL THEN 'YES'
+                        ELSE 'NO'
+                    END as is_primary_key
+                FROM information_schema.columns c
+                LEFT JOIN pg_catalog.pg_description pgd
+                    ON pgd.objoid = (c.table_schema||'.'||c.table_name)::regclass
+                    AND pgd.objsubid = c.ordinal_position
+                LEFT JOIN (
+                    SELECT ku.column_name
+                    FROM information_schema.table_constraints tc
+                    JOIN information_schema.key_column_usage ku
+                        ON tc.constraint_name = ku.constraint_name
+                    WHERE tc.constraint_type = 'PRIMARY KEY'
+                        AND tc.table_schema = c.table_schema
+                        AND tc.table_name = c.table_name
+                ) pk ON pk.column_name = c.column_name
+                WHERE c.table_schema NOT IN ('pg_catalog', 'information_schema')
+                  AND c.table_name = $1
+                ORDER BY c.ordinal_position
+            "#;
 
-        Err(CatalogError::NotSupported(
-            "LivePostgreSQLCatalog::get_columns not yet implemented - requires PostgreSQL driver dependency".to_string(),
-        ))
+            let rows = sqlx::query_as::<_, (String, String, String, Option<String>, Option<String>, String)>(
+                query
+            )
+            .bind(table)
+            .fetch_all(pool)
+            .await
+            .map_err(|e| CatalogError::QueryFailed(format!("Failed to get columns for table '{}': {}", table, e)))?;
+
+            let columns = rows.into_iter().map(|(name, data_type, is_nullable, _default, comment, is_pk)| {
+                let dt = Self::parse_postgres_type(&data_type);
+                let nullable = is_nullable == "YES";
+                let is_pk = is_pk == "YES";
+
+                let mut col = ColumnMetadata::new(name, dt)
+                    .with_nullable(nullable)
+                    .with_comment(comment.unwrap_or_default());
+
+                if is_pk {
+                    col = col.with_primary_key();
+                }
+
+                col
+            }).collect();
+
+            return Ok(columns);
+        }
+
+        #[cfg(not(feature = "postgresql"))]
+        return Err(CatalogError::NotSupported(
+            "get_columns requires 'postgresql' feature enabled".to_string()
+        ));
+
+        #[cfg(all(feature = "postgresql", not(feature = "postgresql")))]
+        unreachable!()
     }
 
     /// List all available functions
     ///
-    /// Returns a list of built-in PostgreSQL functions.
+    /// Returns a list of built-in PostgreSQL functions and custom functions.
     async fn list_functions(&self) -> CatalogResult<Vec<FunctionMetadata>> {
-        // HACK: Static list of functions instead of querying from database
-        // This is a workaround to avoid database driver dependency
-        //
-        // TODO: (CATALOG-003) Query from pg_catalog.pg_proc for complete function list
-        // or maintain as comprehensive static list if dynamic querying is too expensive
-        //
-        // Example query:
-        // SELECT
-        //     p.proname as function_name,
-        //     pg_get_function_result(p.oid) as return_type,
-        //     pg_get_function_arguments(p.oid) as arguments,
-        //     p.prokind as function_kind
-        // FROM pg_catalog.pg_proc p
-        // JOIN pg_catalog.pg_namespace n ON p.pronamespace = n.oid
-        // WHERE n.nspname NOT IN ('pg_catalog', 'information_schema')
+        #[cfg(feature = "postgresql")]
+        if let Some(pool) = &self.pool {
+            // Query custom functions from pg_catalog.pg_proc
+            let custom_query = r#"
+                SELECT
+                    p.proname as function_name,
+                    pg_get_function_result(p.oid) as return_type,
+                    pg_get_function_arguments(p.oid) as arguments,
+                    n.nspname as schema_name
+                FROM pg_catalog.pg_proc p
+                JOIN pg_catalog.pg_namespace n ON p.pronamespace = n.oid
+                WHERE n.nspname NOT IN ('pg_catalog', 'information_schema')
+            "#;
 
-        Ok(vec![
+            let custom_funcs: Vec<FunctionMetadata> = sqlx::query_as::<_, (String, String, String, String)>(
+                custom_query
+            )
+            .fetch_all(pool)
+            .await
+            .unwrap_or(vec![]) // Don't fail if pg_proc not accessible
+            .into_iter()
+            .map(|(name, ret, _args, schema)| {
+                FunctionMetadata::new(&name, Self::parse_postgres_type(&ret))
+                    .with_type(FunctionType::Scalar)
+                    .with_description(format!("Custom function from {}", schema))
+            })
+            .collect();
+
+            // Merge with static built-in functions
+            let mut all_functions = Self::builtin_functions();
+            all_functions.extend(custom_funcs);
+            return Ok(all_functions);
+        }
+
+        // Static fallback when feature not enabled or pool not available
+        Ok(Self::builtin_functions())
+    }
+}
+
+impl LivePostgreSQLCatalog {
+    /// Get the list of built-in PostgreSQL functions
+    fn builtin_functions() -> Vec<FunctionMetadata> {
+        vec![
             // Aggregate functions
             FunctionMetadata::new("COUNT", DataType::BigInt)
                 .with_type(FunctionType::Aggregate)
@@ -608,7 +733,7 @@ impl Catalog for LivePostgreSQLCatalog {
             FunctionMetadata::new("MOD", DataType::Decimal)
                 .with_type(FunctionType::Scalar)
                 .with_description("Modulus"),
-        ])
+        ]
     }
 }
 

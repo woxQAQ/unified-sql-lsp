@@ -18,8 +18,12 @@ pub mod query;
 
 // Re-export commonly used types
 pub use dialect::{Dialect, DialectExtensions};
-pub use expr::{BinaryOp, ColumnRef, Expr, Literal, UnaryOp};
+pub use expr::{
+    BinaryOp, ColumnRef, Expr, Literal, UnaryOp,
+};
+pub use expr::{WindowFrame, WindowFrameBound, WindowFrameUnits, WindowSpec};
 pub use query::{
-    CommonTableExpr, Join, JoinCondition, JoinType, OrderBy, Query, SelectItem, SelectStatement,
-    SetOp, SortDirection, TableRef, WindowDef,
+    Assignment, CommonTableExpr, DeleteStatement, InsertSource, InsertStatement, Join,
+    JoinCondition, JoinType, OnConflict, OrderBy, Query, SelectItem, SelectStatement, SetOp,
+    SortDirection, TableRef, UpdateStatement, WindowDef,
 };

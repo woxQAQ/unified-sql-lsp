@@ -151,6 +151,12 @@ pub enum Expr {
         name: String,
         args: Vec<Expr>,
         distinct: bool,
+        /// FILTER clause for aggregate functions (PostgreSQL)
+        /// Example: COUNT(*) FILTER (WHERE status = 'active')
+        filter: Option<Box<Expr>>,
+        /// OVER clause for window functions
+        /// Example: ROW_NUMBER() OVER (PARTITION BY category ORDER BY date)
+        over: Option<WindowSpec>,
     },
 
     /// CASE expression
@@ -254,6 +260,47 @@ pub enum UnaryOp {
     Neg,
     Not,
     Exists,
+}
+
+/// Window specification for window functions (OVER clause)
+///
+/// This is a simplified version used in Function expressions to avoid circular
+/// dependencies with the query module's WindowDef.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct WindowSpec {
+    /// PARTITION BY expressions
+    pub partition_by: Vec<Expr>,
+    /// ORDER BY clauses (uses query module's OrderBy)
+    pub order_by: Vec<crate::query::OrderBy>,
+    /// Window frame (ROWS/RANGE BETWEEN ...)
+    pub window_frame: Option<WindowFrame>,
+}
+
+/// Window frame (ROWS/RANGE/GROUPS BETWEEN ...)
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct WindowFrame {
+    pub units: WindowFrameUnits,
+    pub start_bound: WindowFrameBound,
+    pub end_bound: Option<WindowFrameBound>,
+}
+
+/// Window frame units
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum WindowFrameUnits {
+    Rows,
+    Range,
+    Groups,
+}
+
+/// Window frame bound
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum WindowFrameBound {
+    /// UNBOUNDED PRECEDING/FOLLOWING
+    Unbounded,
+    /// CURRENT ROW
+    CurrentRow,
+    /// n PRECEDING/FOLLOWING
+    Offset(i64),
 }
 
 #[cfg(test)]

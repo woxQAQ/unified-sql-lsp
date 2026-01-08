@@ -37,10 +37,13 @@
 //! ```
 
 use crate::error::{CatalogError, CatalogResult};
-use crate::metadata::{ColumnMetadata, DataType, FunctionMetadata, FunctionType, TableMetadata};
+use crate::metadata::{ColumnMetadata, DataType, FunctionMetadata, FunctionType, TableMetadata, TableType};
 use crate::r#trait::Catalog;
 
 use async_trait::async_trait;
+
+#[cfg(feature = "mysql")]
+use sqlx::{MySql, Pool};
 
 /// Default connection pool size
 const DEFAULT_POOL_SIZE: u32 = 10;
@@ -55,6 +58,20 @@ const HEALTH_CHECK_INTERVAL_SECS: u64 = 60;
 ///
 /// This catalog connects to a live MySQL database and queries schema information
 /// from the information_schema database.
+#[cfg(feature = "mysql")]
+pub struct LiveMySQLCatalog {
+    /// MySQL connection string
+    connection_string: String,
+    /// Connection pool size
+    pool_size: u32,
+    /// Query timeout in seconds
+    timeout_secs: u64,
+    /// Connection pool
+    pool: Option<Pool<MySql>>,
+}
+
+/// Live MySQL Catalog implementation (stub when feature is disabled)
+#[cfg(not(feature = "mysql"))]
 pub struct LiveMySQLCatalog {
     /// MySQL connection string
     connection_string: String,
@@ -87,11 +104,29 @@ impl LiveMySQLCatalog {
         let conn_str = connection_string.into();
         Self::validate_connection_string(&conn_str)?;
 
-        Ok(Self {
-            connection_string: conn_str,
-            pool_size: DEFAULT_POOL_SIZE,
-            timeout_secs: DEFAULT_TIMEOUT_SECS,
-        })
+        #[cfg(feature = "mysql")]
+        {
+            let pool = Some(
+                Pool::<MySql>::connect(&conn_str)
+                    .await
+                    .map_err(|e| CatalogError::ConnectionFailed(format!("Failed to connect to MySQL: {}", e)))?
+            );
+            Ok(Self {
+                connection_string: conn_str,
+                pool_size: DEFAULT_POOL_SIZE,
+                timeout_secs: DEFAULT_TIMEOUT_SECS,
+                pool,
+            })
+        }
+
+        #[cfg(not(feature = "mysql"))]
+        {
+            Ok(Self {
+                connection_string: conn_str,
+                pool_size: DEFAULT_POOL_SIZE,
+                timeout_secs: DEFAULT_TIMEOUT_SECS,
+            })
+        }
     }
 
     /// Create a new LiveMySQLCatalog with custom configuration
@@ -131,11 +166,29 @@ impl LiveMySQLCatalog {
             ));
         }
 
-        Ok(Self {
-            connection_string: conn_str,
-            pool_size,
-            timeout_secs,
-        })
+        #[cfg(feature = "mysql")]
+        {
+            let pool = Some(
+                Pool::<MySql>::connect(&conn_str)
+                    .await
+                    .map_err(|e| CatalogError::ConnectionFailed(format!("Failed to connect to MySQL: {}", e)))?
+            );
+            Ok(Self {
+                connection_string: conn_str,
+                pool_size,
+                timeout_secs,
+                pool,
+            })
+        }
+
+        #[cfg(not(feature = "mysql"))]
+        {
+            Ok(Self {
+                connection_string: conn_str,
+                pool_size,
+                timeout_secs,
+            })
+        }
     }
 
     /// Validate the connection string format
@@ -255,80 +308,156 @@ impl Catalog for LiveMySQLCatalog {
     ///
     /// Queries information_schema.tables to get all tables, views, and materialized views.
     async fn list_tables(&self) -> CatalogResult<Vec<TableMetadata>> {
-        // HACK: Placeholder implementation - returns error instead of actual data
-        // This is a workaround to avoid adding MySQL driver dependency (e.g., mysql_async or sqlx)
-        // which would significantly increase binary size and complexity
-        //
-        // TODO: (CATALOG-002) Implement actual database connection and query
-        // In a real implementation, you would:
-        // 1. Add mysql_async or sqlx dependency
-        // 2. Establish connection pool
-        // 3. Query information_schema.tables
-        // 4. Parse results into TableMetadata
-        //
-        // Example query:
-        // SELECT
-        //     TABLE_NAME,
-        //     TABLE_SCHEMA,
-        //     TABLE_TYPE,
-        //     TABLE_COMMENT
-        // FROM information_schema.TABLES
-        // WHERE TABLE_SCHEMA = DATABASE()
-        //   AND TABLE_TYPE IN ('BASE TABLE', 'VIEW')
+        #[cfg(feature = "mysql")]
+        if let Some(pool) = &self.pool {
+            let query = r#"
+                SELECT
+                    TABLE_NAME as table_name,
+                    TABLE_SCHEMA as table_schema,
+                    TABLE_TYPE as table_type,
+                    TABLE_COMMENT as table_comment
+                FROM information_schema.TABLES
+                WHERE TABLE_SCHEMA = DATABASE()
+                  AND TABLE_TYPE IN ('BASE TABLE', 'VIEW')
+                ORDER BY TABLE_NAME
+            "#;
 
-        Err(CatalogError::NotSupported(
-            "LiveMySQLCatalog::list_tables not yet implemented - requires MySQL driver dependency"
-                .to_string(),
-        ))
+            let rows = sqlx::query_as::<_, (String, String, String, Option<String>)>(query)
+                .fetch_all(pool)
+                .await
+                .map_err(|e| CatalogError::QueryFailed(format!("Failed to list tables: {}", e)))?;
+
+            let tables = rows.into_iter().map(|(name, schema, table_type, comment)| {
+                let table_type = match table_type.as_str() {
+                    "BASE TABLE" => TableType::Table,
+                    "VIEW" => TableType::View,
+                    _ => TableType::Other(table_type),
+                };
+
+                TableMetadata::new(&name, &schema)
+                    .with_type(table_type)
+                    .with_comment(comment.unwrap_or_default())
+            }).collect();
+
+            return Ok(tables);
+        }
+
+        #[cfg(not(feature = "mysql"))]
+        return Err(CatalogError::NotSupported(
+            "list_tables requires 'mysql' feature enabled".to_string()
+        ));
+
+        #[cfg(all(feature = "mysql", not(feature = "mysql")))]
+        unreachable!()
     }
 
     /// Get column metadata for a specific table
     ///
     /// Queries information_schema.columns to get column information.
-    async fn get_columns(&self, _table: &str) -> CatalogResult<Vec<ColumnMetadata>> {
-        // HACK: Placeholder implementation - returns error instead of actual data
-        // This is a workaround to avoid adding MySQL driver dependency
-        //
-        // TODO: (CATALOG-002) Implement actual database connection and query
-        //
-        // Example query:
-        // SELECT
-        //     COLUMN_NAME,
-        //     DATA_TYPE,
-        //     IS_NULLABLE,
-        //     COLUMN_DEFAULT,
-        //     COLUMN_COMMENT,
-        //     COLUMN_KEY
-        // FROM information_schema.COLUMNS
-        // WHERE TABLE_SCHEMA = DATABASE()
-        //   AND TABLE_NAME = ?
+    async fn get_columns(&self, table: &str) -> CatalogResult<Vec<ColumnMetadata>> {
+        #[cfg(feature = "mysql")]
+        if let Some(pool) = &self.pool {
+            let query = r#"
+                SELECT
+                    COLUMN_NAME as column_name,
+                    DATA_TYPE as data_type,
+                    IS_NULLABLE as is_nullable,
+                    COLUMN_DEFAULT as column_default,
+                    COLUMN_COMMENT as column_comment,
+                    COLUMN_KEY as column_key
+                FROM information_schema.COLUMNS
+                WHERE TABLE_SCHEMA = DATABASE()
+                  AND TABLE_NAME = ?
+                ORDER BY ORDINAL_POSITION
+            "#;
 
-        Err(CatalogError::NotSupported(
-            "LiveMySQLCatalog::get_columns not yet implemented - requires MySQL driver dependency"
-                .to_string(),
-        ))
+            let rows = sqlx::query_as::<_, (String, String, String, Option<String>, Option<String>, String)>(
+                query
+            )
+            .bind(table)
+            .fetch_all(pool)
+            .await
+            .map_err(|e| CatalogError::QueryFailed(format!("Failed to get columns for table '{}': {}", table, e)))?;
+
+            let columns = rows.into_iter().map(|(name, data_type, is_nullable, _default, comment, column_key)| {
+                let dt = Self::parse_mysql_type(&data_type);
+                let nullable = is_nullable == "YES";
+                let is_pk = column_key == "PRI";
+                let is_fk = column_key == "MUL";
+
+                let mut col = ColumnMetadata::new(name, dt)
+                    .with_nullable(nullable)
+                    .with_comment(comment.unwrap_or_default());
+
+                if is_pk {
+                    col = col.with_primary_key();
+                }
+                if is_fk {
+                    col = col.with_foreign_key("", "");
+                }
+
+                col
+            }).collect();
+
+            return Ok(columns);
+        }
+
+        #[cfg(not(feature = "mysql"))]
+        return Err(CatalogError::NotSupported(
+            "get_columns requires 'mysql' feature enabled".to_string()
+        ));
+
+        #[cfg(all(feature = "mysql", not(feature = "mysql")))]
+        unreachable!()
     }
 
     /// List all available functions
     ///
-    /// Returns a list of built-in MySQL functions.
+    /// Returns a list of built-in MySQL functions and custom stored procedures/functions.
     async fn list_functions(&self) -> CatalogResult<Vec<FunctionMetadata>> {
-        // HACK: Static list of functions instead of querying from database
-        // This is a workaround to avoid database driver dependency
-        //
-        // TODO: (CATALOG-002) Query from mysql.proc for complete function list
-        // or maintain as comprehensive static list if dynamic querying is too expensive
-        //
-        // Example query (MySQL 5.x):
-        // SELECT
-        //     name,
-        //     db,
-        //     param_list,
-        //     returns
-        // FROM mysql.proc
-        // WHERE db = DATABASE()
+        #[cfg(feature = "mysql")]
+        if let Some(pool) = &self.pool {
+            // Query custom stored procedures/functions from mysql.proc
+            let custom_query = r#"
+                SELECT
+                    name as function_name,
+                    param_list as parameters,
+                    returns as return_type,
+                    db as schema_name
+                FROM mysql.proc
+                WHERE db = DATABASE()
+                  AND type IN ('FUNCTION', 'PROCEDURE')
+            "#;
 
-        Ok(vec![
+            let custom_funcs: Vec<FunctionMetadata> = sqlx::query_as::<_, (String, String, String, String)>(
+                custom_query
+            )
+            .fetch_all(pool)
+            .await
+            .unwrap_or(vec![]) // Don't fail if mysql.proc not accessible
+            .into_iter()
+            .map(|(name, _params, ret, schema)| {
+                FunctionMetadata::new(&name, Self::parse_mysql_type(&ret))
+                    .with_type(FunctionType::Scalar)
+                    .with_description(format!("Custom function from {}", schema))
+            })
+            .collect();
+
+            // Merge with static built-in functions
+            let mut all_functions = Self::builtin_functions();
+            all_functions.extend(custom_funcs);
+            return Ok(all_functions);
+        }
+
+        // Static fallback when feature not enabled or pool not available
+        Ok(Self::builtin_functions())
+    }
+}
+
+impl LiveMySQLCatalog {
+    /// Get the list of built-in MySQL functions
+    fn builtin_functions() -> Vec<FunctionMetadata> {
+        vec![
             // Aggregate functions
             FunctionMetadata::new("COUNT", DataType::BigInt)
                 .with_type(FunctionType::Aggregate)
@@ -423,7 +552,7 @@ impl Catalog for LiveMySQLCatalog {
             FunctionMetadata::new("LEAD", DataType::Text)
                 .with_type(FunctionType::Window)
                 .with_description("Value from next row"),
-        ])
+        ]
     }
 }
 

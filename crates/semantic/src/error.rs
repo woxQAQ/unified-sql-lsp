@@ -66,6 +66,26 @@ pub enum SemanticError {
     /// Recursive CTE depth limit exceeded
     #[error("Recursive CTE depth limit ({limit}) exceeded")]
     RecursiveCteDepthLimit { limit: usize },
+
+    /// Function argument count mismatch
+    #[error("Function '{function}' expects {expected} argument(s) but found {found}")]
+    FunctionArgumentCountMismatch {
+        function: String,
+        expected: usize,
+        found: usize,
+    },
+
+    /// FILTER clause used on non-aggregate function
+    #[error("FILTER clause can only be used with aggregate functions, not '{function}'")]
+    FilterOnNonAggregateFunction { function: String },
+
+    /// OVER clause used on non-window function
+    #[error("OVER clause can only be used with window functions, not '{function}'")]
+    OverClauseOnNonWindowFunction { function: String },
+
+    /// Invalid window frame specification
+    #[error("Invalid window frame: {reason}")]
+    InvalidWindowFrame { reason: String },
 }
 
 #[cfg(test)]

@@ -21,6 +21,7 @@
 use crate::dialect::DialectLoweringBase;
 use crate::{CstNode, Lowering, LoweringContext, LoweringError, LoweringResult};
 use unified_sql_lsp_ir::expr::{BinaryOp, ColumnRef, Literal, UnaryOp};
+use unified_sql_lsp_ir::{InsertSource, InsertStatement, Join, JoinCondition, JoinType, OnConflict};
 use unified_sql_lsp_ir::query::{OrderBy, SelectItem, SelectStatement, SortDirection, TableRef};
 use unified_sql_lsp_ir::{Dialect, Expr, Query};
 
@@ -170,25 +171,47 @@ impl MySQLLowering {
         N: CstNode,
     {
         // REPLACE INTO table VALUES (...)
-        // Convert to INSERT structure for now
-        // TODO: (LOWERING-002) Track REPLACE semantics in query metadata
+        // Convert to INSERT with ReplaceMode conflict resolution
         // REPLACE differs from INSERT in that it deletes duplicate rows before inserting
-        // This should be tracked separately once IR supports mutation operation metadata
-
-        let mut select = SelectStatement::default();
+        let mut insert = InsertStatement {
+            table: TableRef {
+                name: String::new(),
+                alias: None,
+                joins: Vec::new(),
+            },
+            columns: Vec::new(),
+            source: InsertSource::DefaultValues,
+            on_conflict: Some(OnConflict::ReplaceMode),
+            returning: None,
+        };
 
         // Extract table name from REPLACE
         if let Some(table_node) = self.optional_child(node, "table_name") {
             let table_name = self.normalize_identifier(table_node.text().unwrap_or(""));
-            select.from = vec![TableRef {
-                name: table_name,
-                alias: None,
-                joins: Vec::new(),
-            }];
+            insert.table.name = table_name;
+        }
+
+        // Extract columns if present
+        if let Some(columns_node) = self.optional_child(node, "column_list") {
+            if let Some(identifiers_node) = self.optional_child(columns_node, "identifier_list") {
+                for ident in identifiers_node.all_children() {
+                    if ident.kind() == "identifier" {
+                        if let Some(name) = ident.text() {
+                            insert.columns.push(self.normalize_identifier(name));
+                        }
+                    }
+                }
+            }
+        }
+
+        // Extract VALUES if present
+        let values = self.extract_values_clause(ctx, node);
+        if let Some(all_rows) = values {
+            insert.source = InsertSource::Values(all_rows);
         }
 
         let mut query = Query::new(Dialect::MySQL);
-        query.body = unified_sql_lsp_ir::SetOp::Select(Box::new(select));
+        query.body = unified_sql_lsp_ir::SetOp::Insert(Box::new(insert));
 
         Ok(query)
     }
@@ -335,16 +358,79 @@ impl MySQLLowering {
     where
         N: CstNode,
     {
-        // TODO: (LOWERING-003) Implement JOIN clause lowering
-        // - Parse LEFT/RIGHT/INNER/CROSS join types
-        // - Handle join conditions (ON clause)
-        // - Support multiple joins and nested joins
-        ctx.add_error(LoweringError::UnsupportedSyntax {
-            dialect: "MySQL".to_string(),
-            feature: "JOIN clause".to_string(),
-            suggestion: "JOIN support will be added in a future update".to_string(),
-        });
-        Ok(None)
+        // Parse JOIN type
+        let join_type = if let Some(join_kind_node) = self.optional_child(node, "join_kind") {
+            match join_kind_node.text().unwrap_or("").to_uppercase().as_str() {
+                "LEFT" => JoinType::Left,
+                "RIGHT" => JoinType::Right,
+                "INNER" => JoinType::Inner,
+                "CROSS" => JoinType::Cross,
+                "FULL" => JoinType::Full,  // MySQL doesn't support FULL OUTER JOIN but IR does
+                _ => JoinType::Inner,  // Default to INNER
+            }
+        } else {
+            JoinType::Inner  // Default to INNER JOIN
+        };
+
+        // Get the joined table
+        let table = if let Some(table_node) = self.optional_child(node, "table_name") {
+            let table_name = self.normalize_identifier(table_node.text().unwrap_or(""));
+            TableRef {
+                name: table_name,
+                alias: None,
+                joins: Vec::new(),
+            }
+        } else {
+            ctx.add_error(LoweringError::MissingChild {
+                context: "joined_table".to_string(),
+                expected: "table name".to_string(),
+            });
+            return Ok(None);
+        };
+
+        // Parse join condition (ON clause)
+        let condition = if let Some(on_node) = self.optional_child(node, "join_on") {
+            if let Some(expr_node) = self.optional_child(on_node, "expression") {
+                match self.lower_expr(ctx, expr_node) {
+                    Ok(expr) => JoinCondition::On(expr),
+                    Err(_) => {
+                        // Create placeholder for unsupported expressions
+                        JoinCondition::On(ctx.create_placeholder())
+                    }
+                }
+            } else {
+                // Default to a true condition if no expression found
+                JoinCondition::On(ctx.create_placeholder())
+            }
+        } else if let Some(using_node) = self.optional_child(node, "join_using") {
+            // Handle USING clause
+            let mut columns = Vec::new();
+            for child in using_node.all_children() {
+                if child.kind() == "identifier" {
+                    if let Some(name) = child.text() {
+                        columns.push(self.normalize_identifier(name));
+                    }
+                }
+            }
+            JoinCondition::Using(columns)
+        } else {
+            // Default to ON with a placeholder
+            JoinCondition::On(ctx.create_placeholder())
+        };
+
+        // Create the JOIN structure
+        let join = Join {
+            join_type,
+            table,
+            condition,
+        };
+
+        // Wrap in a TableRef with the join
+        Ok(Some(TableRef {
+            name: String::new(),  // Empty for joins
+            alias: None,
+            joins: vec![join],
+        }))
     }
 
     /// Lower WHERE clause
@@ -681,6 +767,42 @@ impl MySQLLowering {
         Ok(ctx.create_placeholder())
     }
 
+    /// Extract VALUES clause from INSERT/REPLACE statement
+    ///
+    /// Returns None if no VALUES clause found, or Some(Vec<Vec<Expr>>)
+    /// where each inner Vec represents a row of expressions.
+    fn extract_values_clause<N>(
+        &self,
+        ctx: &mut LoweringContext,
+        node: &N,
+    ) -> Option<Vec<Vec<Expr>>>
+    where
+        N: CstNode,
+    {
+        let values_node = self.optional_child(node, "values")?;
+        let rows_node = self.optional_child(values_node, "value_row_list")?;
+
+        let mut all_rows = Vec::new();
+        for row in rows_node.all_children() {
+            if row.kind() != "value_row" {
+                continue;
+            }
+
+            let mut row_values = Vec::new();
+            for expr in row.all_children() {
+                if expr.kind() == "expression" {
+                    match self.lower_expr(ctx, expr) {
+                        Ok(lowered_expr) => row_values.push(lowered_expr),
+                        Err(_) => row_values.push(ctx.create_placeholder()),
+                    }
+                }
+            }
+            all_rows.push(row_values);
+        }
+
+        Some(all_rows)
+    }
+
     /// Lower function call
     ///
     /// TODO: (COMPLETION-006) Implement full function call lowering with:
@@ -708,11 +830,13 @@ impl MySQLLowering {
             }
         }
 
-        // TODO: (COMPLETION-006) Parse DISTINCT modifier (currently hardcoded to false)
+        // TODO: (COMPLETION-006) Parse DISTINCT modifier, OVER clause, and FILTER clause for window/aggregate functions
         Ok(Expr::Function {
             name: func_name,
             args,
             distinct: false,
+            filter: None,
+            over: None,
         })
     }
 

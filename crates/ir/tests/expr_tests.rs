@@ -225,6 +225,8 @@ fn test_expr_function_call() {
         name: "COUNT".to_string(),
         args: vec![],
         distinct: false,
+        filter: None,
+        over: None,
     };
     assert!(matches!(func, Expr::Function { .. }));
     if let Expr::Function { name, distinct, .. } = func {
@@ -239,6 +241,8 @@ fn test_expr_function_with_args() {
         name: "SUM".to_string(),
         args: vec![Expr::Column(ColumnRef::new("total"))],
         distinct: false,
+        filter: None,
+        over: None,
     };
     assert!(matches!(func, Expr::Function { .. }));
     if let Expr::Function { name, args, .. } = func {
@@ -253,12 +257,15 @@ fn test_expr_function_distinct() {
         name: "COUNT".to_string(),
         args: vec![Expr::Column(ColumnRef::new("user_id"))],
         distinct: true,
+        filter: None,
+        over: None,
     };
     assert!(matches!(func, Expr::Function { .. }));
     if let Expr::Function {
         name,
         args,
         distinct,
+        ..
     } = func
     {
         assert_eq!(name, "COUNT");

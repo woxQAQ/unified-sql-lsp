@@ -24,16 +24,20 @@
 //! - **OFFSET**: Row offset for pagination
 //! - **Dialect**: Target SQL dialect for the query
 //!
-//! ## Set Operations
+//! ## Set Operations and Statement Types
 //!
-//! [`SetOp`] represents set operations and query combinations:
+//! [`SetOp`] represents different types of SQL statements and operations:
 //!
-//! - `Select`: A single SELECT statement
+//! - `Select`: A SELECT statement
+//! - `Insert`: An INSERT statement
+//! - `Update`: An UPDATE statement
+//! - `Delete`: A DELETE statement
 //! - `Union`: UNION [ALL] of two queries
 //! - `Intersect`: INTERSECT [DISTINCT] of two queries
 //! - `Except`: EXCEPT [DISTINCT] of two queries
 //!
 //! Set operations form a tree structure, allowing complex nested combinations.
+//! Mutation statements represent data modification operations.
 //!
 //! ## SELECT Statement
 //!
@@ -128,6 +132,77 @@
 //!   ORDER BY created_at
 //!   ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
 //! )
+//! ```
+//!
+//! ## Mutation Statements
+//!
+//! The IR supports data mutation operations through dedicated statement types:
+//!
+//! - **INSERT**: Add new rows to a table
+//! - **UPDATE**: Modify existing rows
+//! - **DELETE**: Remove rows from a table
+//!
+//! ### INSERT Statement
+//!
+//! [`InsertStatement`] represents INSERT operations with:
+//!
+//! - **Table**: Target table
+//! - **Columns**: Optional column list
+//! - **Source**: VALUES, SELECT query, or DEFAULT VALUES
+//! - **On Conflict**: Handling for duplicate keys (dialect-specific)
+//! - **Returning**: RETURNING clause (PostgreSQL/MySQL 8.0+)
+//!
+//! ### UPDATE Statement
+//!
+//! [`UpdateStatement`] represents UPDATE operations with:
+//!
+//! - **Table**: Target table
+//! - **Assignments**: Column-value pairs to update
+//! - **Where**: Filtering condition
+//! - **Returning**: RETURNING clause
+//!
+//! ### DELETE Statement
+//!
+//! [`DeleteStatement`] represents DELETE operations with:
+//!
+//! - **Table**: Target table
+//! - **Where**: Filtering condition
+//! - **Returning**: RETURNING clause
+//!
+//! ### Mutation Examples
+//!
+//! ```sql
+//! -- INSERT with VALUES
+//! INSERT INTO users (name, email) VALUES ('Alice', 'alice@example.com')
+//!
+//! -- INSERT with SELECT
+//! INSERT INTO users_backup SELECT * FROM users WHERE active = true
+//!
+//! -- INSERT with ON CONFLICT (PostgreSQL)
+//! INSERT INTO users (id, name) VALUES (1, 'Alice')
+//! ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name
+//!
+//! -- INSERT with ON DUPLICATE KEY (MySQL)
+//! INSERT INTO users (id, name) VALUES (1, 'Alice')
+//! ON DUPLICATE KEY UPDATE name = VALUES(name)
+//!
+//! -- UPDATE
+//! UPDATE users SET email = 'new@example.com' WHERE id = 1
+//!
+//! -- DELETE
+//! DELETE FROM users WHERE created_at < '2020-01-01'
+//!
+//! -- INSERT with RETURNING (PostgreSQL)
+//! INSERT INTO users (name) VALUES ('Bob') RETURNING id, created_at
+//! ```
+//!
+//! ## DISTINCT ON (PostgreSQL)
+//!
+//! [`SelectStatement`] supports PostgreSQL's DISTINCT ON clause through the `distinct_on` field:
+//!
+//! ```sql
+//! -- DISTINCT ON keeps the first row for each distinct value
+//! SELECT DISTINCT ON (department) * FROM employees ORDER BY department, salary DESC
 //! ```
 //!
 //! ## Common Table Expressions (CTEs)
@@ -319,6 +394,15 @@ pub enum SetOp {
     /// SELECT statement
     Select(Box<SelectStatement>),
 
+    /// INSERT statement
+    Insert(Box<InsertStatement>),
+
+    /// UPDATE statement
+    Update(Box<UpdateStatement>),
+
+    /// DELETE statement
+    Delete(Box<DeleteStatement>),
+
     /// UNION [ALL | DISTINCT]
     Union {
         left: Box<Query>,
@@ -347,6 +431,9 @@ pub struct SelectStatement {
     /// SELECT DISTINCT or ALL
     pub distinct: bool,
 
+    /// DISTINCT ON expression list (PostgreSQL-specific)
+    pub distinct_on: Option<Vec<Expr>>,
+
     /// Projection list (columns to select)
     pub projection: Vec<SelectItem>,
 
@@ -370,6 +457,7 @@ impl Default for SelectStatement {
     fn default() -> Self {
         Self {
             distinct: false,
+            distinct_on: None,
             projection: Vec::new(),
             from: Vec::new(),
             where_clause: None,
@@ -378,6 +466,99 @@ impl Default for SelectStatement {
             window: Vec::new(),
         }
     }
+}
+
+/// INSERT statement
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct InsertStatement {
+    /// Target table
+    pub table: TableRef,
+
+    /// Columns to insert (optional, defaults to all columns in order)
+    pub columns: Vec<String>,
+
+    /// Source of values
+    pub source: InsertSource,
+
+    /// ON CONFLICT / ON DUPLICATE KEY clause (dialect-specific)
+    pub on_conflict: Option<OnConflict>,
+
+    /// RETURNING clause (PostgreSQL/MySQL 8.0.23+)
+    pub returning: Option<Vec<SelectItem>>,
+}
+
+/// Source of inserted values
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum InsertSource {
+    /// VALUES (row1), (row2), ...
+    Values(Vec<Vec<Expr>>),
+
+    /// SELECT query
+    Query(Box<Query>),
+
+    /// DEFAULT VALUES
+    DefaultValues,
+}
+
+/// ON CONFLICT / ON DUPLICATE KEY handling
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum OnConflict {
+    /// PostgreSQL: ON CONFLICT (columns) DO NOTHING
+    DoNothing {
+        columns: Vec<String>,
+    },
+
+    /// PostgreSQL: ON CONFLICT (columns) DO UPDATE SET ...
+    DoUpdate {
+        conflict_columns: Vec<String>,
+        update_columns: Vec<String>,
+        update_exprs: Vec<Expr>,
+    },
+
+    /// MySQL: ON DUPLICATE KEY UPDATE ...
+    DuplicateKeyUpdate {
+        columns: Vec<String>,
+        exprs: Vec<Expr>,
+    },
+
+    /// MySQL REPLACE INTO semantics (delete + insert)
+    ReplaceMode,
+}
+
+/// UPDATE statement
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct UpdateStatement {
+    /// Table to update
+    pub table: TableRef,
+
+    /// Column assignments
+    pub assignments: Vec<Assignment>,
+
+    /// WHERE clause
+    pub where_clause: Option<Expr>,
+
+    /// RETURNING clause
+    pub returning: Option<Vec<SelectItem>>,
+}
+
+/// Column assignment in UPDATE
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Assignment {
+    pub column: String,
+    pub value: Expr,
+}
+
+/// DELETE statement
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct DeleteStatement {
+    /// Table to delete from
+    pub table: TableRef,
+
+    /// WHERE clause
+    pub where_clause: Option<Expr>,
+
+    /// RETURNING clause
+    pub returning: Option<Vec<SelectItem>>,
 }
 
 /// Item in a SELECT projection list

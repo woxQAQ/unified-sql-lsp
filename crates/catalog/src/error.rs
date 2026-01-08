@@ -20,6 +20,10 @@ pub enum CatalogError {
     #[error("Failed to connect to database: {0}")]
     ConnectionFailed(String),
 
+    /// Query execution failed
+    #[error("Query execution failed: {0}")]
+    QueryFailed(String),
+
     /// Query execution timed out
     #[error("Query timed out after {0}s")]
     QueryTimeout(u64),

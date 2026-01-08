@@ -1,79 +1,7 @@
 [
   {
-    "file": "crates/catalog/src/live_mysql.rs",
-    "line": "262-267",
-    "description": "Implement actual database connection and query In a real implementation, you would: 1. Add mysql_async or sqlx dependency 2. Establish connection pool 3. Query information_schema.tables 4. Parse results into TableMetadata",
-    "dependencies": [
-      "CATALOG-002"
-    ]
-  },
-  {
-    "file": "crates/catalog/src/live_mysql.rs",
-    "line": "292-292",
-    "description": "Implement actual database connection and query",
-    "dependencies": [
-      "CATALOG-002"
-    ]
-  },
-  {
-    "file": "crates/catalog/src/live_mysql.rs",
-    "line": "319-320",
-    "description": "Query from mysql.proc for complete function list or maintain as comprehensive static list if dynamic querying is too expensive",
-    "dependencies": [
-      "CATALOG-002"
-    ]
-  },
-  {
-    "file": "crates/catalog/src/live_postgres.rs",
-    "line": "303-308",
-    "description": "Implement actual database connection and query In a real implementation, you would: 1. Add sqlx or tokio-postgres dependency 2. Establish connection pool 3. Query information_schema.tables and pg_catalog.pg_class 4. Parse results into TableMetadata",
-    "dependencies": [
-      "CATALOG-003"
-    ]
-  },
-  {
-    "file": "crates/catalog/src/live_postgres.rs",
-    "line": "338-338",
-    "description": "Implement actual database connection and query",
-    "dependencies": [
-      "CATALOG-003"
-    ]
-  },
-  {
-    "file": "crates/catalog/src/live_postgres.rs",
-    "line": "380-381",
-    "description": "Query from pg_catalog.pg_proc for complete function list or maintain as comprehensive static list if dynamic querying is too expensive",
-    "dependencies": [
-      "CATALOG-003"
-    ]
-  },
-  {
-    "file": "crates/lowering/src/context.rs",
-    "line": "118-119",
-    "description": "Enhance placeholder system to preserve source location and provide better error messages for diagnostics",
-    "dependencies": [
-      "LOWERING-001"
-    ]
-  },
-  {
     "file": "crates/lowering/src/dialect/mysql.rs",
-    "line": "174-176",
-    "description": "Track REPLACE semantics in query metadata REPLACE differs from INSERT in that it deletes duplicate rows before inserting This should be tracked separately once IR supports mutation operation metadata",
-    "dependencies": [
-      "LOWERING-002"
-    ]
-  },
-  {
-    "file": "crates/lowering/src/dialect/mysql.rs",
-    "line": "338-341",
-    "description": "Implement JOIN clause lowering - Parse LEFT/RIGHT/INNER/CROSS join types - Handle join conditions (ON clause) - Support multiple joins and nested joins",
-    "dependencies": [
-      "LOWERING-003"
-    ]
-  },
-  {
-    "file": "crates/lowering/src/dialect/mysql.rs",
-    "line": "686-690",
+    "line": "791-795",
     "description": "Implement full function call lowering with: - DISTINCT modifier parsing (already done for PostgreSQL, add for MySQL) - Window function support (OVER clause) - Aggregate function handling - Function type detection (aggregate vs scalar vs window)",
     "dependencies": [
       "COMPLETION-006"
@@ -81,64 +9,8 @@
   },
   {
     "file": "crates/lowering/src/dialect/mysql.rs",
-    "line": "711-711",
+    "line": "816-816",
     "description": "Parse DISTINCT modifier (currently hardcoded to false)",
-    "dependencies": [
-      "COMPLETION-006"
-    ]
-  },
-  {
-    "file": "crates/lowering/src/dialect/postgresql.rs",
-    "line": "183-186",
-    "description": "Implement full INSERT statement lowering - Parse INSERT INTO table (columns) VALUES (values) - Handle DEFAULT VALUES syntax - Support RETURNING clause (needs IR extension)",
-    "dependencies": [
-      "LOWERING-003"
-    ]
-  },
-  {
-    "file": "crates/lowering/src/dialect/postgresql.rs",
-    "line": "212-214",
-    "description": "Implement full UPDATE statement lowering - Parse UPDATE table SET column = value - Support RETURNING clause (needs IR extension)",
-    "dependencies": [
-      "LOWERING-003"
-    ]
-  },
-  {
-    "file": "crates/lowering/src/dialect/postgresql.rs",
-    "line": "239-241",
-    "description": "Implement full DELETE statement lowering - Parse DELETE FROM table WHERE condition - Support RETURNING clause (needs IR extension)",
-    "dependencies": [
-      "LOWERING-003"
-    ]
-  },
-  {
-    "file": "crates/lowering/src/dialect/postgresql.rs",
-    "line": "271-274",
-    "description": "Implement full DISTINCT ON support - Parse column list from DISTINCT ON (columns) - Extend IR to support distinct_on field - Ensure proper ordering (DISTINCT ON columns should typically appear first in ORDER BY)",
-    "dependencies": [
-      "LOWERING-003"
-    ]
-  },
-  {
-    "file": "crates/lowering/src/dialect/postgresql.rs",
-    "line": "291-294",
-    "description": "Implement full RETURNING clause support - Parse expression list from RETURNING clause - Extend InsertStatement/UpdateStatement/DeleteStatement in IR to have returning field - Return the list of expressions to be inserted into the IR",
-    "dependencies": [
-      "LOWERING-003"
-    ]
-  },
-  {
-    "file": "crates/lowering/src/dialect/postgresql.rs",
-    "line": "439-443",
-    "description": "Implement JOIN clause lowering - Parse LEFT/RIGHT/INNER/FULL/CROSS join types - Handle join conditions (ON clause, USING clause) - Support LATERAL joins (PostgreSQL-specific) - Support multiple joins and nested joins",
-    "dependencies": [
-      "LOWERING-003"
-    ]
-  },
-  {
-    "file": "crates/lowering/src/dialect/postgresql.rs",
-    "line": "841-845",
-    "description": "Implement full function call lowering with: - Window function support (OVER clause with PARTITION BY, ORDER BY, window frame) - Filter clause (aggregate function FILTER) - Function type detection (aggregate vs scalar vs window) - Argument type validation",
     "dependencies": [
       "COMPLETION-006"
     ]
@@ -189,22 +61,6 @@
     "description": "Parse and apply configuration from client For now, just log that configuration changed",
     "dependencies": [
       "CONFIG-001"
-    ]
-  },
-  {
-    "file": "crates/lsp/src/symbols.rs",
-    "line": "341-342",
-    "description": "Handle partial catalog failures better For now, just return the first error",
-    "dependencies": [
-      "CATALOG-002"
-    ]
-  },
-  {
-    "file": "crates/semantic/src/analyzer.rs",
-    "line": "493-493",
-    "description": "Validate function calls against catalog",
-    "dependencies": [
-      "SEMANTIC-004"
     ]
   }
 ]

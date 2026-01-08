@@ -328,24 +328,37 @@ impl SymbolCatalogFetcher {
                 }
                 Err(e) => {
                     errors.push(format!("{}: {}", table_name, e));
+                    // Add empty columns vector to allow partial results
+                    table.symbol = table.symbol.clone().with_columns(vec![]);
                     // Continue with other tables
                 }
             }
         }
 
         if any_success {
+            // At least one table succeeded - log warnings for partial failures but don't fail
+            if !errors.is_empty() {
+                eprintln!(
+                    "Warning: Partial catalog failures occurred while fetching column metadata: {:?}",
+                    errors
+                );
+            }
             Ok(())
         } else if errors.is_empty() {
             Ok(())
         } else {
-            // TODO: (CATALOG-002) Handle partial catalog failures better
-            // For now, just return the first error
-            let first_error = errors
-                .first()
-                .map(|e| e.clone())
-                .unwrap_or_else(|| "Unknown catalog error".to_string());
+            // All tables failed - return error with details
+            let error_msg = if errors.len() == 1 {
+                format!("Failed to fetch table metadata: {}", errors[0])
+            } else {
+                format!(
+                    "Failed to fetch metadata for {} tables: {}",
+                    errors.len(),
+                    errors.join("; ")
+                )
+            };
             Err(CatalogError::TableNotFound(
-                first_error,
+                error_msg,
                 "default".to_string(), // schema name
             ))
         }

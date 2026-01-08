@@ -24,6 +24,10 @@
 use crate::dialect::DialectLoweringBase;
 use crate::{CstNode, Lowering, LoweringContext, LoweringError, LoweringResult};
 use unified_sql_lsp_ir::expr::{BinaryOp, ColumnRef, Literal, UnaryOp};
+use unified_sql_lsp_ir::{
+    Assignment, DeleteStatement, InsertSource, InsertStatement, Join, JoinCondition, JoinType,
+    UpdateStatement, WindowFrame, WindowFrameBound, WindowFrameUnits, WindowSpec,
+};
 use unified_sql_lsp_ir::query::{OrderBy, SelectItem, SelectStatement, SortDirection, TableRef};
 use unified_sql_lsp_ir::{Dialect, Expr, Query};
 
@@ -120,9 +124,17 @@ impl PostgreSQLLowering {
 
         // Check for DISTINCT ON clause (PostgreSQL-specific)
         if let Some(distinct_on_node) = self.optional_child(node, "distinct_on_clause") {
-            self.handle_distinct_on(ctx, distinct_on_node);
-            // Mark as DISTINCT (without ON support for now)
-            select.distinct = true;
+            match self.handle_distinct_on(ctx, distinct_on_node) {
+                Ok(distinct_exprs) => {
+                    select.distinct = true;
+                    select.distinct_on = Some(distinct_exprs);
+                }
+                Err(_) => {
+                    // Fallback to regular DISTINCT on error
+                    select.distinct = true;
+                    select.distinct_on = None;
+                }
+            }
         } else if let Some(_distinct_node) = self.optional_child(node, "distinct") {
             select.distinct = true;
         }
@@ -180,24 +192,54 @@ impl PostgreSQLLowering {
     where
         N: CstNode,
     {
-        // TODO: (LOWERING-003) Implement full INSERT statement lowering
-        // - Parse INSERT INTO table (columns) VALUES (values)
-        // - Handle DEFAULT VALUES syntax
-        // - Support RETURNING clause (needs IR extension)
+        let mut insert = InsertStatement {
+            table: TableRef {
+                name: String::new(),
+                alias: None,
+                joins: Vec::new(),
+            },
+            columns: Vec::new(),
+            source: InsertSource::DefaultValues,
+            on_conflict: None,
+            returning: None,
+        };
 
-        // Check for RETURNING clause
-        if let Some(returning_node) = self.optional_child(node, "returning_clause") {
-            self.handle_returning_clause(ctx, returning_node);
+        // Extract table name from INSERT
+        if let Some(table_node) = self.optional_child(node, "table_name") {
+            let table_name = self.normalize_identifier(table_node.text().unwrap_or(""));
+            insert.table.name = table_name;
         }
 
-        // For now, return a placeholder query
-        ctx.add_error(LoweringError::UnsupportedSyntax {
-            dialect: "PostgreSQL".to_string(),
-            feature: "INSERT statement".to_string(),
-            suggestion: "INSERT lowering is not yet fully implemented".to_string(),
-        });
+        // Extract columns if present
+        insert.columns = self.extract_column_list(ctx, node);
 
-        Ok(Query::new(Dialect::PostgreSQL))
+        // Extract VALUES or SELECT query
+        if let Some(values) = self.extract_values_clause(ctx, node) {
+            insert.source = InsertSource::Values(values);
+        } else if let Some(select_node) = self.optional_child(node, "select_statement") {
+            // Handle INSERT INTO ... SELECT ...
+            match self.lower_select_statement(ctx, select_node) {
+                Ok(query) => {
+                    insert.source = InsertSource::Query(Box::new(query));
+                }
+                Err(_) => {
+                    insert.source = InsertSource::Query(Box::new(Query::new(Dialect::PostgreSQL)));
+                }
+            }
+        } else if let Some(default_node) = self.optional_child(node, "default_values") {
+            // Handle DEFAULT VALUES
+            insert.source = InsertSource::DefaultValues;
+        }
+
+        // Handle RETURNING clause
+        if let Some(returning_node) = self.optional_child(node, "returning_clause") {
+            insert.returning = Some(self.handle_returning_clause(ctx, returning_node)?);
+        }
+
+        let mut query = Query::new(Dialect::PostgreSQL);
+        query.body = unified_sql_lsp_ir::SetOp::Insert(Box::new(insert));
+
+        Ok(query)
     }
 
     /// Lower an UPDATE statement with RETURNING clause support
@@ -209,22 +251,67 @@ impl PostgreSQLLowering {
     where
         N: CstNode,
     {
-        // TODO: (LOWERING-003) Implement full UPDATE statement lowering
-        // - Parse UPDATE table SET column = value
-        // - Support RETURNING clause (needs IR extension)
+        let mut update = UpdateStatement {
+            table: TableRef {
+                name: String::new(),
+                alias: None,
+                joins: Vec::new(),
+            },
+            assignments: Vec::new(),
+            where_clause: None,
+            returning: None,
+        };
 
-        // Check for RETURNING clause
-        if let Some(returning_node) = self.optional_child(node, "returning_clause") {
-            self.handle_returning_clause(ctx, returning_node);
+        // Extract table name from UPDATE
+        if let Some(table_node) = self.optional_child(node, "table_name") {
+            let table_name = self.normalize_identifier(table_node.text().unwrap_or(""));
+            update.table.name = table_name;
         }
 
-        ctx.add_error(LoweringError::UnsupportedSyntax {
-            dialect: "PostgreSQL".to_string(),
-            feature: "UPDATE statement".to_string(),
-            suggestion: "UPDATE lowering is not yet fully implemented".to_string(),
-        });
+        // Extract SET assignments
+        if let Some(set_node) = self.optional_child(node, "set_clause") {
+            for child in set_node.all_children() {
+                if child.kind() == "assignment" {
+                    // Parse column = value
+                    let mut children = child.all_children();
+                    let column = if let Some(col_node) = children.first() {
+                        if col_node.kind() == "identifier" {
+                            self.normalize_identifier(col_node.text().unwrap_or(""))
+                        } else {
+                            String::new()
+                        }
+                    } else {
+                        String::new()
+                    };
 
-        Ok(Query::new(Dialect::PostgreSQL))
+                    let value = if let Some(expr_node) = children.last() {
+                        match self.lower_expr(ctx, *expr_node) {
+                            Ok(expr) => expr,
+                            Err(_) => ctx.create_placeholder(),
+                        }
+                    } else {
+                        ctx.create_placeholder()
+                    };
+
+                    update.assignments.push(Assignment { column, value });
+                }
+            }
+        }
+
+        // Extract WHERE clause
+        if let Some(where_node) = self.optional_child(node, "where_clause") {
+            update.where_clause = Some(self.lower_where_clause(ctx, where_node)?);
+        }
+
+        // Handle RETURNING clause
+        if let Some(returning_node) = self.optional_child(node, "returning_clause") {
+            update.returning = Some(self.handle_returning_clause(ctx, returning_node)?);
+        }
+
+        let mut query = Query::new(Dialect::PostgreSQL);
+        query.body = unified_sql_lsp_ir::SetOp::Update(Box::new(update));
+
+        Ok(query)
     }
 
     /// Lower a DELETE statement with RETURNING clause support
@@ -236,62 +323,96 @@ impl PostgreSQLLowering {
     where
         N: CstNode,
     {
-        // TODO: (LOWERING-003) Implement full DELETE statement lowering
-        // - Parse DELETE FROM table WHERE condition
-        // - Support RETURNING clause (needs IR extension)
+        let mut delete = DeleteStatement {
+            table: TableRef {
+                name: String::new(),
+                alias: None,
+                joins: Vec::new(),
+            },
+            where_clause: None,
+            returning: None,
+        };
 
-        // Check for RETURNING clause
-        if let Some(returning_node) = self.optional_child(node, "returning_clause") {
-            self.handle_returning_clause(ctx, returning_node);
+        // Extract table name from DELETE FROM
+        if let Some(table_node) = self.optional_child(node, "table_name") {
+            let table_name = self.normalize_identifier(table_node.text().unwrap_or(""));
+            delete.table.name = table_name;
         }
 
-        ctx.add_error(LoweringError::UnsupportedSyntax {
-            dialect: "PostgreSQL".to_string(),
-            feature: "DELETE statement".to_string(),
-            suggestion: "DELETE lowering is not yet fully implemented".to_string(),
-        });
+        // Extract WHERE clause
+        if let Some(where_node) = self.optional_child(node, "where_clause") {
+            delete.where_clause = Some(self.lower_where_clause(ctx, where_node)?);
+        }
 
-        Ok(Query::new(Dialect::PostgreSQL))
+        // Handle RETURNING clause
+        if let Some(returning_node) = self.optional_child(node, "returning_clause") {
+            delete.returning = Some(self.handle_returning_clause(ctx, returning_node)?);
+        }
+
+        let mut query = Query::new(Dialect::PostgreSQL);
+        query.body = unified_sql_lsp_ir::SetOp::Delete(Box::new(delete));
+
+        Ok(query)
     }
 
     /// Handle DISTINCT ON clause (PostgreSQL-specific)
     ///
-    /// IR doesn't currently support DISTINCT ON, so we add a warning and
-    /// convert it to regular DISTINCT. Future enhancement needed.
-    fn handle_distinct_on<N>(&self, ctx: &mut LoweringContext, _node: &N)
+    /// Parses the DISTINCT ON clause and returns a list of expressions.
+    fn handle_distinct_on<N>(&self, ctx: &mut LoweringContext, node: &N) -> LoweringResult<Vec<unified_sql_lsp_ir::Expr>>
     where
         N: CstNode,
     {
-        ctx.add_error(LoweringError::UnsupportedSyntax {
-            dialect: "PostgreSQL".to_string(),
-            feature: "DISTINCT ON clause".to_string(),
-            suggestion: "DISTINCT ON is PostgreSQL-specific and will be converted to regular DISTINCT. Full support requires IR extension.".to_string(),
-        });
+        let mut distinct_exprs = Vec::new();
 
-        // TODO: (LOWERING-003) Implement full DISTINCT ON support
-        // - Parse column list from DISTINCT ON (columns)
-        // - Extend IR to support distinct_on field
-        // - Ensure proper ordering (DISTINCT ON columns should typically appear first in ORDER BY)
+        // Parse the column list from DISTINCT ON (columns)
+        for child in node.all_children() {
+            match child.kind() {
+                "expression" | "column_ref" => {
+                    match self.lower_expr(ctx, child) {
+                        Ok(expr) => distinct_exprs.push(expr),
+                        Err(_) => {
+                            // Create placeholder for unsupported expressions
+                            distinct_exprs.push(ctx.create_placeholder());
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+
+        Ok(distinct_exprs)
     }
 
     /// Handle RETURNING clause (PostgreSQL-specific)
     ///
-    /// IR doesn't currently support RETURNING, so we add a warning.
-    /// This needs IR extension to properly support.
-    fn handle_returning_clause<N>(&self, ctx: &mut LoweringContext, _node: &N)
+    /// Parses the RETURNING clause and returns a list of SelectItems.
+    fn handle_returning_clause<N>(&self, ctx: &mut LoweringContext, node: &N) -> LoweringResult<Vec<SelectItem>>
     where
         N: CstNode,
     {
-        ctx.add_error(LoweringError::UnsupportedSyntax {
-            dialect: "PostgreSQL".to_string(),
-            feature: "RETURNING clause".to_string(),
-            suggestion: "RETURNING clause requires IR extension to properly support. Currently treated as placeholder.".to_string(),
-        });
+        let mut items = Vec::new();
 
-        // TODO: (LOWERING-003) Implement full RETURNING clause support
-        // - Parse expression list from RETURNING clause
-        // - Extend InsertStatement/UpdateStatement/DeleteStatement in IR to have returning field
-        // - Return the list of expressions to be inserted into the IR
+        // Parse the expression list from RETURNING clause
+        for child in node.all_children() {
+            match child.kind() {
+                "expression" | "column_ref" => {
+                    match self.lower_expr(ctx, child) {
+                        Ok(expr) => items.push(SelectItem::UnnamedExpr(expr)),
+                        Err(_) => {
+                            // Create placeholder for unsupported expressions
+                            items.push(SelectItem::UnnamedExpr(ctx.create_placeholder()));
+                        }
+                    }
+                }
+                "wildcard_expression" => {
+                    // Handle RETURNING *
+                    items.push(SelectItem::Wildcard);
+                }
+                _ => {}
+            }
+        }
+
+        Ok(items)
     }
 
     /// Lower projection list (SELECT clause)
@@ -436,28 +557,95 @@ impl PostgreSQLLowering {
     where
         N: CstNode,
     {
-        // TODO: (LOWERING-003) Implement JOIN clause lowering
-        // - Parse LEFT/RIGHT/INNER/FULL/CROSS join types
-        // - Handle join conditions (ON clause, USING clause)
-        // - Support LATERAL joins (PostgreSQL-specific)
-        // - Support multiple joins and nested joins
-
-        // Check for LATERAL keyword
+        // Check for LATERAL keyword (PostgreSQL-specific)
+        // LATERAL JOINs are detected and processed as regular JOINs with a warning
+        // Full support requires correlated subquery handling in the semantic layer
         let text = node.text().unwrap_or("");
-        if text.contains("LATERAL") || text.contains("Lateral") {
+        let is_lateral = text.contains("LATERAL") || text.contains("Lateral");
+
+        if is_lateral {
+            // LATERAL joins require special handling - log warning but continue
+            // We'll treat it as a regular join for now
             ctx.add_error(LoweringError::UnsupportedSyntax {
                 dialect: "PostgreSQL".to_string(),
                 feature: "LATERAL JOIN".to_string(),
-                suggestion: "LATERAL JOIN is PostgreSQL-specific and requires IR extension. Currently treated as placeholder.".to_string(),
+                suggestion: "LATERAL JOIN is PostgreSQL-specific and requires IR extension. Currently treated as regular JOIN.".to_string(),
             });
         }
 
-        ctx.add_error(LoweringError::UnsupportedSyntax {
-            dialect: "PostgreSQL".to_string(),
-            feature: "JOIN clause".to_string(),
-            suggestion: "JOIN support will be added in a future update".to_string(),
-        });
-        Ok(None)
+        // Parse JOIN type
+        let join_type = if let Some(join_kind_node) = self.optional_child(node, "join_kind") {
+            match join_kind_node.text().unwrap_or("").to_uppercase().as_str() {
+                "LEFT" => JoinType::Left,
+                "RIGHT" => JoinType::Right,
+                "INNER" => JoinType::Inner,
+                "CROSS" => JoinType::Cross,
+                "FULL" => JoinType::Full,  // PostgreSQL supports FULL OUTER JOIN
+                _ => JoinType::Inner,  // Default to INNER
+            }
+        } else {
+            JoinType::Inner  // Default to INNER JOIN
+        };
+
+        // Get the joined table
+        let table = if let Some(table_node) = self.optional_child(node, "table_name") {
+            let table_name = self.normalize_identifier(table_node.text().unwrap_or(""));
+            TableRef {
+                name: table_name,
+                alias: None,
+                joins: Vec::new(),
+            }
+        } else {
+            ctx.add_error(LoweringError::MissingChild {
+                context: "joined_table".to_string(),
+                expected: "table name".to_string(),
+            });
+            return Ok(None);
+        };
+
+        // Parse join condition (ON clause)
+        let condition = if let Some(on_node) = self.optional_child(node, "join_on") {
+            if let Some(expr_node) = self.optional_child(on_node, "expression") {
+                match self.lower_expr(ctx, expr_node) {
+                    Ok(expr) => JoinCondition::On(expr),
+                    Err(_) => {
+                        // Create placeholder for unsupported expressions
+                        JoinCondition::On(ctx.create_placeholder())
+                    }
+                }
+            } else {
+                // Default to a true condition if no expression found
+                JoinCondition::On(ctx.create_placeholder())
+            }
+        } else if let Some(using_node) = self.optional_child(node, "join_using") {
+            // Handle USING clause
+            let mut columns = Vec::new();
+            for child in using_node.all_children() {
+                if child.kind() == "identifier" {
+                    if let Some(name) = child.text() {
+                        columns.push(self.normalize_identifier(name));
+                    }
+                }
+            }
+            JoinCondition::Using(columns)
+        } else {
+            // Default to ON with a placeholder
+            JoinCondition::On(ctx.create_placeholder())
+        };
+
+        // Create the JOIN structure
+        let join = Join {
+            join_type,
+            table,
+            condition,
+        };
+
+        // Wrap in a TableRef with the join
+        Ok(Some(TableRef {
+            name: String::new(),  // Empty for joins
+            alias: None,
+            joins: vec![join],
+        }))
     }
 
     /// Lower WHERE clause
@@ -836,13 +1024,67 @@ impl PostgreSQLLowering {
         Ok(ctx.create_placeholder())
     }
 
-    /// Lower function call
+    /// Extract column list from INSERT statement
     ///
-    /// TODO: (COMPLETION-006) Implement full function call lowering with:
-    /// - Window function support (OVER clause with PARTITION BY, ORDER BY, window frame)
-    /// - Filter clause (aggregate function FILTER)
-    /// - Function type detection (aggregate vs scalar vs window)
-    /// - Argument type validation
+    /// Returns a vector of column names, or empty vector if no column list found.
+    fn extract_column_list<N>(&self, _ctx: &mut LoweringContext, node: &N) -> Vec<String>
+    where
+        N: CstNode,
+    {
+        let mut columns = Vec::new();
+
+        if let Some(columns_node) = self.optional_child(node, "column_list") {
+            if let Some(identifiers_node) = self.optional_child(columns_node, "identifier_list") {
+                for ident in identifiers_node.all_children() {
+                    if ident.kind() == "identifier" {
+                        if let Some(name) = ident.text() {
+                            columns.push(self.normalize_identifier(name));
+                        }
+                    }
+                }
+            }
+        }
+
+        columns
+    }
+
+    /// Extract VALUES clause from INSERT statement
+    ///
+    /// Returns None if no VALUES clause found, or Some(Vec<Vec<Expr>>)
+    /// where each inner Vec represents a row of expressions.
+    fn extract_values_clause<N>(
+        &self,
+        ctx: &mut LoweringContext,
+        node: &N,
+    ) -> Option<Vec<Vec<Expr>>>
+    where
+        N: CstNode,
+    {
+        let values_node = self.optional_child(node, "values")?;
+        let rows_node = self.optional_child(values_node, "value_row_list")?;
+
+        let mut all_rows = Vec::new();
+        for row in rows_node.all_children() {
+            if row.kind() != "value_row" {
+                continue;
+            }
+
+            let mut row_values = Vec::new();
+            for expr in row.all_children() {
+                if expr.kind() == "expression" {
+                    match self.lower_expr(ctx, expr) {
+                        Ok(lowered_expr) => row_values.push(lowered_expr),
+                        Err(_) => row_values.push(ctx.create_placeholder()),
+                    }
+                }
+            }
+            all_rows.push(row_values);
+        }
+
+        Some(all_rows)
+    }
+
+    /// Lower function call with OVER and FILTER clause support
     fn lower_function_call<N>(&self, ctx: &mut LoweringContext, node: &N) -> LoweringResult<Expr>
     where
         N: CstNode,
@@ -857,23 +1099,154 @@ impl PostgreSQLLowering {
             .to_string();
 
         let mut args = Vec::new();
+        let mut distinct = false;
+
+        // Process function arguments and modifiers
         for child in children.iter().skip(1) {
-            if matches!(child.kind(), "expression" | "column_ref" | "literal") {
-                args.push(self.lower_expr(ctx, *child)?);
+            match child.kind() {
+                "expression" | "column_ref" | "literal" => {
+                    args.push(self.lower_expr(ctx, *child)?);
+                }
+                "distinct" => {
+                    distinct = true;
+                }
+                _ => {}
             }
         }
 
-        // Check for DISTINCT modifier (aggregate functions)
-        let distinct = children.iter().any(|c| {
-            let text = c.text().unwrap_or("");
-            text.eq_ignore_ascii_case("DISTINCT")
-        });
+        // Parse FILTER clause (PostgreSQL aggregate functions)
+        let filter = if let Some(filter_node) = self.optional_child(node, "filter_clause") {
+            // FILTER (WHERE condition)
+            if let Some(where_node) = self.optional_child(filter_node, "where_clause") {
+                Some(Box::new(self.lower_where_clause(ctx, where_node)?))
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+
+        // Parse OVER clause (window functions)
+        let over = if let Some(over_node) = self.optional_child(node, "over_clause") {
+            let mut partition_by = Vec::new();
+            let mut order_by = Vec::new();
+            let mut window_frame = None;
+
+            // Parse PARTITION BY
+            if let Some(partition_node) = self.optional_child(over_node, "partition_by") {
+                for child in partition_node.all_children() {
+                    if matches!(child.kind(), "expression" | "column_ref") {
+                        match self.lower_expr(ctx, child) {
+                            Ok(expr) => partition_by.push(expr),
+                            Err(_) => partition_by.push(ctx.create_placeholder()),
+                        }
+                    }
+                }
+            }
+
+            // Parse ORDER BY
+            if let Some(order_node) = self.optional_child(over_node, "order_by") {
+                for child in order_node.all_children() {
+                    if child.kind() == "order_by_item" {
+                        let mut item_children = child.all_children();
+                        let expr = if let Some(expr_node) = item_children.first() {
+                            self.lower_expr(ctx, *expr_node).unwrap_or_else(|_| ctx.create_placeholder())
+                        } else {
+                            ctx.create_placeholder()
+                        };
+
+                        let direction = if item_children.len() > 1 {
+                            let dir_text = item_children[1].text().unwrap_or("");
+                            if dir_text.eq_ignore_ascii_case("DESC") {
+                                Some(SortDirection::Desc)
+                            } else if dir_text.eq_ignore_ascii_case("ASC") {
+                                Some(SortDirection::Asc)
+                            } else {
+                                None
+                            }
+                        } else {
+                            None
+                        };
+
+                        order_by.push(OrderBy { expr, direction });
+                    }
+                }
+            }
+
+            // Parse window frame (ROWS BETWEEN ...)
+            if let Some(frame_node) = self.optional_child(over_node, "window_frame") {
+                let units = if let Some(units_node) = self.optional_child(frame_node, "frame_units") {
+                    match units_node.text().unwrap_or("").to_uppercase().as_str() {
+                        "ROWS" => WindowFrameUnits::Rows,
+                        "RANGE" => WindowFrameUnits::Range,
+                        "GROUPS" => WindowFrameUnits::Groups,
+                        _ => WindowFrameUnits::Rows,
+                    }
+                } else {
+                    WindowFrameUnits::Rows
+                };
+
+                let start_bound = if let Some(start_node) = self.optional_child(frame_node, "frame_start") {
+                    self.parse_window_bound(ctx, start_node)?
+                } else {
+                    WindowFrameBound::Unbounded
+                };
+
+                let end_bound = if let Some(end_node) = self.optional_child(frame_node, "frame_end") {
+                    Some(self.parse_window_bound(ctx, end_node)?)
+                } else {
+                    None
+                };
+
+                window_frame = Some(WindowFrame {
+                    units,
+                    start_bound,
+                    end_bound,
+                });
+            }
+
+            Some(WindowSpec {
+                partition_by,
+                order_by,
+                window_frame,
+            })
+        } else {
+            None
+        };
 
         Ok(Expr::Function {
             name: func_name,
             args,
             distinct,
+            filter,
+            over,
         })
+    }
+
+    /// Parse a window frame bound (UNBOUNDED PRECEDING, CURRENT ROW, n PRECEDING/FOLLOWING)
+    fn parse_window_bound<N>(&self, _ctx: &mut LoweringContext, node: &N) -> LoweringResult<WindowFrameBound>
+    where
+        N: CstNode,
+    {
+        let text = node.text().unwrap_or("").to_uppercase();
+
+        if text.contains("UNBOUNDED") {
+            Ok(WindowFrameBound::Unbounded)
+        } else if text.contains("CURRENT ROW") {
+            Ok(WindowFrameBound::CurrentRow)
+        } else {
+            // Try to parse offset (n PRECEDING/FOLLOWING)
+            let children = node.all_children();
+            if let Some(offset_node) = children.first() {
+                if let Some(offset_text) = offset_node.text() {
+                    if let Ok(offset) = offset_text.trim().parse::<i64>() {
+                        return Ok(WindowFrameBound::Offset(offset));
+                    }
+                }
+            }
+            // Fallback to unbounded if parsing fails
+            Ok(WindowFrameBound::Unbounded)
+        }
     }
 
     /// Lower CASE expression
