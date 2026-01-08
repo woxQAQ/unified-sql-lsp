@@ -9,7 +9,7 @@
 //! from semantic symbols.
 
 use tower_lsp::lsp_types::{CompletionItem, CompletionItemKind, Documentation};
-use unified_sql_lsp_catalog::{DataType, TableMetadata, TableType};
+use unified_sql_lsp_catalog::{DataType, FunctionMetadata, FunctionType, TableMetadata, TableType};
 use unified_sql_lsp_semantic::{ColumnSymbol, TableSymbol};
 
 /// Completion renderer
@@ -354,6 +354,133 @@ impl CompletionRenderer {
     /// Columns are sorted alphabetically by name
     fn sort_text(column: &ColumnSymbol) -> String {
         format!("01_{}", column.name)
+    }
+
+    /// Render function completion items
+    ///
+    /// # Arguments
+    ///
+    /// * `functions` - Vector of function metadata
+    /// * `filter` - Optional function type filter (None = show all)
+    ///
+    /// # Returns
+    ///
+    /// Vector of completion items
+    ///
+    /// # Examples
+    ///
+    /// ```ignore
+    /// // Show all functions
+    /// let items = CompletionRenderer::render_functions(&functions, None);
+    ///
+    /// // Show only aggregate functions
+    /// let items = CompletionRenderer::render_functions(
+    ///     &functions,
+    ///     Some(FunctionType::Aggregate)
+    /// );
+    /// ```
+    pub fn render_functions(
+        functions: &[FunctionMetadata],
+        filter: Option<FunctionType>,
+    ) -> Vec<CompletionItem> {
+        let mut items = Vec::new();
+
+        for function in functions {
+            // Apply filter if specified
+            if let Some(ft) = &filter {
+                if &function.function_type != ft {
+                    continue;
+                }
+            }
+
+            items.push(Self::function_item(function));
+        }
+
+        // Sort by function type priority, then alphabetically
+        items.sort_by(|a, b| {
+            let a_sort = a.sort_text.as_ref().unwrap();
+            let b_sort = b.sort_text.as_ref().unwrap();
+            a_sort.cmp(b_sort)
+        });
+
+        items
+    }
+
+    /// Render a single function completion item
+    ///
+    /// # Arguments
+    ///
+    /// * `function` - The function metadata
+    fn function_item(function: &FunctionMetadata) -> CompletionItem {
+        let label = function.name.clone();
+        let detail = Self::format_function_detail(function);
+        let documentation = Self::format_function_documentation(function);
+
+        // Determine sort priority based on function type
+        let sort_prefix = match function.function_type {
+            FunctionType::Aggregate => "00_aggregate_",
+            FunctionType::Window => "01_window_",
+            FunctionType::Table => "02_table_",
+            FunctionType::Scalar => "03_scalar_",
+        };
+
+        CompletionItem {
+            label,
+            kind: Some(CompletionItemKind::CLASS), // TODO: (COMPLETION-006) Use Function when tower-lsp upgrades to LSP 3.17+
+            detail: Some(detail),
+            documentation: Some(Documentation::String(documentation)),
+            deprecated: Some(false),
+            preselect: Some(false),
+            sort_text: Some(format!("{}{}", sort_prefix, function.name)),
+            filter_text: Some(function.name.clone()),
+            insert_text: Some(format!("{}(", function.name)), // Add opening paren
+            ..Default::default()
+        }
+    }
+
+    /// Format the detail string for a function
+    ///
+    /// Shows the function signature with parameters and return type
+    fn format_function_detail(function: &FunctionMetadata) -> String {
+        // Use the existing signature() method from FunctionMetadata
+        function.signature()
+    }
+
+    /// Format the documentation string for a function
+    ///
+    /// Shows description, example, and parameter details
+    fn format_function_documentation(function: &FunctionMetadata) -> String {
+        let mut parts = Vec::new();
+
+        // Add description
+        if let Some(desc) = &function.description {
+            parts.push(desc.clone());
+        }
+
+        // Add parameter details
+        if !function.parameters.is_empty() {
+            let params: Vec<String> = function
+                .parameters
+                .iter()
+                .map(|p| {
+                    let default = if p.has_default { " = default" } else { "" };
+                    let variadic = if p.is_variadic { "..." } else { "" };
+                    format!("- `{} {:?}{}{}`", p.name, p.data_type, variadic, default)
+                })
+                .collect();
+            parts.push(format!("Parameters:\n{}", params.join("\n")));
+        }
+
+        // Add example if available
+        if let Some(example) = &function.example {
+            parts.push(format!("Example:\n```sql\n{}\n```", example));
+        }
+
+        if parts.is_empty() {
+            "SQL function".to_string()
+        } else {
+            parts.join("\n\n")
+        }
     }
 }
 
@@ -728,5 +855,144 @@ mod tests {
                 .iter()
                 .all(|i| i.sort_text.as_ref().unwrap().starts_with("00_pk_"))
         );
+    }
+
+    #[test]
+    fn test_render_functions_all() {
+        use unified_sql_lsp_catalog::{FunctionMetadata, FunctionParameter};
+
+        let functions = vec![
+            FunctionMetadata::new("count", DataType::BigInt)
+                .with_type(FunctionType::Aggregate)
+                .with_description("Count rows"),
+            FunctionMetadata::new("abs", DataType::Integer)
+                .with_type(FunctionType::Scalar)
+                .with_description("Absolute value"),
+        ];
+
+        let items = CompletionRenderer::render_functions(&functions, None);
+
+        assert_eq!(items.len(), 2);
+        assert!(items.iter().any(|i| i.label == "count"));
+        assert!(items.iter().any(|i| i.label == "abs"));
+    }
+
+    #[test]
+    fn test_render_functions_filtered() {
+        use unified_sql_lsp_catalog::{FunctionMetadata, FunctionParameter};
+
+        let functions = vec![
+            FunctionMetadata::new("count", DataType::BigInt)
+                .with_type(FunctionType::Aggregate),
+            FunctionMetadata::new("abs", DataType::Integer)
+                .with_type(FunctionType::Scalar),
+        ];
+
+        let items =
+            CompletionRenderer::render_functions(&functions, Some(FunctionType::Aggregate));
+
+        // Should only show aggregate functions
+        assert_eq!(items.len(), 1);
+        assert_eq!(items[0].label, "count");
+    }
+
+    #[test]
+    fn test_function_item_signature() {
+        use unified_sql_lsp_catalog::{FunctionMetadata, FunctionParameter};
+
+        let func = FunctionMetadata::new("count", DataType::BigInt).with_parameters(vec![
+            FunctionParameter {
+                name: "expr".to_string(),
+                data_type: DataType::Integer,
+                has_default: false,
+                is_variadic: false,
+            },
+        ]);
+
+        let item = CompletionRenderer::function_item(&func);
+
+        assert_eq!(item.label, "count");
+        assert!(item.detail.as_ref().unwrap().contains("count"));
+        assert_eq!(item.kind, Some(CompletionItemKind::CLASS)); // Using CLASS for functions
+        assert!(item.insert_text.as_ref().unwrap().ends_with("("));
+    }
+
+    #[test]
+    fn test_function_sort_order() {
+        use unified_sql_lsp_catalog::{FunctionMetadata, FunctionParameter};
+
+        let functions = vec![
+            FunctionMetadata::new("abs", DataType::Integer).with_type(FunctionType::Scalar),
+            FunctionMetadata::new("count", DataType::BigInt)
+                .with_type(FunctionType::Aggregate),
+            FunctionMetadata::new("row_number", DataType::BigInt)
+                .with_type(FunctionType::Window),
+        ];
+
+        let items = CompletionRenderer::render_functions(&functions, None);
+
+        // Aggregates should come first
+        assert!(items[0].sort_text.as_ref().unwrap().starts_with("00_aggregate_"));
+        assert_eq!(items[0].label, "count");
+
+        // Window functions second
+        assert!(items[1].sort_text.as_ref().unwrap().starts_with("01_window_"));
+        assert_eq!(items[1].label, "row_number");
+
+        // Scalar functions last
+        assert!(items[2].sort_text.as_ref().unwrap().starts_with("03_scalar_"));
+        assert_eq!(items[2].label, "abs");
+    }
+
+    #[test]
+    fn test_function_item_with_parameters() {
+        use unified_sql_lsp_catalog::{FunctionMetadata, FunctionParameter};
+
+        let func = FunctionMetadata::new("concat", DataType::Text)
+            .with_type(FunctionType::Scalar)
+            .with_description("Concatenate strings")
+            .with_parameters(vec![
+                FunctionParameter {
+                    name: "str1".to_string(),
+                    data_type: DataType::Text,
+                    has_default: false,
+                    is_variadic: false,
+                },
+                FunctionParameter {
+                    name: "str2".to_string(),
+                    data_type: DataType::Text,
+                    has_default: false,
+                    is_variadic: false,
+                },
+            ])
+            .with_example("SELECT CONCAT(first, ' ', last) FROM users");
+
+        let item = CompletionRenderer::function_item(&func);
+
+        assert_eq!(item.label, "concat");
+        assert_eq!(item.kind, Some(CompletionItemKind::CLASS)); // Using CLASS for functions
+
+        // Check documentation contains parameter details
+        match item.documentation.as_ref().unwrap() {
+            Documentation::String(doc) => {
+                assert!(doc.contains("Concatenate strings"));
+                assert!(doc.contains("str1"));
+                assert!(doc.contains("str2"));
+                assert!(doc.contains("CONCAT"));
+            }
+            _ => panic!("Expected string documentation"),
+        }
+    }
+
+    #[test]
+    fn test_function_item_insert_text() {
+        use unified_sql_lsp_catalog::{FunctionMetadata, FunctionParameter};
+
+        let func = FunctionMetadata::new("count", DataType::BigInt).with_type(FunctionType::Aggregate);
+
+        let item = CompletionRenderer::function_item(&func);
+
+        // Insert text should include opening paren for easier typing
+        assert_eq!(item.insert_text.as_ref().unwrap(), "count(");
     }
 }

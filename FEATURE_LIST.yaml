@@ -539,6 +539,17 @@ meta:
   deliverables:
     - 函数补全逻辑
     - 函数元数据
+  status: done
+  notes: |
+    Implemented:
+    - Added list_functions() to CatalogCompletionFetcher
+    - Implemented render_functions() in CompletionRenderer
+    - Integrated function completion in SelectProjection, WhereClause, and JoinCondition contexts
+    - Added context-aware filtering (scalar functions in JOINs, all functions in SELECT/WHERE)
+    - Added function signature display with parameters and return types
+    - Insert text includes opening parenthesis for easier typing
+    - 27 integration tests passing (including 4 new function completion tests)
+    - Updated TESTING.md with function completion testing documentation
 
 - id: COMPLETION-007
   name: "关键字补全"

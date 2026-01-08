@@ -521,7 +521,7 @@ mod tests {
             if child.kind() == "select_statement" {
                 let result = extract_identifier_name(&child, sql);
                 assert_eq!(result, None, "Should return None for non-identifier node");
-                break;
+                return;
             }
         }
     }
@@ -553,7 +553,7 @@ mod tests {
                     result, None,
                     "Should return None for non-table_reference node"
                 );
-                break;
+                return;
             }
         }
     }
@@ -636,7 +636,7 @@ mod tests {
             if child.kind() == "select_statement" {
                 let result = extract_column_info(&child, sql);
                 assert_eq!(result, None, "Should return None for non-column node");
-                break;
+                return;
             }
         }
     }

@@ -249,6 +249,98 @@ fn test_parse_query() {
 }
 ```
 
+### Testing Function Completion
+
+Function completion is tested at multiple levels:
+
+#### Unit Tests
+
+`crates/lsp/src/completion/render.rs`:
+```rust
+#[test]
+fn test_render_functions_all() {
+    use unified_sql_lsp_catalog::{FunctionMetadata, FunctionType};
+
+    let functions = vec![
+        FunctionMetadata::new("count", DataType::BigInt)
+            .with_type(FunctionType::Aggregate)
+            .with_description("Count rows"),
+        FunctionMetadata::new("abs", DataType::Integer)
+            .with_type(FunctionType::Scalar)
+            .with_description("Absolute value"),
+    ];
+
+    let items = CompletionRenderer::render_functions(&functions, None);
+
+    assert_eq!(items.len(), 2);
+    assert!(items.iter().any(|i| i.label == "count"));
+    assert!(items.iter().any(|i| i.label == "abs"));
+}
+```
+
+#### Integration Tests
+
+`crates/lsp/tests/integration_tests.rs`:
+```rust
+#[tokio::test]
+async fn test_catalog_integration_function_completion() {
+    use unified_sql_lsp_catalog::{FunctionMetadata, FunctionType};
+
+    let catalog = MockCatalogBuilder::new()
+        .with_function(
+            FunctionMetadata::new("count", DataType::BigInt)
+                .with_type(FunctionType::Aggregate)
+                .with_description("Count rows in a table")
+                .with_example("SELECT COUNT(*) FROM users"),
+        )
+        .with_function(
+            FunctionMetadata::new("upper", DataType::Varchar(None))
+                .with_type(FunctionType::Scalar)
+                .with_description("Convert string to uppercase")
+                .with_parameters(vec![/* ... */]),
+        )
+        .with_table(/* ... */)
+        .build();
+
+    let engine = CompletionEngine::new(Arc::new(catalog));
+
+    let sql = "SELECT * FROM users";
+    let document = create_test_document(sql, "mysql").await;
+    let result = engine.complete(&document, Position::new(0, 20)).await;
+
+    assert!(result.is_ok());
+}
+```
+
+#### Mock Function Setup
+
+```rust
+use unified_sql_lsp_catalog::{FunctionMetadata, FunctionType, FunctionParameter};
+
+let catalog = MockCatalogBuilder::new()
+    .with_function(
+        FunctionMetadata::new("concat", DataType::Text)
+            .with_type(FunctionType::Scalar)
+            .with_description("Concatenate strings")
+            .with_parameters(vec![
+                FunctionParameter {
+                    name: "str1".to_string(),
+                    data_type: DataType::Text,
+                    has_default: false,
+                    is_variadic: false,
+                },
+                FunctionParameter {
+                    name: "str2".to_string(),
+                    data_type: DataType::Text,
+                    has_default: false,
+                    is_variadic: false,
+                },
+            ])
+            .with_example("SELECT CONCAT(first, ' ', last) FROM users"),
+    )
+    .build();
+```
+
 ## Test Utilities
 
 ### Mock Catalog

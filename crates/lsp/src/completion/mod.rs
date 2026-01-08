@@ -41,7 +41,7 @@ pub mod scopes;
 use std::collections::HashSet;
 use std::sync::Arc;
 use tower_lsp::lsp_types::{CompletionItem, Position};
-use unified_sql_lsp_catalog::Catalog;
+use unified_sql_lsp_catalog::{Catalog, FunctionType};
 
 use crate::completion::catalog_integration::CatalogCompletionFetcher;
 use crate::completion::context::{CompletionContext, detect_completion_context};
@@ -146,6 +146,9 @@ impl CompletionEngine {
                             .await?;
                     }
 
+                    // Fetch functions from catalog (all types for SELECT)
+                    let functions = self.catalog_fetcher.list_functions().await?;
+
                     // Resolve qualifier if present to filter tables
                     let tables_to_render = if let Some(q) = &qualifier {
                         // Resolve qualifier to actual table
@@ -167,10 +170,14 @@ impl CompletionEngine {
                         scope.tables.clone()
                     };
 
-                    // Render completion items
+                    // Render completion items (both columns and functions)
                     let force_qualifier = qualifier.is_some();
-                    let items =
+                    let mut items =
                         CompletionRenderer::render_columns(&tables_to_render, force_qualifier);
+
+                    // Add function completion items (no filter needed for SELECT)
+                    let function_items = CompletionRenderer::render_functions(&functions, None);
+                    items.extend(function_items);
 
                     Ok(Some(items))
                 } else {
@@ -202,6 +209,9 @@ impl CompletionEngine {
                             .await?;
                     }
 
+                    // Fetch functions from catalog (all types for WHERE)
+                    let functions = self.catalog_fetcher.list_functions().await?;
+
                     // Resolve qualifier if present to filter tables
                     let tables_to_render = if let Some(q) = &qualifier {
                         // Resolve qualifier to actual table
@@ -222,13 +232,17 @@ impl CompletionEngine {
                         scope.tables.clone()
                     };
 
-                    // Render completion items
+                    // Render completion items (both columns and functions)
                     let force_qualifier = qualifier.is_some();
                     let items =
                         CompletionRenderer::render_columns(&tables_to_render, force_qualifier);
 
                     // Filter out wildcard (*) for WHERE clause (not relevant)
-                    let items: Vec<_> = items.into_iter().filter(|i| i.label != "*").collect();
+                    let mut items: Vec<_> = items.into_iter().filter(|i| i.label != "*").collect();
+
+                    // Add function completion items (no filter needed for WHERE)
+                    let function_items = CompletionRenderer::render_functions(&functions, None);
+                    items.extend(function_items);
 
                     Ok(Some(items))
                 } else {
@@ -270,14 +284,22 @@ impl CompletionEngine {
                     }
                 };
 
+                // Fetch functions from catalog (scalar functions only for JOINs)
+                let functions = self.catalog_fetcher.list_functions().await?;
+
                 // Always force qualification for JOINs (best practice)
                 let force_qualifier = true;
 
                 // Render with PK/FK prioritization
-                let items = CompletionRenderer::render_join_columns(
+                let mut items = CompletionRenderer::render_join_columns(
                     &[left_table_symbol, right_table_symbol],
                     force_qualifier,
                 );
+
+                // Add function completion items (scalar functions only for JOINs)
+                let function_items =
+                    CompletionRenderer::render_functions(&functions, Some(FunctionType::Scalar));
+                items.extend(function_items);
 
                 Ok(Some(items))
             }
