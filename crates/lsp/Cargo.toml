@@ -7,6 +7,10 @@ license.workspace = true
 repository.workspace = true
 description = "LSP server implementation for Unified SQL LSP"
 
+[[bin]]
+name = "unified-sql-lsp"
+path = "src/bin/main.rs"
+
 [dependencies]
 # Workspace dependencies
 serde = { workspace = true }
