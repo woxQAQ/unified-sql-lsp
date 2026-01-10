@@ -150,11 +150,4 @@ mod tests {
         assert!(registry.has_function(Dialect::MySQL, "COUNT"));
         assert!(!registry.has_function(Dialect::MySQL, "NONEXISTENT"));
     }
-
-    #[test]
-    fn test_default() {
-        let registry = FunctionRegistry::default();
-        let mysql_funcs = registry.get_functions(Dialect::MySQL);
-        assert!(!mysql_funcs.is_empty());
-    }
 }

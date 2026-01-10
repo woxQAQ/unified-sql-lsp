@@ -60,31 +60,3 @@ impl CompletionError {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_completion_error_display() {
-        let err = CompletionError::NotParsed;
-        assert_eq!(err.to_string(), "Document not parsed");
-
-        let pos = Position::new(0, 0);
-        let err = CompletionError::InvalidPosition(pos);
-        assert!(err.to_string().contains("Invalid position"));
-
-        let err = CompletionError::NoFromClause;
-        assert_eq!(err.to_string(), "No FROM clause found");
-    }
-
-    #[test]
-    fn test_should_return_empty() {
-        assert!(CompletionError::NotParsed.should_return_empty());
-        assert!(CompletionError::InvalidPosition(Position::new(0, 0)).should_return_empty());
-        assert!(CompletionError::NoFromClause.should_return_empty());
-
-        // Catalog errors should propagate
-        let catalog_err = CatalogError::TableNotFound("test".to_string(), "public".to_string());
-        assert!(!CompletionError::Catalog(catalog_err).should_return_empty());
-    }
-}

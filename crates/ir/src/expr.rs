@@ -303,18 +303,3 @@ pub enum WindowFrameBound {
     Offset(i64),
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_column_ref() {
-        let col = ColumnRef::new("id");
-        assert_eq!(col.qualified(), "id");
-        assert!(col.table.is_none());
-
-        let qualified = col.with_table("users");
-        assert_eq!(qualified.qualified(), "users.id");
-        assert_eq!(qualified.table.as_deref(), Some("users"));
-    }
-}

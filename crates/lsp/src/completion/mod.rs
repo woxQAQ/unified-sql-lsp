@@ -325,13 +325,6 @@ mod tests {
         document
     }
 
-    #[test]
-    fn test_completion_engine_new() {
-        // This test requires a catalog, which we'd mock in real tests
-        // Placeholder to show module structure
-        assert!(true);
-    }
-
     #[tokio::test]
     async fn test_qualified_column_completion_with_table_name() {
         use unified_sql_lsp_catalog::{DataType, TableMetadata};

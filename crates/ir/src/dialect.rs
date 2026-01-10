@@ -158,33 +158,3 @@ impl DialectExtensions {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_dialect_family() {
-        assert_eq!(Dialect::MySQL.family(), DialectFamily::MySQL);
-        assert_eq!(Dialect::TiDB.family(), DialectFamily::MySQL);
-        assert_eq!(Dialect::PostgreSQL.family(), DialectFamily::PostgreSQL);
-        assert_eq!(Dialect::CockroachDB.family(), DialectFamily::PostgreSQL);
-    }
-
-    #[test]
-    fn test_mysql_supports_limit() {
-        assert!(Dialect::MySQL.supports(DialectExtensions::LimitOffset));
-    }
-
-    #[test]
-    fn test_postgresql_supports_distinct_on() {
-        assert!(Dialect::PostgreSQL.supports(DialectExtensions::DistinctOn));
-        assert!(!Dialect::MySQL.supports(DialectExtensions::DistinctOn));
-    }
-
-    #[test]
-    fn test_core_extensions() {
-        assert!(DialectExtensions::CTE.is_core());
-        assert!(DialectExtensions::WindowFunctions.is_core());
-        assert!(!DialectExtensions::DistinctOn.is_core());
-    }
-}

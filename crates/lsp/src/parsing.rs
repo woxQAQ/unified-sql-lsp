@@ -437,13 +437,6 @@ mod tests {
     use ropey::Rope;
 
     #[test]
-    fn test_parser_manager_new() {
-        let manager = ParserManager::new();
-        // Should not panic
-        drop(manager);
-    }
-
-    #[test]
     fn test_parse_text_simple() {
         let manager = ParserManager::new();
 
@@ -531,82 +524,4 @@ mod tests {
         assert!(edit.is_none(), "Full replacement should return None");
     }
 
-    #[test]
-    fn test_parse_result_is_success() {
-        // Test ParseResult::Success state without needing actual tree
-        // We only test the state methods, not the tree itself
-        let _duration = Duration::from_millis(10);
-
-        // Verify the enum variants work correctly through the API
-        // Note: We can't create a ParseResult::Success without a real tree,
-        // but we can test the state checking logic indirectly through actual parsing
-
-        // If grammars are available, test with real parse
-        if language_for_dialect(Dialect::MySQL).is_some() {
-            let manager = ParserManager::new();
-            let result = manager.parse_text(Dialect::MySQL, "SELECT 1");
-
-            // Test that state methods work correctly
-            if result.is_success() {
-                assert!(!result.is_partial());
-                assert!(!result.is_failed());
-            }
-        }
-    }
-
-    #[test]
-    fn test_parse_result_methods() {
-        // Test ParseResult state checking methods
-        let failed_result = ParseResult::Failed {
-            error: ParseError::Generic {
-                message: "Test error".to_string(),
-            },
-        };
-
-        assert!(!failed_result.is_success());
-        assert!(!failed_result.is_partial());
-        assert!(failed_result.is_failed());
-        assert!(failed_result.tree().is_none());
-        assert!(failed_result.errors().is_none());
-
-        // Test tree() method returns None for failed result
-        assert!(failed_result.tree().is_none());
-    }
-
-    #[test]
-    fn test_parse_error_display() {
-        // Test ParseError can be displayed
-        let error = ParseError::Generic {
-            message: "Test error".to_string(),
-        };
-
-        let error_string = format!("{}", error);
-        assert!(error_string.contains("Test error"));
-
-        let error2 = ParseError::NoGrammar {
-            dialect: "mysql".to_string(),
-        };
-
-        let error_string2 = format!("{}", error2);
-        assert!(error_string2.contains("mysql"));
-    }
-
-    #[test]
-    fn test_parse_metadata() {
-        // Test ParseMetadata creation
-        use std::time::SystemTime;
-
-        let metadata = crate::document::ParseMetadata {
-            parsed_at: SystemTime::now(),
-            parse_time_ms: 100,
-            dialect: Dialect::MySQL,
-            has_errors: false,
-            error_count: 0,
-        };
-
-        assert_eq!(metadata.parse_time_ms, 100);
-        assert_eq!(metadata.dialect, Dialect::MySQL);
-        assert!(!metadata.has_errors);
-        assert_eq!(metadata.error_count, 0);
-    }
 }

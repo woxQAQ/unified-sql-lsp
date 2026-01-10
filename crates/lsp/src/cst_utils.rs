@@ -250,20 +250,4 @@ mod tests {
         assert_eq!(pos.line, 0);
         assert_eq!(pos.character, 0);
     }
-
-    #[test]
-    fn test_extract_node_text() {
-        let _source = "SELECT id FROM users";
-
-        // This would need a real tree-sitter node for a full test
-        // Just verify the function compiles correctly
-        assert!(true);
-    }
-
-    #[test]
-    fn test_extract_identifier_name() {
-        // This would need a real tree-sitter node for a full test
-        // Just verify the function compiles correctly
-        assert!(true);
-    }
 }

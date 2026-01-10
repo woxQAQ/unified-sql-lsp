@@ -750,22 +750,6 @@ impl LanguageServer for LspBackend {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn test_backend_new() {
-        // Create a mock client for testing
-        // Note: tower_lsp::Client cannot be directly instantiated,
-        // so in real tests we would use dependency injection
-        // This is a placeholder test structure
-    }
-
-    // More comprehensive tests would require:
-    // - Mock LSP client
-    // - Mock executor
-    // - Integration test framework
-    // These will be added in TEST-002
-}
 
 /// LSP backend errors
 ///

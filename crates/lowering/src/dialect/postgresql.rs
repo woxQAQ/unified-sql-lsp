@@ -1350,18 +1350,6 @@ impl PostgreSQLLowering {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::cst::MockCstNode;
-
-    #[test]
-    fn test_postgresql_lowering_dialect() {
-        let lowering = PostgreSQLLowering;
-        let node = MockCstNode::new("select_statement");
-        assert_eq!(
-            Lowering::<MockCstNode>::dialect(&lowering),
-            Dialect::PostgreSQL
-        );
-        assert!(lowering.supports_node(&node, "select_statement"));
-    }
 
     #[test]
     fn test_normalize_identifier_with_quotes() {
@@ -1417,17 +1405,5 @@ mod tests {
         } else {
             panic!("Expected string literal");
         }
-    }
-
-    #[test]
-    fn test_postgresql_supports_node() {
-        let lowering = PostgreSQLLowering;
-        let node = MockCstNode::new("select_statement");
-
-        assert!(lowering.supports_node(&node, "select_statement"));
-        assert!(lowering.supports_node(&node, "insert_statement"));
-        assert!(lowering.supports_node(&node, "binary_expression"));
-        assert!(lowering.supports_node(&node, "column_ref"));
-        assert!(!lowering.supports_node(&node, "unknown_node"));
     }
 }

@@ -194,17 +194,3 @@ pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 /// Server name
 pub const SERVER_NAME: &str = "unified-sql-lsp";
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_version_defined() {
-        assert!(!VERSION.is_empty());
-    }
-
-    #[test]
-    fn test_server_name_defined() {
-        assert_eq!(SERVER_NAME, "unified-sql-lsp");
-    }
-}

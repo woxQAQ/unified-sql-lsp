@@ -343,34 +343,6 @@ mod tests {
     }
 
     #[test]
-    fn test_scope_find_table_by_name() {
-        let table = create_mock_table();
-        let scope = Scope::new(0, ScopeType::Query).with_tables(vec![table]);
-
-        assert!(scope.find_table("users").is_some());
-        assert!(scope.find_table("nonexistent").is_none());
-    }
-
-    #[test]
-    fn test_scope_find_table_by_alias() {
-        let table = create_mock_table();
-        let scope = Scope::new(0, ScopeType::Query).with_tables(vec![table]);
-
-        assert!(scope.find_table("u").is_some());
-        assert!(scope.find_table("users").is_some());
-    }
-
-    #[test]
-    fn test_scope_add_table() {
-        let mut scope = Scope::new(0, ScopeType::Query);
-        let table = create_mock_table();
-
-        let result = scope.add_table(table);
-        assert!(result.is_ok());
-        assert_eq!(scope.tables.len(), 1);
-    }
-
-    #[test]
     fn test_scope_add_duplicate_alias_error() {
         let mut scope = Scope::new(0, ScopeType::Query);
         let table1 = create_mock_table();

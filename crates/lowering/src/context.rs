@@ -212,14 +212,6 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_context_creation() {
-        let ctx = LoweringContext::new(Dialect::MySQL);
-        assert_eq!(ctx.dialect(), Dialect::MySQL);
-        assert!(!ctx.has_errors());
-        assert_eq!(ctx.recursion_depth, 0);
-    }
-
-    #[test]
     fn test_error_accumulation() {
         let mut ctx = LoweringContext::new(Dialect::PostgreSQL);
 

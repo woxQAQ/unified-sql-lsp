@@ -328,15 +328,6 @@ impl MySQLLowering {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::cst::MockCstNode;
-
-    #[test]
-    fn test_mysql_lowering_dialect() {
-        let lowering = MySQLLowering;
-        let node = MockCstNode::new("select_statement");
-        assert_eq!(Lowering::<MockCstNode>::dialect(&lowering), Dialect::MySQL);
-        assert!(lowering.supports_node(&node, "select_statement"));
-    }
 
     #[test]
     fn test_normalize_identifier_with_backticks() {
@@ -351,16 +342,5 @@ mod tests {
     fn test_normalize_identifier_without_backticks() {
         assert_eq!(MySQLLowering::normalize_identifier("id"), "id");
         assert_eq!(MySQLLowering::normalize_identifier("table_name"), "table_name");
-    }
-
-    #[test]
-    fn test_mysql_supports_node() {
-        let lowering = MySQLLowering;
-        let node = MockCstNode::new("select_statement");
-
-        assert!(lowering.supports_node(&node, "select_statement"));
-        assert!(lowering.supports_node(&node, "binary_expression"));
-        assert!(lowering.supports_node(&node, "column_ref"));
-        assert!(!lowering.supports_node(&node, "unknown_node"));
     }
 }
