@@ -135,54 +135,13 @@ impl CompletionEngine {
         // Now handle async operations with only owned data
         match ctx {
             CompletionContext::SelectProjection { qualifier, .. } => {
-                if let Some(mut scope_manager) = scope_manager {
-                    let scope_id = 0; // Main query scope
-
-                    // Populate all tables with columns from catalog
-                    {
-                        let scope = scope_manager.get_scope_mut(scope_id).unwrap();
-                        self.catalog_fetcher
-                            .populate_all_tables(&mut scope.tables)
-                            .await?;
-                    }
-
-                    // Fetch functions from catalog (all types for SELECT)
-                    let functions = self.catalog_fetcher.list_functions().await?;
-
-                    // Resolve qualifier if present to filter tables
-                    let tables_to_render = if let Some(q) = &qualifier {
-                        // Resolve qualifier to actual table
-                        let scope = scope_manager.get_scope(scope_id).unwrap();
-                        match scope.find_table(q) {
-                            Some(qualified_table) => {
-                                // Found the table - create filtered list with just this table
-                                vec![qualified_table.clone()]
-                            }
-                            None => {
-                                // Invalid qualifier - return empty completion
-                                // User might be typing a wrong table name
-                                return Ok(Some(vec![]));
-                            }
-                        }
-                    } else {
-                        // No qualifier - show all columns from all tables
-                        let scope = scope_manager.get_scope(scope_id).unwrap();
-                        scope.tables.clone()
-                    };
-
-                    // Render completion items (both columns and functions)
-                    let force_qualifier = qualifier.is_some();
-                    let mut items =
-                        CompletionRenderer::render_columns(&tables_to_render, force_qualifier);
-
-                    // Add function completion items (no filter needed for SELECT)
-                    let function_items = CompletionRenderer::render_functions(&functions, None);
-                    items.extend(function_items);
-
-                    Ok(Some(items))
-                } else {
-                    Ok(None)
-                }
+                self.complete_with_scope(
+                    &scope_manager,
+                    qualifier,
+                    false, // include_wildcard
+                    None,  // function_filter
+                )
+                .await
             }
             CompletionContext::FromClause => {
                 // Fetch all tables from catalog
@@ -198,56 +157,13 @@ impl CompletionEngine {
                 Ok(Some(items))
             }
             CompletionContext::WhereClause { qualifier } => {
-                if let Some(mut scope_manager) = scope_manager {
-                    let scope_id = 0; // Main query scope
-
-                    // Populate all tables with columns from catalog
-                    {
-                        let scope = scope_manager.get_scope_mut(scope_id).unwrap();
-                        self.catalog_fetcher
-                            .populate_all_tables(&mut scope.tables)
-                            .await?;
-                    }
-
-                    // Fetch functions from catalog (all types for WHERE)
-                    let functions = self.catalog_fetcher.list_functions().await?;
-
-                    // Resolve qualifier if present to filter tables
-                    let tables_to_render = if let Some(q) = &qualifier {
-                        // Resolve qualifier to actual table
-                        let scope = scope_manager.get_scope(scope_id).unwrap();
-                        match scope.find_table(q) {
-                            Some(qualified_table) => {
-                                // Found the table - create filtered list with just this table
-                                vec![qualified_table.clone()]
-                            }
-                            None => {
-                                // Invalid qualifier - return empty completion
-                                return Ok(Some(vec![]));
-                            }
-                        }
-                    } else {
-                        // No qualifier - show all columns from all tables
-                        let scope = scope_manager.get_scope(scope_id).unwrap();
-                        scope.tables.clone()
-                    };
-
-                    // Render completion items (both columns and functions)
-                    let force_qualifier = qualifier.is_some();
-                    let items =
-                        CompletionRenderer::render_columns(&tables_to_render, force_qualifier);
-
-                    // Filter out wildcard (*) for WHERE clause (not relevant)
-                    let mut items: Vec<_> = items.into_iter().filter(|i| i.label != "*").collect();
-
-                    // Add function completion items (no filter needed for WHERE)
-                    let function_items = CompletionRenderer::render_functions(&functions, None);
-                    items.extend(function_items);
-
-                    Ok(Some(items))
-                } else {
-                    Ok(None)
-                }
+                self.complete_with_scope(
+                    &scope_manager,
+                    qualifier,
+                    true, // exclude_wildcard
+                    None, // function_filter
+                )
+                .await
             }
             CompletionContext::JoinCondition {
                 left_table,
@@ -269,20 +185,17 @@ impl CompletionEngine {
                         }
                     };
 
-                let right_table_symbol = match self
-                    .catalog_fetcher
-                    .populate_single_table(&right_name)
-                    .await
-                {
-                    Ok(table) => table,
-                    Err(e) => {
-                        eprintln!(
-                            "Warning: Failed to load right table '{}': {}",
-                            right_name, e
-                        );
-                        return Ok(None);
-                    }
-                };
+                let right_table_symbol =
+                    match self.catalog_fetcher.populate_single_table(&right_name).await {
+                        Ok(table) => table,
+                        Err(e) => {
+                            eprintln!(
+                                "Warning: Failed to load right table '{}': {}",
+                                right_name, e
+                            );
+                            return Ok(None);
+                        }
+                    };
 
                 // Fetch functions from catalog (scalar functions only for JOINs)
                 let functions = self.catalog_fetcher.list_functions().await?;
@@ -305,6 +218,65 @@ impl CompletionEngine {
             }
             CompletionContext::Unknown => Ok(None),
         }
+    }
+
+    /// Shared completion logic for contexts with scope (SELECT/WHERE)
+    ///
+    /// This consolidates the duplicate logic between SelectProjection and WhereClause.
+    async fn complete_with_scope(
+        &self,
+        scope_manager: &Option<unified_sql_lsp_semantic::ScopeManager>,
+        qualifier: Option<String>,
+        exclude_wildcard: bool,
+        function_filter: Option<FunctionType>,
+    ) -> Result<Option<Vec<CompletionItem>>, CompletionError> {
+        let mut scope_manager = match scope_manager {
+            Some(manager) => manager.clone(),
+            None => return Ok(None),
+        };
+
+        let scope_id = 0; // Main query scope
+
+        // Populate all tables with columns from catalog
+        {
+            let scope = scope_manager.get_scope_mut(scope_id).unwrap();
+            self.catalog_fetcher
+                .populate_all_tables(&mut scope.tables)
+                .await?;
+        }
+
+        // Fetch functions from catalog
+        let functions = self.catalog_fetcher.list_functions().await?;
+
+        // Resolve qualifier if present to filter tables
+        let tables_to_render = match &qualifier {
+            Some(q) => {
+                let scope = scope_manager.get_scope(scope_id).unwrap();
+                match scope.find_table(q) {
+                    Some(qualified_table) => vec![qualified_table.clone()],
+                    None => return Ok(Some(vec![])), // Invalid qualifier
+                }
+            }
+            None => {
+                let scope = scope_manager.get_scope(scope_id).unwrap();
+                scope.tables.clone()
+            }
+        };
+
+        // Render completion items
+        let force_qualifier = qualifier.is_some();
+        let mut items = CompletionRenderer::render_columns(&tables_to_render, force_qualifier);
+
+        // Filter out wildcard if needed
+        if exclude_wildcard {
+            items.retain(|i| i.label != "*");
+        }
+
+        // Add function completion items
+        let function_items = CompletionRenderer::render_functions(&functions, function_filter);
+        items.extend(function_items);
+
+        Ok(Some(items))
     }
 }
 

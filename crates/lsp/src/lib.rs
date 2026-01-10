@@ -168,6 +168,7 @@ pub mod backend;
 pub mod catalog_manager;
 pub mod completion;
 pub mod config;
+pub mod cst_utils;
 pub mod definition;
 pub mod document;
 pub mod parsing;

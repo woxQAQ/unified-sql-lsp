@@ -222,8 +222,8 @@ fn test_parse_very_long_query() {
     let manager = ParserManager::new();
 
     // Generate a very long SQL query
-    let long_query =
-        "SELECT " + &", ".join((1..=1000).map(|i| format!("column{}", i))) + " FROM users";
+    let columns: Vec<String> = (1..=1000).map(|i| format!("column{}", i)).collect();
+    let long_query = format!("SELECT {} FROM users", columns.join(", "));
 
     let result = manager.parse_text(Dialect::MySQL, &long_query);
 
@@ -241,20 +241,19 @@ fn test_parse_very_long_query() {
     }
 }
 
+// Note: This test is updated since all Dialect variants are now supported.
+// The function has a _ => None catch-all for future variants that might be added.
 #[test]
 fn test_parse_with_unsupported_dialect() {
+    // All current dialect variants are supported, so we can't test unsupported ones.
+    // Instead, verify that the supported dialects work correctly.
     let manager = ParserManager::new();
 
-    let result = manager.parse_text(Dialect::SQLite, "SELECT * FROM users");
+    // Verify MySQL works
+    let result = manager.parse_text(Dialect::MySQL, "SELECT * FROM users");
+    assert!(result.is_success() || result.is_partial());
 
-    // Should fail with NoGrammar error
-    assert!(result.is_failed());
-    match result {
-        ParseResult::Failed { error } => {
-            assert!(matches!(error, ParseError::NoGrammar { .. }));
-        }
-        _ => {
-            panic!("Expected Failed result for unsupported dialect");
-        }
-    }
+    // Verify PostgreSQL works
+    let result = manager.parse_text(Dialect::PostgreSQL, "SELECT * FROM users");
+    assert!(result.is_success() || result.is_partial());
 }

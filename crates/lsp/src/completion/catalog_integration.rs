@@ -127,9 +127,8 @@ impl CatalogCompletionFetcher {
         tables: &mut [TableSymbol],
     ) -> Result<(), CompletionError> {
         for table in tables.iter_mut() {
-            // Skip tables that fail to load
+            // Skip tables that fail to load - log warning but continue
             if let Err(e) = self.populate_table_columns(table).await {
-                // Log error but continue with other tables
                 eprintln!(
                     "Warning: Failed to load columns for table '{}': {}",
                     table.table_name, e

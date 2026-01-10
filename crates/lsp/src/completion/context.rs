@@ -9,6 +9,7 @@
 //! It analyzes the tree-sitter CST to determine what kind of
 //! completion should be provided based on cursor position.
 
+use crate::cst_utils::{extract_identifier_name, find_node_at_position};
 use tower_lsp::lsp_types::Position;
 use tree_sitter::Node;
 
@@ -164,34 +165,6 @@ pub fn detect_completion_context(
     CompletionContext::Unknown
 }
 
-/// Find the node at the given position
-fn find_node_at_position<'a>(root: &'a Node, position: Position, source: &str) -> Option<Node<'a>> {
-    let byte_offset = position_to_byte_offset(source, position);
-    // descendant_for_byte_range(start, end) returns the smallest node that
-    // completely spans the range [start, end]. When start == end, it finds
-    // the node at that exact byte position.
-    root.descendant_for_byte_range(byte_offset, byte_offset)
-}
-
-/// Convert LSP Position to byte offset
-fn position_to_byte_offset(source: &str, position: Position) -> usize {
-    let lines: Vec<&str> = source.lines().collect();
-    // LSP Position uses u32 for line/character (per LSP specification),
-    // but we need usize for indexing into lines array.
-    // The cast is safe because cursor positions are always within document bounds.
-    let mut byte_offset = 0;
-
-    for (i, line) in lines.iter().enumerate() {
-        if i == position.line as usize {
-            byte_offset += position.character as usize;
-            break;
-        }
-        byte_offset += line.len() + 1; // +1 for newline character
-    }
-
-    byte_offset
-}
-
 /// Check if the position is within the SELECT projection list
 fn is_in_projection(select_node: &Node, position: Position) -> bool {
     // The projection is typically the first child after "SELECT" keyword
@@ -228,7 +201,7 @@ fn extract_tables_from_from_clause(select_node: &Node, source: &str) -> Vec<Stri
 fn extract_table_names_recursive(node: &Node, source: &str, tables: &mut Vec<String>) {
     match node.kind() {
         "table_reference" | "table_name" => {
-            if let Some(name) = extract_identifier(node, source) {
+            if let Some(name) = extract_identifier_name(node, source) {
                 tables.push(name);
             }
         }
@@ -239,13 +212,6 @@ fn extract_table_names_recursive(node: &Node, source: &str, tables: &mut Vec<Str
             }
         }
     }
-}
-
-/// Extract identifier text from a node
-fn extract_identifier(node: &Node, source: &str) -> Option<String> {
-    let bytes = node.byte_range();
-    let text = &source[bytes];
-    Some(text.trim().to_string())
 }
 
 /// Extract table qualifier if cursor is after a dot
@@ -288,7 +254,7 @@ fn extract_join_tables(join_node: &Node, source: &str) -> (Option<String>, Optio
                 found_join_keyword = true;
             }
             "table_name" | "table_reference" if found_join_keyword => {
-                if let Some(name) = extract_identifier(&child, source) {
+                if let Some(name) = extract_identifier_name(&child, source) {
                     right_table = Some(name);
                     break;
                 }

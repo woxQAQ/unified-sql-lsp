@@ -31,7 +31,8 @@
 //! - `DefinitionFinder`: Finds symbol definitions from CST
 //! - Helper functions for CST traversal and text extraction
 
-use tower_lsp::lsp_types::{Location, Position, Range, Url};
+use crate::cst_utils::{extract_identifier_name, extract_node_text, find_node_at_position, node_to_range};
+use tower_lsp::lsp_types::{Location, Position, Url};
 use tree_sitter::{Node, TreeCursor};
 
 /// Iterator over a node's children
@@ -286,102 +287,6 @@ impl DefinitionFinder {
     }
 }
 
-/// Find the node at the given position
-///
-/// This is a copy of the function from completion/context.rs to avoid
-/// circular dependencies between modules.
-fn find_node_at_position<'a>(root: &'a Node, position: Position, source: &str) -> Option<Node<'a>> {
-    let byte_offset = position_to_byte_offset(source, position);
-    // descendant_for_byte_range(start, end) returns the smallest node that
-    // completely spans the range [start, end]. When start == end, it finds
-    // the node at that exact byte position.
-    root.descendant_for_byte_range(byte_offset, byte_offset)
-}
-
-/// Convert LSP Position to byte offset
-///
-/// This is a copy of the function from completion/context.rs.
-fn position_to_byte_offset(source: &str, position: Position) -> usize {
-    let lines: Vec<&str> = source.lines().collect();
-    let mut byte_offset = 0;
-
-    for (i, line) in lines.iter().enumerate() {
-        if i == position.line as usize {
-            byte_offset += position.character as usize;
-            break;
-        }
-        byte_offset += line.len() + 1; // +1 for newline character
-    }
-
-    byte_offset
-}
-
-/// Convert a tree-sitter node to LSP Range
-fn node_to_range(node: &Node, source: &str) -> Range {
-    let start = byte_to_position(node.start_byte(), source);
-    let end = byte_to_position(node.end_byte(), source);
-    Range { start, end }
-}
-
-/// Convert byte offset to LSP Position (UTF-8 aware)
-///
-/// This function correctly handles:
-/// - Multi-line text
-/// - UTF-8 characters
-/// - 0-based line and character numbers (LSP standard)
-fn byte_to_position(byte_offset: usize, source: &str) -> Position {
-    if source.is_empty() {
-        return Position::new(0, 0);
-    }
-
-    // Clamp byte_offset to source length
-    let safe_byte_offset = byte_offset.min(source.len());
-
-    let mut line = 0;
-    let mut char_in_line = 0;
-
-    // Use char_indices() to correctly handle UTF-8
-    for (byte_idx, ch) in source.char_indices() {
-        // If we've reached or passed the target byte offset
-        if byte_idx >= safe_byte_offset {
-            break;
-        }
-
-        // Count characters and lines
-        if ch == '\n' {
-            line += 1;
-            char_in_line = 0;
-        } else {
-            char_in_line += 1;
-        }
-    }
-
-    Position::new(line as u32, char_in_line as u32)
-}
-
-/// Extract text from a node
-fn extract_node_text(node: &Node, source: &str) -> String {
-    let bytes = node.byte_range();
-    source[bytes].to_string()
-}
-
-/// Extract identifier name from a node
-fn extract_identifier_name(node: &Node, source: &str) -> Option<String> {
-    match node.kind() {
-        "table_name" | "column_name" | "identifier" => Some(extract_node_text(node, source)),
-        _ => {
-            // Try to find identifier child
-            if let Some(child) =
-                node.find_child(|c| matches!(c.kind(), "table_name" | "column_name" | "identifier"))
-            {
-                Some(extract_node_text(&child, source))
-            } else {
-                None
-            }
-        }
-    }
-}
-
 /// Extract table name from table_reference node
 fn extract_table_name(node: &Node, source: &str) -> Option<String> {
     if let Some(child) = node.find_child(|c| matches!(c.kind(), "table_name" | "identifier")) {
@@ -449,23 +354,31 @@ fn extract_alias(node: &Node, source: &str) -> Option<String> {
 
 // Test helper functions
 #[cfg(test)]
-fn find_table_name_node(root_node: &Node) -> Option<Node> {
-    let select = root_node.find_child(|n| n.kind() == "select_statement")?;
-    let from_clause = select.find_child(|n| n.kind() == "from_clause")?;
-    let table_ref = from_clause.find_child(|n| n.kind() == "table_reference")?;
-    table_ref.find_child(|n| n.kind() == "table_name")
+fn find_table_name_node<'a>(root_node: &Node<'a>) -> Option<Node<'a>> {
+    let select = root_node.children(&mut root_node.walk())
+        .find(|n| n.kind() == "select_statement")?;
+    let from_clause = select.children(&mut select.walk())
+        .find(|n| n.kind() == "from_clause")?;
+    let table_ref = from_clause.children(&mut from_clause.walk())
+        .find(|n| n.kind() == "table_reference")?;
+    table_ref.children(&mut table_ref.walk())
+        .find(|n| n.kind() == "table_name")
 }
 
 #[cfg(test)]
-fn find_table_reference_node(root_node: &Node) -> Option<Node> {
-    let select = root_node.find_child(|n| n.kind() == "select_statement")?;
-    let from_clause = select.find_child(|n| n.kind() == "from_clause")?;
-    from_clause.find_child(|n| n.kind() == "table_reference")
+fn find_table_reference_node<'a>(root_node: &Node<'a>) -> Option<Node<'a>> {
+    let select = root_node.children(&mut root_node.walk())
+        .find(|n| n.kind() == "select_statement")?;
+    let from_clause = select.children(&mut select.walk())
+        .find(|n| n.kind() == "from_clause")?;
+    from_clause.children(&mut from_clause.walk())
+        .find(|n| n.kind() == "table_reference")
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::cst_utils::{byte_to_position, position_to_byte_offset};
     use crate::parsing::{ParseResult, ParserManager};
     use unified_sql_lsp_ir::Dialect;
 
@@ -648,12 +561,12 @@ mod tests {
         let root_node = tree.root_node();
 
         // Find a column node using recursive walk
-        fn find_column_node_recursive(node: &tree_sitter::Node) -> Option<tree_sitter::Node> {
+        fn find_column_node_recursive(node: tree_sitter::Node) -> Option<tree_sitter::Node> {
             if node.kind() == "column_name" || node.kind() == "identifier" {
                 return Some(node.clone());
             }
-            for child in node.iter_children() {
-                if let Some(found) = find_column_node_recursive(&child) {
+            for child in node.children(&mut node.walk()) {
+                if let Some(found) = find_column_node_recursive(child) {
                     return Some(found);
                 }
             }
@@ -661,7 +574,7 @@ mod tests {
         }
 
         let column_node =
-            find_column_node_recursive(&root_node).expect("Could not find column node for testing");
+            find_column_node_recursive(root_node.clone()).expect("Could not find column node for testing");
 
         let result = find_parent_select(&column_node);
         assert!(result.is_some(), "Should find parent SELECT statement");

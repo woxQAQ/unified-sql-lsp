@@ -5,39 +5,33 @@
 
 //! Multi-dialect test matrix
 //!
-//! Macro-based testing across all supported dialects to ensure consistency.
+//! Tests across all supported dialects to ensure consistency.
 
 use unified_sql_lsp_ir::Dialect;
 use unified_sql_lsp_lsp::parsing::ParserManager;
 
-// Macro to run tests across all supported dialects
-macro_rules! test_all_dialects {
-    ($test_name:ident, $test_body:expr) => {
-        #[test]
-        fn $test_name_mysql() {
-            let dialect = Dialect::MySQL;
-            $test_body(dialect);
-        }
-
-        #[test]
-        fn $test_name_postgresql() {
-            let dialect = Dialect::PostgreSQL;
-            $test_body(dialect);
-        }
-    };
-}
-
 // Test basic parsing across dialects
-test_all_dialects!(test_parse_basic_select, |dialect| {
+#[test]
+fn test_parse_basic_select_mysql() {
     let manager = ParserManager::new();
-    let result = manager.parse_text(dialect, "SELECT id FROM users");
+    let result = manager.parse_text(Dialect::MySQL, "SELECT id FROM users");
 
     assert!(
         !result.is_failed(),
-        "Failed to parse for dialect {:?}",
-        dialect
+        "Failed to parse for dialect MySQL",
     );
-});
+}
+
+#[test]
+fn test_parse_basic_select_postgresql() {
+    let manager = ParserManager::new();
+    let result = manager.parse_text(Dialect::PostgreSQL, "SELECT id FROM users");
+
+    assert!(
+        !result.is_failed(),
+        "Failed to parse for dialect PostgreSQL",
+    );
+}
 
 // Test dialect-specific syntax
 #[test]
@@ -100,31 +94,64 @@ fn test_dialect_family_mapping() {
 }
 
 // Test JOIN syntax across dialects
-test_all_dialects!(test_parse_join, |dialect| {
+#[test]
+fn test_parse_join_mysql() {
     let manager = ParserManager::new();
     let result = manager.parse_text(
-        dialect,
+        Dialect::MySQL,
         "SELECT * FROM users u JOIN orders o ON u.id = o.user_id",
     );
 
     assert!(!result.is_failed());
-});
+}
 
-// Test aggregate functions across dialects
-test_all_dialects!(test_parse_aggregates, |dialect| {
-    let manager = ParserManager::new();
-    let result = manager.parse_text(dialect, "SELECT COUNT(*), AVG(amount) FROM orders");
-
-    assert!(!result.is_failed());
-});
-
-// Test WHERE clause across dialects
-test_all_dialects!(test_parse_where, |dialect| {
+#[test]
+fn test_parse_join_postgresql() {
     let manager = ParserManager::new();
     let result = manager.parse_text(
-        dialect,
+        Dialect::PostgreSQL,
+        "SELECT * FROM users u JOIN orders o ON u.id = o.user_id",
+    );
+
+    assert!(!result.is_failed());
+}
+
+// Test aggregate functions across dialects
+#[test]
+fn test_parse_aggregates_mysql() {
+    let manager = ParserManager::new();
+    let result = manager.parse_text(Dialect::MySQL, "SELECT COUNT(*), AVG(amount) FROM orders");
+
+    assert!(!result.is_failed());
+}
+
+#[test]
+fn test_parse_aggregates_postgresql() {
+    let manager = ParserManager::new();
+    let result = manager.parse_text(Dialect::PostgreSQL, "SELECT COUNT(*), AVG(amount) FROM orders");
+
+    assert!(!result.is_failed());
+}
+
+// Test WHERE clause across dialects
+#[test]
+fn test_parse_where_mysql() {
+    let manager = ParserManager::new();
+    let result = manager.parse_text(
+        Dialect::MySQL,
         "SELECT * FROM users WHERE active = true AND created_at > '2024-01-01'",
     );
 
     assert!(!result.is_failed());
-});
+}
+
+#[test]
+fn test_parse_where_postgresql() {
+    let manager = ParserManager::new();
+    let result = manager.parse_text(
+        Dialect::PostgreSQL,
+        "SELECT * FROM users WHERE active = true AND created_at > '2024-01-01'",
+    );
+
+    assert!(!result.is_failed());
+}

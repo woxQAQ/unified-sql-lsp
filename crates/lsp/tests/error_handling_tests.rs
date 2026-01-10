@@ -30,13 +30,18 @@ fn test_parse_with_invalid_sql() {
     }
 }
 
+// Note: This test is disabled since all Dialect variants are now supported.
+// The language_for_dialect function has a catch-all case that returns None
+// for future dialects that might be added to the enum but don't have grammar support yet.
 #[test]
 fn test_parse_with_no_grammar() {
     use unified_sql_grammar::language_for_dialect;
 
-    // Try to use an unsupported dialect
-    let lang = language_for_dialect(Dialect::SQLite);
-    assert!(lang.is_none(), "Expected no language for SQLite");
+    // All current dialect variants are supported, so we can't test unsupported ones.
+    // The function has a _ => None catch-all for future variants.
+    // We can verify the function works correctly by checking it returns Some for supported dialects.
+    assert!(language_for_dialect(Dialect::MySQL).is_some());
+    assert!(language_for_dialect(Dialect::PostgreSQL).is_some());
 }
 
 #[test]
@@ -75,8 +80,8 @@ fn test_parse_very_long_input() {
     let manager = ParserManager::new();
 
     // Generate a very long SQL query
-    let long_query =
-        "SELECT " + &", ".join((1..=1000).map(|i| format!("column{}", i))) + " FROM users";
+    let columns: Vec<String> = (1..=1000).map(|i| format!("column{}", i)).collect();
+    let long_query = format!("SELECT {} FROM users", columns.join(", "));
 
     let result = manager.parse_text(Dialect::MySQL, &long_query);
 

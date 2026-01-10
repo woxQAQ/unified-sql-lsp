@@ -55,7 +55,7 @@
 use crate::catalog_manager::CatalogManager;
 use crate::completion::CompletionEngine;
 use crate::config::EngineConfig;
-use crate::document::{DocumentError, DocumentStore, ParseMetadata};
+use crate::document::{Document, DocumentError, DocumentStore, ParseMetadata};
 use crate::symbols::{SymbolBuilder, SymbolCatalogFetcher, SymbolError, SymbolRenderer};
 use crate::sync::DocumentSync;
 use std::sync::Arc;
@@ -142,6 +142,80 @@ impl LspBackend {
         self.client
             .publish_diagnostics(uri, diagnostics, None)
             .await;
+    }
+
+    /// Parse document and update its tree in the store
+    ///
+    /// Shared helper for did_open and did_change handlers.
+    async fn parse_and_update_tree(&self, uri: &Url, document: &Document) {
+        let dialect = self.doc_sync.resolve_dialect(document);
+
+        match self.doc_sync.on_document_open(document) {
+            crate::parsing::ParseResult::Success { tree, parse_time } => {
+                info!("Document parsed successfully in {:?}", parse_time);
+                let metadata = ParseMetadata::new(parse_time.as_millis() as u64, dialect, false, 0);
+                if let Some(tree) = tree {
+                    if let Err(e) = self.documents.update_document_tree(uri, tree, metadata).await {
+                        error!("Failed to update document tree: {}", e);
+                    }
+                }
+            }
+            crate::parsing::ParseResult::Partial { tree, errors } => {
+                warn!("Document parsed with {} errors", errors.len());
+                let metadata = ParseMetadata::new(0, dialect, true, errors.len());
+                if let Some(tree) = tree {
+                    if let Err(e) = self.documents.update_document_tree(uri, tree, metadata).await {
+                        error!("Failed to update document tree: {}", e);
+                    }
+                }
+            }
+            crate::parsing::ParseResult::Failed { error } => {
+                error!("Failed to parse document: {}", error);
+            }
+        }
+    }
+
+    /// Parse document with incremental update support
+    ///
+    /// Used for did_change when we have an old tree for incremental parsing.
+    async fn parse_and_update_tree_incremental(
+        &self,
+        uri: &Url,
+        document: &Document,
+        old_tree: Option<&tree_sitter::Tree>,
+        changes: &[TextDocumentContentChangeEvent],
+    ) {
+        let dialect = self.doc_sync.resolve_dialect(document);
+
+        match self
+            .doc_sync
+            .on_document_change(document, old_tree, changes)
+        {
+            crate::parsing::ParseResult::Success { tree, parse_time } => {
+                info!("Document reparsed in {:?}", parse_time);
+                let metadata = ParseMetadata::new(parse_time.as_millis() as u64, dialect, false, 0);
+                if let Some(tree) = tree {
+                    if let Err(e) = self.documents.update_document_tree(uri, tree, metadata).await {
+                        error!("Failed to update document tree: {}", e);
+                    }
+                }
+            }
+            crate::parsing::ParseResult::Partial { tree, errors } => {
+                warn!("Document reparsed with {} errors", errors.len());
+                let metadata = ParseMetadata::new(0, dialect, true, errors.len());
+                if let Some(tree) = tree {
+                    if let Err(e) = self.documents.update_document_tree(uri, tree, metadata).await {
+                        error!("Failed to update document tree: {}", e);
+                    }
+                }
+            }
+            crate::parsing::ParseResult::Failed { error } => {
+                error!("Failed to reparse document: {}", error);
+                if let Err(e) = self.documents.clear_document_tree(uri).await {
+                    error!("Failed to clear document tree: {}", e);
+                }
+            }
+        }
     }
 }
 
@@ -283,51 +357,9 @@ impl LanguageServer for LspBackend {
                 self.log_message(&format!("Document opened: {}", uri), MessageType::INFO)
                     .await;
 
-                // Trigger parsing
+                // Trigger parsing using shared helper
                 if let Some(document) = self.documents.get_document(&uri).await {
-                    match self.doc_sync.on_document_open(&document) {
-                        crate::parsing::ParseResult::Success { tree, parse_time } => {
-                            info!("Document parsed successfully in {:?}", parse_time);
-                            let metadata = ParseMetadata::new(
-                                parse_time.as_millis() as u64,
-                                self.doc_sync.resolve_dialect(&document),
-                                false,
-                                0,
-                            );
-                            if let Some(tree) = tree {
-                                if let Err(e) = self
-                                    .documents
-                                    .update_document_tree(&uri, tree, metadata)
-                                    .await
-                                {
-                                    error!("Failed to update document tree: {}", e);
-                                }
-                            }
-                        }
-                        crate::parsing::ParseResult::Partial { tree, errors } => {
-                            warn!("Document parsed with {} errors", errors.len());
-                            let metadata = ParseMetadata::new(
-                                0, // parse_time not available in Partial
-                                self.doc_sync.resolve_dialect(&document),
-                                true,
-                                errors.len(),
-                            );
-                            if let Some(tree) = tree {
-                                if let Err(e) = self
-                                    .documents
-                                    .update_document_tree(&uri, tree, metadata)
-                                    .await
-                                {
-                                    error!("Failed to update document tree: {}", e);
-                                }
-                            }
-                            // TODO: (DIAG-002) Publish diagnostics
-                        }
-                        crate::parsing::ParseResult::Failed { error } => {
-                            error!("Failed to parse document: {}", error);
-                            // Document remains usable, just without tree
-                        }
-                    }
+                    self.parse_and_update_tree(&uri, &document).await;
                 }
             }
             Err(e) => {
@@ -356,11 +388,10 @@ impl LanguageServer for LspBackend {
             changes.len()
         );
 
-        // Get old tree before update
+        // Get old tree before update for incremental parsing
         let old_document = self.documents.get_document(&uri).await;
         let old_tree: Option<tree_sitter::Tree> = old_document.as_ref().and_then(|d| {
             d.tree().as_ref().and_then(|arc_mutex| {
-                // Try to lock and clone the tree
                 arc_mutex.try_lock().ok().map(|guard| (*guard).clone())
             })
         });
@@ -368,56 +399,15 @@ impl LanguageServer for LspBackend {
         // Update document in store
         match self.documents.update_document(&identifier, &changes).await {
             Ok(()) => {
-                // Trigger re-parsing
+                // Trigger re-parsing using shared helper
                 if let Some(document) = self.documents.get_document(&uri).await {
-                    match self
-                        .doc_sync
-                        .on_document_change(&document, old_tree.as_ref(), &changes)
-                    {
-                        crate::parsing::ParseResult::Success { tree, parse_time } => {
-                            info!("Document reparsed in {:?}", parse_time);
-                            let metadata = ParseMetadata::new(
-                                parse_time.as_millis() as u64,
-                                self.doc_sync.resolve_dialect(&document),
-                                false,
-                                0,
-                            );
-                            if let Some(tree) = tree {
-                                if let Err(e) = self
-                                    .documents
-                                    .update_document_tree(&uri, tree, metadata)
-                                    .await
-                                {
-                                    error!("Failed to update document tree: {}", e);
-                                }
-                            }
-                        }
-                        crate::parsing::ParseResult::Partial { tree, errors } => {
-                            warn!("Document reparsed with {} errors", errors.len());
-                            let metadata = ParseMetadata::new(
-                                0,
-                                self.doc_sync.resolve_dialect(&document),
-                                true,
-                                errors.len(),
-                            );
-                            if let Some(tree) = tree {
-                                if let Err(e) = self
-                                    .documents
-                                    .update_document_tree(&uri, tree, metadata)
-                                    .await
-                                {
-                                    error!("Failed to update document tree: {}", e);
-                                }
-                            }
-                            // TODO: (DIAG-002) Publish diagnostics
-                        }
-                        crate::parsing::ParseResult::Failed { error } => {
-                            error!("Failed to reparse document: {}", error);
-                            if let Err(e) = self.documents.clear_document_tree(&uri).await {
-                                error!("Failed to clear document tree: {}", e);
-                            }
-                        }
-                    }
+                    self.parse_and_update_tree_incremental(
+                        &uri,
+                        &document,
+                        old_tree.as_ref(),
+                        &changes,
+                    )
+                    .await;
                 }
             }
             Err(DocumentError::DocumentNotFound(uri)) => {

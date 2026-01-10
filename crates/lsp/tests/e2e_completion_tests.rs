@@ -8,7 +8,7 @@
 //! Tests the full pipeline from parsing to completion.
 
 use std::sync::Arc;
-use tower_lsp::lsp_types::{Position, Url};
+use tower_lsp::lsp_types::{Position, Range, TextDocumentContentChangeEvent, Url};
 use unified_sql_lsp_catalog::{ColumnMetadata, DataType, TableMetadata};
 use unified_sql_lsp_ir::Dialect;
 use unified_sql_lsp_lsp::completion::CompletionEngine;
@@ -79,7 +79,7 @@ async fn test_e2e_completion_from_clause() {
 #[tokio::test]
 async fn test_e2e_completion_with_mysql_syntax() {
     let catalog = MockCatalogBuilder::new()
-        .add_table(
+        .with_table(
             TableMetadata::new("users", "myapp")
                 .with_columns(vec![ColumnMetadata::new("id", DataType::Integer)]),
         )
@@ -101,7 +101,7 @@ async fn test_e2e_completion_with_mysql_syntax() {
 #[tokio::test]
 async fn test_e2e_completion_with_postgresql_syntax() {
     let catalog = MockCatalogBuilder::new()
-        .add_table(
+        .with_table(
             TableMetadata::new("users", "myapp")
                 .with_columns(vec![ColumnMetadata::new("id", DataType::Integer)]),
         )
@@ -128,7 +128,7 @@ async fn test_e2e_document_sync_flow() {
     let sync = unified_sql_lsp_lsp::sync::DocumentSync::new(config);
 
     let uri = Url::parse("file:///test.sql").unwrap();
-    let mut doc = Document::new(uri, "SELECT 1".to_string(), 1, "mysql".to_string());
+    let doc = Document::new(uri, "SELECT 1".to_string(), 1, "mysql".to_string());
 
     // Open document
     let open_result = sync.on_document_open(&doc);
@@ -237,7 +237,7 @@ async fn test_e2e_completion_where_clause_multiple_tables() {
         .with_table(TableMetadata::new("orders", "public").with_columns(vec![
             ColumnMetadata::new("id", DataType::Integer),
             ColumnMetadata::new("user_id", DataType::Integer),
-            ColumnMetadata::new("total", DataType::Decimal(None, None)),
+            ColumnMetadata::new("total", DataType::Decimal),
         ]))
         .build();
 
@@ -281,7 +281,7 @@ async fn test_e2e_completion_where_clause_invalid_qualifier() {
     let result = engine.complete(&document, position).await;
 
     assert!(result.is_ok(), "Completion failed: {:?}", result.err());
-    let items = result.unwrap();
+    let items = result.unwrap().unwrap_or_default();
 
     // Should return empty completion for invalid qualifier
     assert_eq!(
@@ -296,7 +296,7 @@ async fn test_e2e_completion_where_clause_with_postgresql() {
     let catalog = MockCatalogBuilder::new()
         .with_table(TableMetadata::new("products", "public").with_columns(vec![
             ColumnMetadata::new("id", DataType::Integer),
-            ColumnMetadata::new("price", DataType::Decimal(None, None)),
+            ColumnMetadata::new("price", DataType::Decimal),
             ColumnMetadata::new("name", DataType::Varchar(None)),
         ]))
         .build();
