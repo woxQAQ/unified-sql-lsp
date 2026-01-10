@@ -53,6 +53,30 @@ Dialects use compile-time merging approach:
 
 - `cargo run -p unified-sql-lsp-lsp` - Run the LSP server
 
+### Playground
+
+Web-based testing environment with real database connections (MySQL, PostgreSQL, backend, frontend).
+
+Quick start
+
+- `cargo build --release` - Build LSP server binary
+- `cd playground && ./start.sh` - Start all services
+- Access at http://localhost:3000
+- `cd playground && ./stop.sh` - Stop all services
+
+Local development (without Docker)
+
+- Start databases: `cd playground && docker-compose up -d mysql postgres`
+- Start backend: `cd playground/backend && npm install && MYSQL_PORT=3307 PG_PORT=5433 npm start`
+- Start frontend: `cd playground/frontend && npm install && npm run dev`
+
+Testing features
+
+- Table completion: `SELECT * FROM` (Ctrl+Space)
+- Column completion: `SELECT customer_id,` (Ctrl+Space)
+- JOIN completion: `SELECT * FROM orders o JOIN customers c ON o.` (Ctrl+Space)
+- Function completion: `SELECT C` (Ctrl+Space)
+
 ### Testing
 
 - `cargo test --workspace` - Run all tests
