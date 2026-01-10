@@ -226,6 +226,7 @@ mod tests {
     // will be in the tests module. Here we test the logic
     // with mock nodes where possible.
 
+    // TODO: (TEST-001) Add comprehensive unit tests for ScopeBuilder with tree-sitter integration
     #[test]
     fn test_scope_builder_new() {
         // This is a placeholder to show the module structure

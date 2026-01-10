@@ -95,6 +95,7 @@ async fn test_e2e_completion_with_mysql_syntax() {
     let result = engine.complete(&document, position).await;
 
     assert!(result.is_ok());
+    // TODO: (COMPLETION-005) Implement LIMIT/OFFSET clause completion context detection
     // LIMIT clause completion not implemented yet, so we just verify it doesn't crash
 }
 

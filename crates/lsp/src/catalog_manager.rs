@@ -66,6 +66,7 @@ impl CatalogManager {
                 .get_postgres_catalog(config)
                 .await
                 .map(|c| c as Arc<dyn Catalog>),
+            // TODO: (DIALECT-TIDB-001) Add support for additional dialects (TiDB, MariaDB, CockroachDB)
             _ => Err(CatalogError::NotSupported(format!(
                 "Dialect {:?} is not supported yet",
                 config.dialect
@@ -155,6 +156,7 @@ mod tests {
     async fn test_catalog_manager_unsupported_dialect() {
         let mut manager = CatalogManager::new();
 
+        // TODO: (DIALECT-TIDB-001) Remove this test once TiDB catalog support is implemented
         let config = EngineConfig {
             dialect: Dialect::TiDB, // Not supported yet
             ..Default::default()
