@@ -393,6 +393,7 @@ impl SymbolRenderer {
             .map(|table| Self::render_table(table))
             .collect();
 
+        #[allow(deprecated)]
         DocumentSymbol {
             name: "SELECT".to_string(),
             kind: SymbolKind::FUNCTION,
@@ -409,6 +410,7 @@ impl SymbolRenderer {
     fn render_table(table: TableSymbolWithRange) -> DocumentSymbol {
         let children = Self::render_columns(&table.symbol.columns);
 
+        #[allow(deprecated)]
         DocumentSymbol {
             name: table.symbol.display_name().to_string(),
             kind: SymbolKind::OBJECT,
@@ -454,11 +456,12 @@ impl SymbolRenderer {
     fn render_column(column: &ColumnSymbol) -> DocumentSymbol {
         let detail = Self::format_column_detail(column);
 
+        #[allow(deprecated)]
         DocumentSymbol {
             name: column.name.clone(),
             kind: SymbolKind::FIELD,
             detail: Some(detail),
-            tags: None, // Note: PK/FK info is shown in detail field instead
+            tags: None,
             range: Range::default(),
             selection_range: Range::default(),
             deprecated: None,

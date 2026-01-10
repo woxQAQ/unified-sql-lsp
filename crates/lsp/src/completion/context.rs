@@ -316,7 +316,6 @@ fn extract_join_tables(join_node: &Node, source: &str) -> (Option<String>, Optio
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tree_sitter::Parser;
 
     #[test]
     fn test_completion_context_is_select_projection() {

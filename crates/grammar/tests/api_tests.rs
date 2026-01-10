@@ -40,17 +40,20 @@ fn test_language_for_dialect_postgresql_family() {
 }
 
 #[test]
-fn test_language_for_dialect_unsupported() {
-    // Test unsupported dialects
-    let unsupported = vec![
-        Dialect::SQLite,    // Not implemented yet
-        Dialect::Snowflake, // Not implemented yet
+fn test_language_for_dialect_coverage() {
+    // Test that all currently implemented dialects have a grammar
+    let supported = vec![
+        Dialect::MySQL,
+        Dialect::PostgreSQL,
+        Dialect::TiDB,
+        Dialect::MariaDB,
+        Dialect::CockroachDB,
     ];
 
-    for dialect in unsupported {
+    for dialect in supported {
         assert!(
-            language_for_dialect(dialect).is_none(),
-            "Expected no language for unsupported dialect {:?}",
+            language_for_dialect(dialect).is_some(),
+            "Expected language for supported dialect {:?}",
             dialect
         );
     }
@@ -62,7 +65,7 @@ fn test_parse_simple_query_mysql() {
 
     let mut parser = Parser::new();
     parser
-        .set_language(*language)
+        .set_language(&language)
         .expect("Failed to set language");
 
     let source = "SELECT * FROM users WHERE id = 1";
@@ -78,7 +81,7 @@ fn test_parse_mysql_specific_syntax() {
 
     let mut parser = Parser::new();
     parser
-        .set_language(*language)
+        .set_language(&language)
         .expect("Failed to set language");
 
     // Test MySQL-specific LIMIT syntax
@@ -95,7 +98,7 @@ fn test_parse_postgresql_specific_syntax() {
 
     let mut parser = Parser::new();
     parser
-        .set_language(*language)
+        .set_language(&language)
         .expect("Failed to set language");
 
     // Test PostgreSQL-specific DISTINCT ON syntax
@@ -111,7 +114,7 @@ fn test_parse_with_syntax_error() {
 
     let mut parser = Parser::new();
     parser
-        .set_language(*language)
+        .set_language(&language)
         .expect("Failed to set language");
 
     // Intentionally invalid SQL
@@ -157,7 +160,7 @@ fn test_parse_complex_query() {
 
     let mut parser = Parser::new();
     parser
-        .set_language(*language)
+        .set_language(&language)
         .expect("Failed to set language");
 
     // Complex query with JOINs, aggregates, and subquery
@@ -183,7 +186,7 @@ fn test_parse_multiple_statements() {
 
     let mut parser = Parser::new();
     parser
-        .set_language(*language)
+        .set_language(&language)
         .expect("Failed to set language");
 
     // Multiple statements separated by semicolons

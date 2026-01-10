@@ -311,11 +311,11 @@ impl CompletionEngine {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::document::ParseMetadata;
+    use crate::parsing::{ParseResult, ParserManager};
     use std::sync::Arc;
     use tower_lsp::lsp_types::{Position, Url};
     use unified_sql_lsp_ir::Dialect;
-    use unified_sql_lsp_lsp::document::ParseMetadata;
-    use unified_sql_lsp_lsp::parsing::ParserManager;
 
     /// Helper function to create a parsed document for testing
     async fn create_test_document(sql: &str, language_id: &str) -> Document {
@@ -332,20 +332,20 @@ mod tests {
         let result = manager.parse_text(dialect, sql);
 
         match &result {
-            unified_sql_lsp_lsp::parsing::ParseResult::Success { tree, parse_time } => {
+            ParseResult::Success { tree, parse_time } => {
                 if let Some(tree) = tree {
                     let metadata =
                         ParseMetadata::new(parse_time.as_millis() as u64, dialect, false, 0);
                     document.set_tree(tree.clone(), metadata);
                 }
             }
-            unified_sql_lsp_lsp::parsing::ParseResult::Partial { tree, errors: _ } => {
+            ParseResult::Partial { tree, .. } => {
                 if let Some(tree) = tree {
                     let metadata = ParseMetadata::new(0, dialect, true, 0);
                     document.set_tree(tree.clone(), metadata);
                 }
             }
-            unified_sql_lsp_lsp::parsing::ParseResult::Failed { .. } => {
+            ParseResult::Failed { .. } => {
                 // No tree to set
             }
         }
@@ -362,8 +362,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_qualified_column_completion_with_table_name() {
-        use unified_sql_lsp_catalog::TableMetadata;
-        use unified_sql_lsp_test_utils::{MockCatalogBuilder, catalog::DataType};
+        use unified_sql_lsp_catalog::{DataType, TableMetadata};
+        use unified_sql_lsp_test_utils::MockCatalogBuilder;
 
         // Create mock catalog
         let catalog = MockCatalogBuilder::new()
@@ -402,7 +402,8 @@ mod tests {
     #[tokio::test]
     async fn test_qualified_column_completion_with_alias() {
         use unified_sql_lsp_catalog::TableMetadata;
-        use unified_sql_lsp_test_utils::{MockCatalogBuilder, catalog::DataType};
+        use unified_sql_lsp_catalog::DataType;
+        use unified_sql_lsp_test_utils::MockCatalogBuilder;
 
         let catalog = MockCatalogBuilder::new()
             .with_table(TableMetadata::new("users", "public").with_columns(vec![
@@ -432,7 +433,8 @@ mod tests {
     #[tokio::test]
     async fn test_qualified_column_completion_invalid_qualifier() {
         use unified_sql_lsp_catalog::TableMetadata;
-        use unified_sql_lsp_test_utils::{MockCatalogBuilder, catalog::DataType};
+        use unified_sql_lsp_catalog::DataType;
+        use unified_sql_lsp_test_utils::MockCatalogBuilder;
 
         let catalog = MockCatalogBuilder::new()
             .with_table(TableMetadata::new("users", "public").with_columns(vec![
@@ -458,7 +460,8 @@ mod tests {
     #[tokio::test]
     async fn test_unqualified_column_completion_still_works() {
         use unified_sql_lsp_catalog::TableMetadata;
-        use unified_sql_lsp_test_utils::{MockCatalogBuilder, catalog::DataType};
+        use unified_sql_lsp_catalog::DataType;
+        use unified_sql_lsp_test_utils::MockCatalogBuilder;
 
         let catalog = MockCatalogBuilder::new()
             .with_table(TableMetadata::new("users", "public").with_columns(vec![
@@ -488,7 +491,8 @@ mod tests {
     #[tokio::test]
     async fn test_where_clause_unqualified_completion() {
         use unified_sql_lsp_catalog::TableMetadata;
-        use unified_sql_lsp_test_utils::{MockCatalogBuilder, catalog::DataType};
+        use unified_sql_lsp_catalog::DataType;
+        use unified_sql_lsp_test_utils::MockCatalogBuilder;
 
         let catalog = MockCatalogBuilder::new()
             .with_table(TableMetadata::new("users", "public").with_columns(vec![
@@ -522,7 +526,8 @@ mod tests {
     #[tokio::test]
     async fn test_where_clause_qualified_completion() {
         use unified_sql_lsp_catalog::TableMetadata;
-        use unified_sql_lsp_test_utils::{MockCatalogBuilder, catalog::DataType};
+        use unified_sql_lsp_catalog::DataType;
+        use unified_sql_lsp_test_utils::MockCatalogBuilder;
 
         let catalog = MockCatalogBuilder::new()
             .with_table(TableMetadata::new("users", "public").with_columns(vec![
@@ -558,7 +563,8 @@ mod tests {
     #[tokio::test]
     async fn test_where_clause_qualified_with_alias() {
         use unified_sql_lsp_catalog::TableMetadata;
-        use unified_sql_lsp_test_utils::{MockCatalogBuilder, catalog::DataType};
+        use unified_sql_lsp_catalog::DataType;
+        use unified_sql_lsp_test_utils::MockCatalogBuilder;
 
         let catalog = MockCatalogBuilder::new()
             .with_table(TableMetadata::new("users", "public").with_columns(vec![
@@ -588,7 +594,8 @@ mod tests {
     #[tokio::test]
     async fn test_where_clause_invalid_qualifier() {
         use unified_sql_lsp_catalog::TableMetadata;
-        use unified_sql_lsp_test_utils::{MockCatalogBuilder, catalog::DataType};
+        use unified_sql_lsp_catalog::DataType;
+        use unified_sql_lsp_test_utils::MockCatalogBuilder;
 
         let catalog = MockCatalogBuilder::new()
             .with_table(TableMetadata::new("users", "public").with_columns(vec![
@@ -614,7 +621,8 @@ mod tests {
     #[tokio::test]
     async fn test_where_clause_ambiguous_column() {
         use unified_sql_lsp_catalog::TableMetadata;
-        use unified_sql_lsp_test_utils::{MockCatalogBuilder, catalog::DataType};
+        use unified_sql_lsp_catalog::DataType;
+        use unified_sql_lsp_test_utils::MockCatalogBuilder;
 
         let catalog = MockCatalogBuilder::new()
             .with_table(TableMetadata::new("users", "public").with_columns(vec![

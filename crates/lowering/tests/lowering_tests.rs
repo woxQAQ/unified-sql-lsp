@@ -9,7 +9,7 @@ use unified_sql_lsp_ir::{Dialect, Expr, Query};
 use unified_sql_lsp_lowering::cst::MockCstNode;
 use unified_sql_lsp_lowering::dialect::DialectLoweringBase;
 use unified_sql_lsp_lowering::{
-    CstNode, ErrorSeverity, Lowering, LoweringContext, LoweringError, LoweringOutcome,
+    CstNode, Lowering, LoweringContext, LoweringError, LoweringOutcome,
     SourceLocation,
 };
 
@@ -27,15 +27,14 @@ where
     ) -> unified_sql_lsp_lowering::LoweringResult<Query> {
         if node.kind() == "select_statement" {
             // Check for unsupported features
-            if let Some(_lateral_children) = node.children("lateral").first() {
-                if !ctx.supports_feature("LATERAL") {
+            if let Some(_lateral_children) = node.children("lateral").first()
+                && !ctx.supports_feature("LATERAL") {
                     ctx.add_error(LoweringError::UnsupportedSyntax {
                         dialect: format!("{:?}", ctx.dialect()),
                         feature: "LATERAL JOIN".to_string(),
                         suggestion: "Use a subquery instead".to_string(),
                     });
                 }
-            }
             Ok(Query::new(ctx.dialect()))
         } else if node.kind() == "empty" {
             Err(LoweringError::Generic {

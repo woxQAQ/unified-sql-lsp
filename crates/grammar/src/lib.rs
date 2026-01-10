@@ -121,6 +121,7 @@ pub fn language_for_dialect(dialect: Dialect) -> Option<&'static tree_sitter::La
 // External functions from compiled grammars
 // Rust 2024 edition requires extern blocks to be unsafe
 unsafe extern "C" {
+    #[allow(dead_code)]
     fn tree_sitter_unified_sql_base() -> *const ();
     fn tree_sitter_unified_sql_mysql() -> *const ();
     fn tree_sitter_unified_sql_postgresql() -> *const ();

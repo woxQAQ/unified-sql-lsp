@@ -305,7 +305,9 @@ impl DocumentSync {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::parsing::{ParseError, ParseResult};
     use std::sync::Arc;
+    use std::time::Duration;
     use tower_lsp::lsp_types::Url;
 
     fn create_test_document(content: &str, language_id: &str) -> Document {

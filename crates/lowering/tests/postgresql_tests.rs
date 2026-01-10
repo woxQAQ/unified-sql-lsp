@@ -10,10 +10,10 @@
 //! PostgreSQL-specific syntax.
 
 use unified_sql_lsp_ir::query::SortDirection;
-use unified_sql_lsp_ir::{BinaryOp, Dialect, Expr, Literal};
+use unified_sql_lsp_ir::{Dialect, Expr};
 use unified_sql_lsp_lowering::cst::MockCstNode;
 use unified_sql_lsp_lowering::dialect::PostgreSQLLowering;
-use unified_sql_lsp_lowering::{Lowering, LoweringContext, LoweringError};
+use unified_sql_lsp_lowering::{Lowering, LoweringContext};
 
 // =============================================================================
 // Basic SELECT Statement Tests

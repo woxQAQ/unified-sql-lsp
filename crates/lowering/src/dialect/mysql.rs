@@ -192,17 +192,15 @@ impl MySQLLowering {
         }
 
         // Extract columns if present
-        if let Some(columns_node) = self.optional_child(node, "column_list") {
-            if let Some(identifiers_node) = self.optional_child(columns_node, "identifier_list") {
+        if let Some(columns_node) = self.optional_child(node, "column_list")
+            && let Some(identifiers_node) = self.optional_child(columns_node, "identifier_list") {
                 for ident in identifiers_node.all_children() {
-                    if ident.kind() == "identifier" {
-                        if let Some(name) = ident.text() {
+                    if ident.kind() == "identifier"
+                        && let Some(name) = ident.text() {
                             insert.columns.push(self.normalize_identifier(name));
                         }
-                    }
                 }
             }
-        }
 
         // Extract VALUES if present
         let values = self.extract_values_clause(ctx, node);
@@ -287,11 +285,10 @@ impl MySQLLowering {
             if matches!(
                 child.kind(),
                 "table_reference" | "table_name" | "joined_table"
-            ) {
-                if let Some(table) = self.lower_table_reference(ctx, child)? {
+            )
+                && let Some(table) = self.lower_table_reference(ctx, child)? {
                     tables.push(table);
                 }
-            }
         }
 
         if tables.is_empty() {
@@ -406,11 +403,10 @@ impl MySQLLowering {
             // Handle USING clause
             let mut columns = Vec::new();
             for child in using_node.all_children() {
-                if child.kind() == "identifier" {
-                    if let Some(name) = child.text() {
+                if child.kind() == "identifier"
+                    && let Some(name) = child.text() {
                         columns.push(self.normalize_identifier(name));
                     }
-                }
             }
             JoinCondition::Using(columns)
         } else {
@@ -699,7 +695,7 @@ impl MySQLLowering {
     }
 
     /// Lower column reference
-    fn lower_column_ref<N>(&self, ctx: &mut LoweringContext, node: &N) -> LoweringResult<Expr>
+    fn lower_column_ref<N>(&self, _ctx: &mut LoweringContext, node: &N) -> LoweringResult<Expr>
     where
         N: CstNode,
     {

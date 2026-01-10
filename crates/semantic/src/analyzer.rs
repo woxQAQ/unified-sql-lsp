@@ -16,7 +16,7 @@ use std::sync::Arc;
 use unified_sql_lsp_catalog::{Catalog, FunctionMetadata, FunctionType};
 use unified_sql_lsp_ir::{CommonTableExpr, Dialect};
 use unified_sql_lsp_ir::{
-    BinaryOp, ColumnRef, Expr, Literal, OrderBy, Query, SelectItem, SelectStatement, SetOp,
+    ColumnRef, Expr, Literal, OrderBy, Query, SelectItem, SelectStatement, SetOp,
     TableRef,
 };
 
@@ -26,6 +26,7 @@ use crate::scope::{ScopeManager, ScopeType};
 use crate::symbol::{ColumnSymbol, TableSymbol};
 
 /// Metadata for processed CTEs
+#[allow(dead_code)]
 struct CteMetadata {
     scope_id: usize,
     output_columns: Vec<ColumnSymbol>,
@@ -41,6 +42,7 @@ pub struct SemanticAnalyzer {
     catalog: Arc<dyn Catalog>,
 
     /// SQL dialect for the query being analyzed
+    #[allow(dead_code)]
     dialect: Dialect,
 
     /// Scope manager for tracking tables across query hierarchy
@@ -712,6 +714,7 @@ impl SemanticAnalyzer {
     /// Check if a function name is an aggregate function
     ///
     /// Uses catalog function metadata to determine if a function is aggregate.
+    #[allow(dead_code)]
     fn is_aggregate_function(&self, name: &str) -> bool {
         self.function_cache.iter().any(|f| {
             f.name.to_uppercase() == name.to_uppercase()
@@ -722,6 +725,7 @@ impl SemanticAnalyzer {
     /// Check if an expression contains an aggregate function
     ///
     /// This recursively checks the expression tree for aggregate functions.
+    #[allow(dead_code)]
     fn expr_contains_aggregate(&self, expr: &Expr) -> bool {
         match expr {
             Expr::Function { name, .. } => self.is_aggregate_function(name),
@@ -738,7 +742,7 @@ impl SemanticAnalyzer {
                     || results.iter().any(|r| self.expr_contains_aggregate(r))
                     || else_result
                         .as_ref()
-                        .map_or(false, |e| self.expr_contains_aggregate(e))
+                        .is_some_and(|e| self.expr_contains_aggregate(e))
             }
             Expr::Cast { expr, .. } => self.expr_contains_aggregate(expr),
             Expr::Paren(inner) => self.expr_contains_aggregate(inner),
@@ -1058,6 +1062,7 @@ impl SemanticAnalyzer {
     /// # Returns
     ///
     /// Vector of column symbols representing the CTE's output schema
+    #[allow(dead_code)]
     fn infer_cte_output_columns(
         &self,
         cte: &CommonTableExpr,
@@ -1220,8 +1225,8 @@ impl SemanticAnalyzer {
             }
             SetOp::Union { left, right, .. } => {
                 // Recursive case: analyze both sides
-                let (left_id, left_cols) = self.analyze_set_operation_recursive(&left.body, parent_id)?;
-                let (right_id, right_cols) = self.analyze_set_operation_recursive(&right.body, parent_id)?;
+                let (_left_id, left_cols) = self.analyze_set_operation_recursive(&left.body, parent_id)?;
+                let (_right_id, right_cols) = self.analyze_set_operation_recursive(&right.body, parent_id)?;
 
                 // Validate column count matches
                 if left_cols.len() != right_cols.len() {
@@ -1237,8 +1242,8 @@ impl SemanticAnalyzer {
             }
             SetOp::Intersect { left, right, .. } => {
                 // Same logic as UNION
-                let (left_id, left_cols) = self.analyze_set_operation_recursive(&left.body, parent_id)?;
-                let (right_id, right_cols) = self.analyze_set_operation_recursive(&right.body, parent_id)?;
+                let (_left_id, left_cols) = self.analyze_set_operation_recursive(&left.body, parent_id)?;
+                let (_right_id, right_cols) = self.analyze_set_operation_recursive(&right.body, parent_id)?;
 
                 if left_cols.len() != right_cols.len() {
                     return Err(SemanticError::SetOperationColumnCountMismatch {
@@ -1252,8 +1257,8 @@ impl SemanticAnalyzer {
             }
             SetOp::Except { left, right, .. } => {
                 // Same logic as UNION and INTERSECT
-                let (left_id, left_cols) = self.analyze_set_operation_recursive(&left.body, parent_id)?;
-                let (right_id, right_cols) = self.analyze_set_operation_recursive(&right.body, parent_id)?;
+                let (_left_id, left_cols) = self.analyze_set_operation_recursive(&left.body, parent_id)?;
+                let (_right_id, right_cols) = self.analyze_set_operation_recursive(&right.body, parent_id)?;
 
                 if left_cols.len() != right_cols.len() {
                     return Err(SemanticError::SetOperationColumnCountMismatch {
@@ -1594,7 +1599,7 @@ mod tests {
     use unified_sql_lsp_catalog::{
         CatalogError, ColumnMetadata, DataType, FunctionMetadata, TableMetadata,
     };
-    use unified_sql_lsp_ir::{Join, JoinCondition, JoinType, SortDirection};
+    use unified_sql_lsp_ir::{BinaryOp, Join, JoinCondition, JoinType, SortDirection};
 
     // Mock catalog for testing
     struct MockCatalog {

@@ -859,7 +859,7 @@ mod tests {
 
     #[test]
     fn test_render_functions_all() {
-        use unified_sql_lsp_catalog::{FunctionMetadata, FunctionParameter};
+        use unified_sql_lsp_catalog::FunctionMetadata;
 
         let functions = vec![
             FunctionMetadata::new("count", DataType::BigInt)
@@ -879,7 +879,7 @@ mod tests {
 
     #[test]
     fn test_render_functions_filtered() {
-        use unified_sql_lsp_catalog::{FunctionMetadata, FunctionParameter};
+        use unified_sql_lsp_catalog::FunctionMetadata;
 
         let functions = vec![
             FunctionMetadata::new("count", DataType::BigInt)
@@ -919,7 +919,7 @@ mod tests {
 
     #[test]
     fn test_function_sort_order() {
-        use unified_sql_lsp_catalog::{FunctionMetadata, FunctionParameter};
+        use unified_sql_lsp_catalog::FunctionMetadata;
 
         let functions = vec![
             FunctionMetadata::new("abs", DataType::Integer).with_type(FunctionType::Scalar),
@@ -986,7 +986,7 @@ mod tests {
 
     #[test]
     fn test_function_item_insert_text() {
-        use unified_sql_lsp_catalog::{FunctionMetadata, FunctionParameter};
+        use unified_sql_lsp_catalog::FunctionMetadata;
 
         let func = FunctionMetadata::new("count", DataType::BigInt).with_type(FunctionType::Aggregate);
 

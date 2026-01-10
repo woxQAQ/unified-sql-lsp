@@ -449,7 +449,7 @@ fn extract_alias(node: &Node, source: &str) -> Option<String> {
 
 // Test helper functions
 #[cfg(test)]
-fn find_table_name_node(root_node: &Node<'_>) -> Option<Node<'_>> {
+fn find_table_name_node(root_node: &Node) -> Option<Node> {
     let select = root_node.find_child(|n| n.kind() == "select_statement")?;
     let from_clause = select.find_child(|n| n.kind() == "from_clause")?;
     let table_ref = from_clause.find_child(|n| n.kind() == "table_reference")?;
@@ -457,7 +457,7 @@ fn find_table_name_node(root_node: &Node<'_>) -> Option<Node<'_>> {
 }
 
 #[cfg(test)]
-fn find_table_reference_node(root_node: &Node<'_>) -> Option<Node<'_>> {
+fn find_table_reference_node(root_node: &Node) -> Option<Node> {
     let select = root_node.find_child(|n| n.kind() == "select_statement")?;
     let from_clause = select.find_child(|n| n.kind() == "from_clause")?;
     from_clause.find_child(|n| n.kind() == "table_reference")
@@ -466,14 +466,14 @@ fn find_table_reference_node(root_node: &Node<'_>) -> Option<Node<'_>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::parsing::{ParseResult, ParserManager};
     use unified_sql_lsp_ir::Dialect;
-    use unified_sql_lsp_lsp::parsing::ParserManager;
 
     /// Helper function to parse SQL and get root node
     fn parse_sql(sql: &str) -> tree_sitter::Tree {
         let manager = ParserManager::new();
         match manager.parse_text(Dialect::MySQL, sql) {
-            unified_sql_lsp_lsp::parsing::ParseResult::Success { tree, .. } => {
+            ParseResult::Success { tree, .. } => {
                 tree.expect("Parse tree should be present")
             }
             _ => panic!("Failed to parse SQL: {}", sql),

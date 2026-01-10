@@ -137,6 +137,7 @@ impl LspBackend {
     /// Publish diagnostics to the client
     ///
     /// This will be used extensively in DIAG-001 and subsequent features.
+    #[allow(dead_code)]
     async fn publish_diagnostics(&self, uri: Url, diagnostics: Vec<Diagnostic>) {
         self.client
             .publish_diagnostics(uri, diagnostics, None)
@@ -761,8 +762,6 @@ impl LanguageServer for LspBackend {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-
     #[test]
     fn test_backend_new() {
         // Create a mock client for testing

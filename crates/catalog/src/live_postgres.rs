@@ -37,10 +37,13 @@
 //! ```
 
 use crate::error::{CatalogError, CatalogResult};
-use crate::metadata::{ColumnMetadata, DataType, FunctionMetadata, FunctionType, TableMetadata, TableType};
+use crate::metadata::{ColumnMetadata, DataType, FunctionMetadata, FunctionType, TableMetadata};
 use crate::r#trait::Catalog;
 
 use async_trait::async_trait;
+
+#[cfg(feature = "postgresql")]
+use crate::metadata::TableType;
 
 #[cfg(feature = "postgresql")]
 use sqlx::{Postgres, Pool};
@@ -50,9 +53,6 @@ const DEFAULT_POOL_SIZE: u32 = 10;
 
 /// Default query timeout in seconds
 const DEFAULT_TIMEOUT_SECS: u64 = 5;
-
-/// Health check interval in seconds
-const HEALTH_CHECK_INTERVAL_SECS: u64 = 60;
 
 /// Live PostgreSQL Catalog implementation
 ///
@@ -235,6 +235,7 @@ impl LivePostgreSQLCatalog {
     ///
     /// PostgreSQL uses the SQL standard type names, which are more verbose than MySQL.
     /// This method handles both the full names (e.g., "character varying") and common aliases.
+    #[allow(dead_code)]
     fn parse_postgres_type(postgres_type: &str) -> DataType {
         let type_lower = postgres_type.to_lowercase();
         let type_lower = type_lower.trim();
@@ -258,12 +259,12 @@ impl LivePostgreSQLCatalog {
         match type_name.as_str() {
             // PostgreSQL uses SQL standard names, so we need to handle several variants
             "character" | "char" => {
-                let len = Self::extract_length(&type_lower);
+                let len = Self::extract_length(type_lower);
                 DataType::Char(len)
             }
 
             "character varying" | "varchar" => {
-                let len = Self::extract_length(&type_lower);
+                let len = Self::extract_length(type_lower);
                 DataType::Varchar(len)
             }
 
@@ -285,11 +286,11 @@ impl LivePostgreSQLCatalog {
             // Binary types
             "bytea" => DataType::Binary,
             "bit" => {
-                let len = Self::extract_length(&type_lower);
+                let len = Self::extract_length(type_lower);
                 DataType::Other(format!("bit({:?})", len))
             }
             "bit varying" | "varbit" => {
-                let len = Self::extract_length(&type_lower);
+                let len = Self::extract_length(type_lower);
                 DataType::Other(format!("varbit({:?})", len))
             }
 
@@ -327,19 +328,19 @@ impl LivePostgreSQLCatalog {
 
     /// Extract length from type string (e.g., "varchar(255)" -> Some(255))
     /// or "numeric(10,2)" -> Some(10) (returns precision)
+    #[allow(dead_code)]
     fn extract_length(type_str: &str) -> Option<usize> {
         type_str
             .find('(')
             .and_then(|pos| {
                 // Find the first comma or closing paren
-                let end_match = type_str[pos + 1..].find(|c| c == ',' || c == ')');
+                let end_match = type_str[pos + 1..].find([',', ')']);
                 let end = end_match?;
 
                 // Parse the number
                 type_str[pos + 1..pos + 1 + end].parse().ok()
             })
-            .map(|len: usize| if len == 0 { None } else { Some(len) })
-            .flatten()
+            .and_then(|len: usize| if len == 0 { None } else { Some(len) })
     }
 }
 
@@ -373,12 +374,12 @@ impl Catalog for LivePostgreSQLCatalog {
                 .await
                 .map_err(|e| CatalogError::QueryFailed(format!("Failed to list tables: {}", e)))?;
 
-            let tables = rows.into_iter().map(|(name, schema, table_type, comment)| {
-                let table_type = match table_type.as_str() {
+            let tables = rows.into_iter().map(|(name, schema, db_table_type, comment)| {
+                let table_type = match db_table_type.as_str() {
                     "table" => TableType::Table,
                     "view" => TableType::View,
                     "materialized" => TableType::MaterializedView,
-                    _ => TableType::Other(table_type),
+                    _ => TableType::Other(db_table_type),
                 };
 
                 TableMetadata::new(&name, &schema)
@@ -462,7 +463,7 @@ impl Catalog for LivePostgreSQLCatalog {
 
         #[cfg(not(feature = "postgresql"))]
         return Err(CatalogError::NotSupported(
-            "get_columns requires 'postgresql' feature enabled".to_string()
+            format!("get_columns requires 'postgresql' feature enabled (table: '{}')", table)
         ));
 
         #[cfg(all(feature = "postgresql", not(feature = "postgresql")))]

@@ -286,7 +286,7 @@ impl ColumnResolver {
                     }
                 } else {
                     ColumnResolutionResult::NotFoundWithSuggestions {
-                        suggestions: candidates.into_iter().map(|c| c).collect(),
+                        suggestions: candidates.into_iter().collect(),
                     }
                 }
             }
@@ -301,7 +301,7 @@ impl ColumnResolver {
             _ => {
                 // Ambiguous - multiple exact matches
                 ColumnResolutionResult::Ambiguous {
-                    candidates: exact_matches.into_iter().map(|c| c.clone()).collect(),
+                    candidates: exact_matches.into_iter().cloned().collect(),
                 }
             }
         }
@@ -710,18 +710,15 @@ mod tests {
         // "usr" should rank "user_id" higher than other columns
         let result = resolver.resolve_column(&ColumnRef::new("usr"), 0);
 
-        match result {
-            ColumnResolutionResult::NotFoundWithSuggestions { suggestions } => {
-                if !suggestions.is_empty() {
-                    // Verify suggestions are sorted by relevance
-                    for i in 1..suggestions.len() {
-                        assert!(
-                            suggestions[i - 1].relevance_score >= suggestions[i].relevance_score
-                        );
-                    }
+        if let ColumnResolutionResult::NotFoundWithSuggestions { suggestions } = result {
+            if !suggestions.is_empty() {
+                // Verify suggestions are sorted by relevance
+                for i in 1..suggestions.len() {
+                    assert!(
+                        suggestions[i - 1].relevance_score >= suggestions[i].relevance_score
+                    );
                 }
             }
-            _ => {}
         }
     }
 

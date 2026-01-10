@@ -222,8 +222,6 @@ impl ScopeBuilder {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-
     // Note: Full integration tests with real tree-sitter parsing
     // will be in the tests module. Here we test the logic
     // with mock nodes where possible.

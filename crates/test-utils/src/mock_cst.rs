@@ -40,7 +40,7 @@ impl MockCstNode {
         if let Some(field_name) = field {
             self.field_map
                 .entry(field_name.to_string())
-                .or_insert_with(Vec::new)
+                .or_default()
                 .push(idx);
         }
         self.children.push(child);
@@ -121,7 +121,7 @@ impl MockCstBuilder {
         self.current
             .field_map
             .entry(field.to_string())
-            .or_insert_with(Vec::new)
+            .or_default()
             .push(idx);
         self.current.children.push(child);
         self
@@ -248,7 +248,7 @@ mod tests {
         let node = SqlCstHelpers::select_with_where(vec!["id"], "users", "id > 10");
 
         assert_eq!(node.kind(), "select_statement");
-        assert!(node.children("where").len() > 0);
+        assert!(!node.children("where").is_empty());
     }
 
     #[test]

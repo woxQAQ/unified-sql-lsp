@@ -37,10 +37,13 @@
 //! ```
 
 use crate::error::{CatalogError, CatalogResult};
-use crate::metadata::{ColumnMetadata, DataType, FunctionMetadata, FunctionType, TableMetadata, TableType};
+use crate::metadata::{ColumnMetadata, DataType, FunctionMetadata, FunctionType, TableMetadata};
 use crate::r#trait::Catalog;
 
 use async_trait::async_trait;
+
+#[cfg(feature = "mysql")]
+use crate::metadata::TableType;
 
 #[cfg(feature = "mysql")]
 use sqlx::{MySql, Pool};
@@ -50,9 +53,6 @@ const DEFAULT_POOL_SIZE: u32 = 10;
 
 /// Default query timeout in seconds
 const DEFAULT_TIMEOUT_SECS: u64 = 5;
-
-/// Health check interval in seconds
-const HEALTH_CHECK_INTERVAL_SECS: u64 = 60;
 
 /// Live MySQL Catalog implementation
 ///
@@ -232,6 +232,7 @@ impl LiveMySQLCatalog {
     ///
     /// Converts MySQL type strings (e.g., "varchar(255)", "int", "text")
     /// to the unified DataType enum.
+    #[allow(dead_code)]
     fn parse_mysql_type(mysql_type: &str) -> DataType {
         let type_lower = mysql_type.to_lowercase();
 
@@ -290,6 +291,7 @@ impl LiveMySQLCatalog {
     }
 
     /// Extract length from type string (e.g., "varchar(255)" -> Some(255))
+    #[allow(dead_code)]
     fn extract_length(type_str: &str) -> Option<usize> {
         type_str
             .find('(')
@@ -297,8 +299,7 @@ impl LiveMySQLCatalog {
                 let end = type_str[pos..].find(')')?;
                 type_str[pos + 1..pos + end].parse().ok()
             })
-            .map(|len: usize| if len == 0 { None } else { Some(len) })
-            .flatten()
+            .and_then(|len: usize| if len == 0 { None } else { Some(len) })
     }
 }
 
@@ -327,11 +328,11 @@ impl Catalog for LiveMySQLCatalog {
                 .await
                 .map_err(|e| CatalogError::QueryFailed(format!("Failed to list tables: {}", e)))?;
 
-            let tables = rows.into_iter().map(|(name, schema, table_type, comment)| {
-                let table_type = match table_type.as_str() {
+            let tables = rows.into_iter().map(|(name, schema, db_table_type, comment)| {
+                let table_type = match db_table_type.as_str() {
                     "BASE TABLE" => TableType::Table,
                     "VIEW" => TableType::View,
-                    _ => TableType::Other(table_type),
+                    _ => TableType::Other(db_table_type),
                 };
 
                 TableMetadata::new(&name, &schema)
@@ -404,7 +405,7 @@ impl Catalog for LiveMySQLCatalog {
 
         #[cfg(not(feature = "mysql"))]
         return Err(CatalogError::NotSupported(
-            "get_columns requires 'mysql' feature enabled".to_string()
+            format!("get_columns requires 'mysql' feature enabled (table: '{}')", table)
         ));
 
         #[cfg(all(feature = "mysql", not(feature = "mysql")))]

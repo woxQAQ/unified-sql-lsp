@@ -427,6 +427,7 @@ pub enum SetOp {
 
 /// SELECT statement
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Default)]
 pub struct SelectStatement {
     /// SELECT DISTINCT or ALL
     pub distinct: bool,
@@ -453,20 +454,6 @@ pub struct SelectStatement {
     pub window: Vec<WindowDef>,
 }
 
-impl Default for SelectStatement {
-    fn default() -> Self {
-        Self {
-            distinct: false,
-            distinct_on: None,
-            projection: Vec::new(),
-            from: Vec::new(),
-            where_clause: None,
-            group_by: Vec::new(),
-            having: None,
-            window: Vec::new(),
-        }
-    }
-}
 
 /// INSERT statement
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -680,7 +667,7 @@ pub enum WindowFrameBound {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::expr::{ColumnRef, Literal};
+    use crate::expr::ColumnRef;
 
     #[test]
     fn test_query_creation() {

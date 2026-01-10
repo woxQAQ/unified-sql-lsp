@@ -226,7 +226,7 @@ impl PostgreSQLLowering {
                     insert.source = InsertSource::Query(Box::new(Query::new(Dialect::PostgreSQL)));
                 }
             }
-        } else if let Some(default_node) = self.optional_child(node, "default_values") {
+        } else if self.optional_child(node, "default_values").is_some() {
             // Handle DEFAULT VALUES
             insert.source = InsertSource::DefaultValues;
         }
@@ -273,7 +273,7 @@ impl PostgreSQLLowering {
             for child in set_node.all_children() {
                 if child.kind() == "assignment" {
                     // Parse column = value
-                    let mut children = child.all_children();
+                    let children = child.all_children();
                     let column = if let Some(col_node) = children.first() {
                         if col_node.kind() == "identifier" {
                             self.normalize_identifier(col_node.text().unwrap_or(""))
@@ -486,11 +486,10 @@ impl PostgreSQLLowering {
             if matches!(
                 child.kind(),
                 "table_reference" | "table_name" | "joined_table"
-            ) {
-                if let Some(table) = self.lower_table_reference(ctx, child)? {
+            )
+                && let Some(table) = self.lower_table_reference(ctx, child)? {
                     tables.push(table);
                 }
-            }
         }
 
         if tables.is_empty() {
@@ -621,11 +620,10 @@ impl PostgreSQLLowering {
             // Handle USING clause
             let mut columns = Vec::new();
             for child in using_node.all_children() {
-                if child.kind() == "identifier" {
-                    if let Some(name) = child.text() {
+                if child.kind() == "identifier"
+                    && let Some(name) = child.text() {
                         columns.push(self.normalize_identifier(name));
                     }
-                }
             }
             JoinCondition::Using(columns)
         } else {
@@ -1033,17 +1031,15 @@ impl PostgreSQLLowering {
     {
         let mut columns = Vec::new();
 
-        if let Some(columns_node) = self.optional_child(node, "column_list") {
-            if let Some(identifiers_node) = self.optional_child(columns_node, "identifier_list") {
+        if let Some(columns_node) = self.optional_child(node, "column_list")
+            && let Some(identifiers_node) = self.optional_child(columns_node, "identifier_list") {
                 for ident in identifiers_node.all_children() {
-                    if ident.kind() == "identifier" {
-                        if let Some(name) = ident.text() {
+                    if ident.kind() == "identifier"
+                        && let Some(name) = ident.text() {
                             columns.push(self.normalize_identifier(name));
                         }
-                    }
                 }
             }
-        }
 
         columns
     }
@@ -1148,7 +1144,7 @@ impl PostgreSQLLowering {
             if let Some(order_node) = self.optional_child(over_node, "order_by") {
                 for child in order_node.all_children() {
                     if child.kind() == "order_by_item" {
-                        let mut item_children = child.all_children();
+                        let item_children = child.all_children();
                         let expr = if let Some(expr_node) = item_children.first() {
                             self.lower_expr(ctx, *expr_node).unwrap_or_else(|_| ctx.create_placeholder())
                         } else {
@@ -1237,13 +1233,11 @@ impl PostgreSQLLowering {
         } else {
             // Try to parse offset (n PRECEDING/FOLLOWING)
             let children = node.all_children();
-            if let Some(offset_node) = children.first() {
-                if let Some(offset_text) = offset_node.text() {
-                    if let Ok(offset) = offset_text.trim().parse::<i64>() {
+            if let Some(offset_node) = children.first()
+                && let Some(offset_text) = offset_node.text()
+                    && let Ok(offset) = offset_text.trim().parse::<i64>() {
                         return Ok(WindowFrameBound::Offset(offset));
                     }
-                }
-            }
             // Fallback to unbounded if parsing fails
             Ok(WindowFrameBound::Unbounded)
         }

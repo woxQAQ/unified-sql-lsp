@@ -135,7 +135,6 @@ impl Default for CatalogManager {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use unified_sql_lsp_catalog::Catalog;
     use unified_sql_lsp_ir::Dialect;
 
     #[tokio::test]

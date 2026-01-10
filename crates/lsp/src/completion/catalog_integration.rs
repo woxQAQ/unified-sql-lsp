@@ -229,7 +229,7 @@ mod tests {
         let catalog = Arc::new(MockCatalog {
             tables: std::collections::HashMap::new(),
         }) as Arc<dyn Catalog>;
-        let fetcher = CatalogCompletionFetcher::new(catalog.clone());
+        let _fetcher = CatalogCompletionFetcher::new(catalog.clone());
         // Just verify the fetcher was created successfully
         assert!(true);
     }
