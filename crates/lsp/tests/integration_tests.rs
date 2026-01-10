@@ -446,7 +446,6 @@ async fn test_catalog_integration_function_completion() {
 #[tokio::test]
 async fn test_function_completion_with_parameters() {
     use unified_sql_lsp_catalog::FunctionParameter;
-    use tower_lsp::lsp_types::CompletionItemKind;
 
     let catalog = MockCatalogBuilder::new()
         .with_function(

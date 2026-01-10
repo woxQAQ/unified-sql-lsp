@@ -79,37 +79,29 @@ impl Dialect {
 
     /// Check if this dialect supports a specific extension
     pub fn supports(&self, ext: DialectExtensions) -> bool {
+        // MySQL family extensions
+        let mysql_family = matches!(
+            ext,
+            DialectExtensions::LimitOffset
+                | DialectExtensions::MultiDelete
+                | DialectExtensions::StraightJoin
+        );
+
+        // PostgreSQL family extensions
+        let postgresql_family = matches!(
+            ext,
+            DialectExtensions::LimitOffset
+                | DialectExtensions::DistinctOn
+                | DialectExtensions::LateralJoin
+                | DialectExtensions::WindowFunctions
+        );
+
         match self {
-            Dialect::MySQL => matches!(
-                ext,
-                DialectExtensions::LimitOffset
-                    | DialectExtensions::MultiDelete
-                    | DialectExtensions::StraightJoin
-            ),
-            Dialect::PostgreSQL => matches!(
-                ext,
-                DialectExtensions::LimitOffset
-                    | DialectExtensions::DistinctOn
-                    | DialectExtensions::LateralJoin
-                    | DialectExtensions::WindowFunctions
-            ),
-            Dialect::TiDB => matches!(
-                ext,
-                DialectExtensions::LimitOffset | DialectExtensions::TiDBSnapshot
-            ),
-            Dialect::MariaDB => matches!(
-                ext,
-                DialectExtensions::LimitOffset
-                    | DialectExtensions::MultiDelete
-                    | DialectExtensions::StraightJoin
-            ),
-            Dialect::CockroachDB => matches!(
-                ext,
-                DialectExtensions::LimitOffset
-                    | DialectExtensions::DistinctOn
-                    | DialectExtensions::LateralJoin
-                    | DialectExtensions::WindowFunctions
-            ),
+            Dialect::MySQL => mysql_family,
+            Dialect::PostgreSQL => postgresql_family,
+            Dialect::TiDB => mysql_family || ext == DialectExtensions::TiDBSnapshot,
+            Dialect::MariaDB => mysql_family,
+            Dialect::CockroachDB => postgresql_family,
         }
     }
 }

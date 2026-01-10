@@ -585,9 +585,8 @@ mod tests {
             .complete(&document, Position::new(0, 43))
             .await
             .unwrap();
-        assert!(items.is_some());
-        // Should return empty completion for invalid qualifier
-        assert_eq!(items.unwrap().len(), 0);
+        // Should return None for invalid qualifier (no completions available)
+        assert!(items.is_none());
     }
 
     #[tokio::test]

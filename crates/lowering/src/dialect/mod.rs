@@ -6,10 +6,11 @@
 //! Dialect-specific lowering implementations
 
 pub mod base;
-
 pub mod mysql;
 pub mod postgresql;
+pub mod shared;
 
 pub use base::DialectLoweringBase;
 pub use mysql::MySQLLowering;
 pub use postgresql::PostgreSQLLowering;
+pub use shared::SharedLowering;

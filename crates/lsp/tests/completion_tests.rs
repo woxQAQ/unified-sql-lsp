@@ -9,7 +9,6 @@
 
 use std::sync::Arc;
 use tower_lsp::lsp_types::{Position, Url};
-use unified_sql_lsp_catalog::{ColumnMetadata, DataType, TableMetadata};
 use unified_sql_lsp_ir::Dialect;
 use unified_sql_lsp_lsp::completion::CompletionEngine;
 use unified_sql_lsp_lsp::document::{Document, ParseMetadata};

@@ -15,8 +15,8 @@ use unified_sql_lsp_ir::Dialect;
 use unified_sql_lsp_lsp::config::{
     ConnectionPoolConfig, DialectVersion, EngineConfig, SchemaFilter,
 };
-use unified_sql_lsp_lsp::document::{Document, ParseMetadata};
-use unified_sql_lsp_lsp::parsing::{ParseError, ParseResult, ParserManager};
+use unified_sql_lsp_lsp::document::Document;
+use unified_sql_lsp_lsp::parsing::{ParseError, ParseResult};
 use unified_sql_lsp_lsp::sync::DocumentSync;
 
 fn create_test_document(content: &str, language_id: &str) -> Document {

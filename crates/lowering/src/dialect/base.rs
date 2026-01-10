@@ -48,11 +48,7 @@ where
     where
         F: FnMut(&mut LoweringContext, &N) -> LoweringResult<T>,
     {
-        let mut results = Vec::new();
-        for &node in nodes {
-            results.push(lower_fn(ctx, node)?);
-        }
-        Ok(results)
+        nodes.iter().map(|&node| lower_fn(ctx, node)).collect()
     }
 }
 
