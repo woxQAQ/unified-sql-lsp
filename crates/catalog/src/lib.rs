@@ -30,7 +30,6 @@
 //! ## Usage
 //!
 //! ```rust,ignore
-//! // TODO: (CATALOG-001) Implement actual catalog to make this example testable
 //! use unified_sql_lsp_catalog::{Catalog, CatalogError};
 //!
 //! async fn print_tables(catalog: &impl Catalog) -> Result<(), CatalogError> {
@@ -47,7 +46,6 @@
 //! To implement a custom catalog:
 //!
 //! ```rust,ignore
-//! // TODO: (CATALOG-001) Implement actual catalog to make this example testable
 //! use unified_sql_lsp_catalog::{Catalog, CatalogResult};
 //! use async_trait::async_trait;
 //!

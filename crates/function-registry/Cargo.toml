@@ -1,0 +1,18 @@
+[package]
+name = "unified-sql-lsp-function-registry"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Builtin SQL function registry for Unified SQL LSP"
+
+[dependencies]
+# Workspace dependencies
+serde = { workspace = true }
+
+# Internal dependencies
+unified-sql-lsp-ir = { path = "../ir" }
+
+[dev-dependencies]
+tokio = { workspace = true }

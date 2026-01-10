@@ -1814,6 +1814,17 @@ dependencies = [
  "sqlx",
  "thiserror",
  "tokio",
+ "unified-sql-lsp-function-registry",
+ "unified-sql-lsp-ir",
+]
+
+[[package]]
+name = "unified-sql-lsp-function-registry"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "tokio",
+ "unified-sql-lsp-ir",
 ]
 
 [[package]]
@@ -1821,6 +1832,7 @@ name = "unified-sql-lsp-ir"
 version = "0.1.0"
 dependencies = [
  "serde",
+ "serde_json",
  "thiserror",
 ]
 

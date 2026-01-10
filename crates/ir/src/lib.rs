@@ -14,10 +14,15 @@
 
 pub mod dialect;
 pub mod expr;
+pub mod metadata;
 pub mod query;
 
 // Re-export commonly used types
 pub use dialect::{Dialect, DialectExtensions};
+pub use metadata::{
+    ColumnMetadata, DataType, FunctionMetadata, FunctionParameter, FunctionType,
+    TableMetadata, TableReference, TableType,
+};
 pub use expr::{
     BinaryOp, ColumnRef, Expr, Literal, UnaryOp,
 };

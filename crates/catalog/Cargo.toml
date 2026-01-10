@@ -12,6 +12,10 @@ async-trait = { workspace = true }
 serde = { workspace = true }
 thiserror = { workspace = true }
 
+# Internal dependencies
+unified-sql-lsp-function-registry = { path = "../function-registry" }
+unified-sql-lsp-ir = { path = "../ir" }
+
 # Database drivers (feature-gated)
 sqlx = { version = "0.8", optional = true, features = ["runtime-tokio"] }
 
