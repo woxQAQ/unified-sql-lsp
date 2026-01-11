@@ -170,6 +170,7 @@ pub mod completion;
 pub mod config;
 pub mod cst_utils;
 pub mod definition;
+pub mod diagnostic;
 pub mod document;
 pub mod parsing;
 pub mod symbols;
@@ -183,6 +184,10 @@ pub use config::{ConfigError, ConnectionPoolConfig, DialectVersion, EngineConfig
 pub use definition::{
     ColumnDefinition, Definition, DefinitionError, DefinitionFinder, TableDefinition,
 };
+pub use diagnostic::{
+    DiagnosticCode, DiagnosticCollector, SqlDiagnostic, node_to_range,
+    publish_diagnostics_for_document,
+};
 pub use document::{Document, DocumentError, DocumentMetadata, DocumentStore, ParseMetadata};
 pub use parsing::{ParseError, ParseResult, ParserManager};
 pub use symbols::{SymbolBuilder, SymbolCatalogFetcher, SymbolError, SymbolRenderer};
@@ -193,4 +198,3 @@ pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 /// Server name
 pub const SERVER_NAME: &str = "unified-sql-lsp";
-

@@ -31,7 +31,9 @@
 //! - `DefinitionFinder`: Finds symbol definitions from CST
 //! - Helper functions for CST traversal and text extraction
 
-use crate::cst_utils::{extract_identifier_name, extract_node_text, find_node_at_position, node_to_range};
+use crate::cst_utils::{
+    extract_identifier_name, extract_node_text, find_node_at_position, node_to_range,
+};
 use tower_lsp::lsp_types::{Location, Position, Url};
 use tree_sitter::{Node, TreeCursor};
 
@@ -355,23 +357,30 @@ fn extract_alias(node: &Node, source: &str) -> Option<String> {
 // Test helper functions
 #[cfg(test)]
 fn find_table_name_node<'a>(root_node: &Node<'a>) -> Option<Node<'a>> {
-    let select = root_node.children(&mut root_node.walk())
+    let select = root_node
+        .children(&mut root_node.walk())
         .find(|n| n.kind() == "select_statement")?;
-    let from_clause = select.children(&mut select.walk())
+    let from_clause = select
+        .children(&mut select.walk())
         .find(|n| n.kind() == "from_clause")?;
-    let table_ref = from_clause.children(&mut from_clause.walk())
+    let table_ref = from_clause
+        .children(&mut from_clause.walk())
         .find(|n| n.kind() == "table_reference")?;
-    table_ref.children(&mut table_ref.walk())
+    table_ref
+        .children(&mut table_ref.walk())
         .find(|n| n.kind() == "table_name")
 }
 
 #[cfg(test)]
 fn find_table_reference_node<'a>(root_node: &Node<'a>) -> Option<Node<'a>> {
-    let select = root_node.children(&mut root_node.walk())
+    let select = root_node
+        .children(&mut root_node.walk())
         .find(|n| n.kind() == "select_statement")?;
-    let from_clause = select.children(&mut select.walk())
+    let from_clause = select
+        .children(&mut select.walk())
         .find(|n| n.kind() == "from_clause")?;
-    from_clause.children(&mut from_clause.walk())
+    from_clause
+        .children(&mut from_clause.walk())
         .find(|n| n.kind() == "table_reference")
 }
 
@@ -386,9 +395,7 @@ mod tests {
     fn parse_sql(sql: &str) -> tree_sitter::Tree {
         let manager = ParserManager::new();
         match manager.parse_text(Dialect::MySQL, sql) {
-            ParseResult::Success { tree, .. } => {
-                tree.expect("Parse tree should be present")
-            }
+            ParseResult::Success { tree, .. } => tree.expect("Parse tree should be present"),
             _ => panic!("Failed to parse SQL: {}", sql),
         }
     }
@@ -573,8 +580,8 @@ mod tests {
             None
         }
 
-        let column_node =
-            find_column_node_recursive(root_node.clone()).expect("Could not find column node for testing");
+        let column_node = find_column_node_recursive(root_node.clone())
+            .expect("Could not find column node for testing");
 
         let result = find_parent_select(&column_node);
         assert!(result.is_some(), "Should find parent SELECT statement");

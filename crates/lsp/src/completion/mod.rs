@@ -185,17 +185,20 @@ impl CompletionEngine {
                         }
                     };
 
-                let right_table_symbol =
-                    match self.catalog_fetcher.populate_single_table(&right_name).await {
-                        Ok(table) => table,
-                        Err(e) => {
-                            eprintln!(
-                                "Warning: Failed to load right table '{}': {}",
-                                right_name, e
-                            );
-                            return Ok(None);
-                        }
-                    };
+                let right_table_symbol = match self
+                    .catalog_fetcher
+                    .populate_single_table(&right_name)
+                    .await
+                {
+                    Ok(table) => table,
+                    Err(e) => {
+                        eprintln!(
+                            "Warning: Failed to load right table '{}': {}",
+                            right_name, e
+                        );
+                        return Ok(None);
+                    }
+                };
 
                 // Fetch functions from catalog (scalar functions only for JOINs)
                 let functions = self.catalog_fetcher.list_functions().await?;
@@ -366,8 +369,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_qualified_column_completion_with_alias() {
-        use unified_sql_lsp_catalog::TableMetadata;
         use unified_sql_lsp_catalog::DataType;
+        use unified_sql_lsp_catalog::TableMetadata;
         use unified_sql_lsp_test_utils::MockCatalogBuilder;
 
         let catalog = MockCatalogBuilder::new()
@@ -397,8 +400,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_qualified_column_completion_invalid_qualifier() {
-        use unified_sql_lsp_catalog::TableMetadata;
         use unified_sql_lsp_catalog::DataType;
+        use unified_sql_lsp_catalog::TableMetadata;
         use unified_sql_lsp_test_utils::MockCatalogBuilder;
 
         let catalog = MockCatalogBuilder::new()
@@ -424,8 +427,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_unqualified_column_completion_still_works() {
-        use unified_sql_lsp_catalog::TableMetadata;
         use unified_sql_lsp_catalog::DataType;
+        use unified_sql_lsp_catalog::TableMetadata;
         use unified_sql_lsp_test_utils::MockCatalogBuilder;
 
         let catalog = MockCatalogBuilder::new()
@@ -455,8 +458,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_where_clause_unqualified_completion() {
-        use unified_sql_lsp_catalog::TableMetadata;
         use unified_sql_lsp_catalog::DataType;
+        use unified_sql_lsp_catalog::TableMetadata;
         use unified_sql_lsp_test_utils::MockCatalogBuilder;
 
         let catalog = MockCatalogBuilder::new()
@@ -490,8 +493,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_where_clause_qualified_completion() {
-        use unified_sql_lsp_catalog::TableMetadata;
         use unified_sql_lsp_catalog::DataType;
+        use unified_sql_lsp_catalog::TableMetadata;
         use unified_sql_lsp_test_utils::MockCatalogBuilder;
 
         let catalog = MockCatalogBuilder::new()
@@ -527,8 +530,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_where_clause_qualified_with_alias() {
-        use unified_sql_lsp_catalog::TableMetadata;
         use unified_sql_lsp_catalog::DataType;
+        use unified_sql_lsp_catalog::TableMetadata;
         use unified_sql_lsp_test_utils::MockCatalogBuilder;
 
         let catalog = MockCatalogBuilder::new()
@@ -558,8 +561,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_where_clause_invalid_qualifier() {
-        use unified_sql_lsp_catalog::TableMetadata;
         use unified_sql_lsp_catalog::DataType;
+        use unified_sql_lsp_catalog::TableMetadata;
         use unified_sql_lsp_test_utils::MockCatalogBuilder;
 
         let catalog = MockCatalogBuilder::new()
@@ -584,8 +587,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_where_clause_ambiguous_column() {
-        use unified_sql_lsp_catalog::TableMetadata;
         use unified_sql_lsp_catalog::DataType;
+        use unified_sql_lsp_catalog::TableMetadata;
         use unified_sql_lsp_test_utils::MockCatalogBuilder;
 
         let catalog = MockCatalogBuilder::new()

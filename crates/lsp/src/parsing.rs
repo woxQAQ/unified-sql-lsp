@@ -523,5 +523,4 @@ mod tests {
 
         assert!(edit.is_none(), "Full replacement should return None");
     }
-
 }

@@ -353,4 +353,3 @@ pub enum ConfigError {
     #[error("Catalog error: {0}")]
     CatalogError(#[from] CatalogError),
 }
-

@@ -301,4 +301,3 @@ impl DocumentSync {
         }
     }
 }
-

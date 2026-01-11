@@ -422,12 +422,10 @@ async fn test_catalog_integration_function_completion() {
                 .with_type(FunctionType::Window)
                 .with_description("Assign sequential row number"),
         )
-        .with_table(
-            TableMetadata::new("users", "public").with_columns(vec![
-                ColumnMetadata::new("id", DataType::Integer),
-                ColumnMetadata::new("name", DataType::Text),
-            ]),
-        )
+        .with_table(TableMetadata::new("users", "public").with_columns(vec![
+            ColumnMetadata::new("id", DataType::Integer),
+            ColumnMetadata::new("name", DataType::Text),
+        ]))
         .build();
 
     let engine = CompletionEngine::new(Arc::new(catalog));
@@ -519,18 +517,14 @@ async fn test_function_completion_join_context() {
                 .with_type(FunctionType::Scalar)
                 .with_description("Scalar function"),
         )
-        .with_table(
-            TableMetadata::new("users", "public").with_columns(vec![
-                ColumnMetadata::new("id", DataType::Integer),
-                ColumnMetadata::new("name", DataType::Text),
-            ]),
-        )
-        .with_table(
-            TableMetadata::new("orders", "public").with_columns(vec![
-                ColumnMetadata::new("id", DataType::Integer),
-                ColumnMetadata::new("user_id", DataType::Integer),
-            ]),
-        )
+        .with_table(TableMetadata::new("users", "public").with_columns(vec![
+            ColumnMetadata::new("id", DataType::Integer),
+            ColumnMetadata::new("name", DataType::Text),
+        ]))
+        .with_table(TableMetadata::new("orders", "public").with_columns(vec![
+            ColumnMetadata::new("id", DataType::Integer),
+            ColumnMetadata::new("user_id", DataType::Integer),
+        ]))
         .build();
 
     let engine = CompletionEngine::new(Arc::new(catalog));

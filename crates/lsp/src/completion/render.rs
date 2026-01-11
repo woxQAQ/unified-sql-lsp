@@ -882,14 +882,11 @@ mod tests {
         use unified_sql_lsp_catalog::FunctionMetadata;
 
         let functions = vec![
-            FunctionMetadata::new("count", DataType::BigInt)
-                .with_type(FunctionType::Aggregate),
-            FunctionMetadata::new("abs", DataType::Integer)
-                .with_type(FunctionType::Scalar),
+            FunctionMetadata::new("count", DataType::BigInt).with_type(FunctionType::Aggregate),
+            FunctionMetadata::new("abs", DataType::Integer).with_type(FunctionType::Scalar),
         ];
 
-        let items =
-            CompletionRenderer::render_functions(&functions, Some(FunctionType::Aggregate));
+        let items = CompletionRenderer::render_functions(&functions, Some(FunctionType::Aggregate));
 
         // Should only show aggregate functions
         assert_eq!(items.len(), 1);
@@ -923,24 +920,40 @@ mod tests {
 
         let functions = vec![
             FunctionMetadata::new("abs", DataType::Integer).with_type(FunctionType::Scalar),
-            FunctionMetadata::new("count", DataType::BigInt)
-                .with_type(FunctionType::Aggregate),
-            FunctionMetadata::new("row_number", DataType::BigInt)
-                .with_type(FunctionType::Window),
+            FunctionMetadata::new("count", DataType::BigInt).with_type(FunctionType::Aggregate),
+            FunctionMetadata::new("row_number", DataType::BigInt).with_type(FunctionType::Window),
         ];
 
         let items = CompletionRenderer::render_functions(&functions, None);
 
         // Aggregates should come first
-        assert!(items[0].sort_text.as_ref().unwrap().starts_with("00_aggregate_"));
+        assert!(
+            items[0]
+                .sort_text
+                .as_ref()
+                .unwrap()
+                .starts_with("00_aggregate_")
+        );
         assert_eq!(items[0].label, "count");
 
         // Window functions second
-        assert!(items[1].sort_text.as_ref().unwrap().starts_with("01_window_"));
+        assert!(
+            items[1]
+                .sort_text
+                .as_ref()
+                .unwrap()
+                .starts_with("01_window_")
+        );
         assert_eq!(items[1].label, "row_number");
 
         // Scalar functions last
-        assert!(items[2].sort_text.as_ref().unwrap().starts_with("03_scalar_"));
+        assert!(
+            items[2]
+                .sort_text
+                .as_ref()
+                .unwrap()
+                .starts_with("03_scalar_")
+        );
         assert_eq!(items[2].label, "abs");
     }
 
@@ -988,7 +1001,8 @@ mod tests {
     fn test_function_item_insert_text() {
         use unified_sql_lsp_catalog::FunctionMetadata;
 
-        let func = FunctionMetadata::new("count", DataType::BigInt).with_type(FunctionType::Aggregate);
+        let func =
+            FunctionMetadata::new("count", DataType::BigInt).with_type(FunctionType::Aggregate);
 
         let item = CompletionRenderer::function_item(&func);
 

@@ -55,6 +55,7 @@
 use crate::catalog_manager::CatalogManager;
 use crate::completion::CompletionEngine;
 use crate::config::EngineConfig;
+use crate::diagnostic::{DiagnosticCollector, publish_diagnostics_for_document};
 use crate::document::{Document, DocumentError, DocumentStore, ParseMetadata};
 use crate::symbols::{SymbolBuilder, SymbolCatalogFetcher, SymbolError, SymbolRenderer};
 use crate::sync::DocumentSync;
@@ -84,6 +85,9 @@ pub struct LspBackend {
 
     /// Catalog manager for database connections
     catalog_manager: Arc<RwLock<CatalogManager>>,
+
+    /// Diagnostic collector for error detection
+    diagnostic_collector: DiagnosticCollector,
 }
 
 impl LspBackend {
@@ -102,6 +106,7 @@ impl LspBackend {
             config,
             doc_sync,
             catalog_manager: Arc::new(RwLock::new(CatalogManager::new())),
+            diagnostic_collector: DiagnosticCollector::new(),
         }
     }
 
@@ -155,22 +160,62 @@ impl LspBackend {
                 info!("Document parsed successfully in {:?}", parse_time);
                 let metadata = ParseMetadata::new(parse_time.as_millis() as u64, dialect, false, 0);
                 if let Some(tree) = tree {
-                    if let Err(e) = self.documents.update_document_tree(uri, tree, metadata).await {
+                    if let Err(e) = self
+                        .documents
+                        .update_document_tree(uri, tree, metadata)
+                        .await
+                    {
                         error!("Failed to update document tree: {}", e);
                     }
+                }
+                // Publish diagnostics
+                let updated_document = self.documents.get_document(uri).await;
+                if let Some(doc) = updated_document {
+                    let source = doc.get_content();
+                    let tree_ref = doc.tree();
+                    let _count = publish_diagnostics_for_document(
+                        &self.diagnostic_collector,
+                        &self.client,
+                        uri.clone(),
+                        &tree_ref,
+                        &source,
+                    )
+                    .await;
                 }
             }
             crate::parsing::ParseResult::Partial { tree, errors } => {
                 warn!("Document parsed with {} errors", errors.len());
                 let metadata = ParseMetadata::new(0, dialect, true, errors.len());
                 if let Some(tree) = tree {
-                    if let Err(e) = self.documents.update_document_tree(uri, tree, metadata).await {
+                    if let Err(e) = self
+                        .documents
+                        .update_document_tree(uri, tree, metadata)
+                        .await
+                    {
                         error!("Failed to update document tree: {}", e);
                     }
+                }
+                // Publish diagnostics
+                let updated_document = self.documents.get_document(uri).await;
+                if let Some(doc) = updated_document {
+                    let source = doc.get_content();
+                    let tree_ref = doc.tree();
+                    let _count = publish_diagnostics_for_document(
+                        &self.diagnostic_collector,
+                        &self.client,
+                        uri.clone(),
+                        &tree_ref,
+                        &source,
+                    )
+                    .await;
                 }
             }
             crate::parsing::ParseResult::Failed { error } => {
                 error!("Failed to parse document: {}", error);
+                // Clear diagnostics on parse failure
+                self.client
+                    .publish_diagnostics(uri.clone(), Vec::new(), None)
+                    .await;
             }
         }
     }
@@ -195,18 +240,54 @@ impl LspBackend {
                 info!("Document reparsed in {:?}", parse_time);
                 let metadata = ParseMetadata::new(parse_time.as_millis() as u64, dialect, false, 0);
                 if let Some(tree) = tree {
-                    if let Err(e) = self.documents.update_document_tree(uri, tree, metadata).await {
+                    if let Err(e) = self
+                        .documents
+                        .update_document_tree(uri, tree, metadata)
+                        .await
+                    {
                         error!("Failed to update document tree: {}", e);
                     }
+                }
+                // Publish diagnostics
+                let updated_document = self.documents.get_document(uri).await;
+                if let Some(doc) = updated_document {
+                    let source = doc.get_content();
+                    let tree_ref = doc.tree();
+                    let _count = publish_diagnostics_for_document(
+                        &self.diagnostic_collector,
+                        &self.client,
+                        uri.clone(),
+                        &tree_ref,
+                        &source,
+                    )
+                    .await;
                 }
             }
             crate::parsing::ParseResult::Partial { tree, errors } => {
                 warn!("Document reparsed with {} errors", errors.len());
                 let metadata = ParseMetadata::new(0, dialect, true, errors.len());
                 if let Some(tree) = tree {
-                    if let Err(e) = self.documents.update_document_tree(uri, tree, metadata).await {
+                    if let Err(e) = self
+                        .documents
+                        .update_document_tree(uri, tree, metadata)
+                        .await
+                    {
                         error!("Failed to update document tree: {}", e);
                     }
+                }
+                // Publish diagnostics
+                let updated_document = self.documents.get_document(uri).await;
+                if let Some(doc) = updated_document {
+                    let source = doc.get_content();
+                    let tree_ref = doc.tree();
+                    let _count = publish_diagnostics_for_document(
+                        &self.diagnostic_collector,
+                        &self.client,
+                        uri.clone(),
+                        &tree_ref,
+                        &source,
+                    )
+                    .await;
                 }
             }
             crate::parsing::ParseResult::Failed { error } => {
@@ -214,6 +295,10 @@ impl LspBackend {
                 if let Err(e) = self.documents.clear_document_tree(uri).await {
                     error!("Failed to clear document tree: {}", e);
                 }
+                // Clear diagnostics on parse failure
+                self.client
+                    .publish_diagnostics(uri.clone(), Vec::new(), None)
+                    .await;
             }
         }
     }
@@ -391,9 +476,9 @@ impl LanguageServer for LspBackend {
         // Get old tree before update for incremental parsing
         let old_document = self.documents.get_document(&uri).await;
         let old_tree: Option<tree_sitter::Tree> = old_document.as_ref().and_then(|d| {
-            d.tree().as_ref().and_then(|arc_mutex| {
-                arc_mutex.try_lock().ok().map(|guard| (*guard).clone())
-            })
+            d.tree()
+                .as_ref()
+                .and_then(|arc_mutex| arc_mutex.try_lock().ok().map(|guard| (*guard).clone()))
         });
 
         // Update document in store
@@ -436,6 +521,11 @@ impl LanguageServer for LspBackend {
         if self.documents.close_document(&uri).await {
             // Clear parse data
             self.doc_sync.on_document_close(&uri);
+
+            // Clear diagnostics
+            self.client
+                .publish_diagnostics(uri.clone(), Vec::new(), None)
+                .await;
 
             self.log_message(&format!("Document closed: {}", uri), MessageType::INFO)
                 .await;
@@ -749,7 +839,6 @@ impl LanguageServer for LspBackend {
         .await;
     }
 }
-
 
 /// LSP backend errors
 ///
