@@ -12,890 +12,933 @@ meta:
   last_updated: "2026-01-08"
   total_features: 48
   completed_features: 23
-  notes: "TEST-002 fully implemented with 24 comprehensive integration tests covering completion flow (10 tests), multi-document concurrency (6 tests), and catalog integration (8 tests). All tests passing with performance validation (p95 < 200ms) and error isolation."
+  notes: >-
+    TEST-002 fully implemented with 24 comprehensive integration tests covering
+    completion flow (10 tests), multi-document concurrency (6 tests), and
+    catalog integration (8 tests). All tests passing with performance
+    validation (p95 < 200ms) and error isolation.
 
-# =============================================================================
-# 阶段 0: 基础设施 (Foundation)
-# =============================================================================
+features:
+  # =============================================================================
+  # 阶段 0: 基础设施 (Foundation)
+  # =============================================================================
 
-- id: GRAMMAR-001
-  name: "Tree-sitter Grammar 基础框架"
-  description: |
-    基于 DerekStride/tree-sitter-sql 创建基础 Grammar 框架
-    - 建立 dialect/ 目录结构
-    - 实现基础 SQL 规则（SELECT, INSERT, UPDATE, DELETE）
-    - 实现方言继承机制
-    - 配置化方言支持（DIALECT=xxx tree-sitter generate）
-  priority: P0
-  status: done
-  dependencies: []
-  deliverables:
-    - tree-sitter-unified-sql/grammar.js
-    - tree-sitter-unified-sql/dialect/base.js
-    - tree-sitter-unified-sql/dialect/mysql.js
-    - tree-sitter-unified-sql/dialect/postgresql.js
-    - 构建脚本和配置
-    - 单元测试
+  - id: GRAMMAR-001
+    name: "Tree-sitter Grammar 基础框架"
+    description: |
+      基于 DerekStride/tree-sitter-sql 创建基础 Grammar 框架
+      - 建立 dialect/ 目录结构
+      - 实现基础 SQL 规则（SELECT, INSERT, UPDATE, DELETE）
+      - 实现方言继承机制
+      - 配置化方言支持（DIALECT=xxx tree-sitter generate）
+    priority: P0
+    status: done
+    dependencies: []
+    deliverables:
+      - tree-sitter-unified-sql/grammar.js
+      - tree-sitter-unified-sql/dialect/base.js
+      - tree-sitter-unified-sql/dialect/mysql.js
+      - tree-sitter-unified-sql/dialect/postgresql.js
+      - 构建脚本和配置
+      - 单元测试
 
-- id: GRAMMAR-002
-  name: "MySQL 方言 Grammar 实现"
-  description: |
-    实现完整的 MySQL 方言支持
-    - MySQL 5.7 和 8.0 版本差异
-    - LIMIT/OFFSET 语法
-    - 基础关键字和函数
-  priority: P0
-  status: done
-  dependencies: ["GRAMMAR-001"]
-  deliverables:
-    - dialect/mysql.js
-    - mysql-5.7.so
-    - mysql-8.0.so
-    - 单元测试
+  - id: GRAMMAR-002
+    name: "MySQL 方言 Grammar 实现"
+    description: |
+      实现完整的 MySQL 方言支持
+      - MySQL 5.7 和 8.0 版本差异
+      - LIMIT/OFFSET 语法
+      - 基础关键字和函数
+    priority: P0
+    status: done
+    dependencies: ["GRAMMAR-001"]
+    deliverables:
+      - dialect/mysql.js
+      - mysql-5.7.so
+      - mysql-8.0.so
+      - 单元测试
 
-- id: GRAMMAR-003
-  name: "PostgreSQL 方言 Grammar 实现"
-  description: |
-    实现完整的 PostgreSQL 方言支持
-    - PostgreSQL 12+ 版本特性
-    - CTE (WITH 子句)
-    - LATERAL JOIN
-    - DISTINCT ON
-  priority: P0
-  status: done
-  dependencies: ["GRAMMAR-001"]
-  deliverables:
-    - dialect/postgresql.js
-    - postgresql-12.so
-    - postgresql-14.so
-    - 单元测试
+  - id: GRAMMAR-003
+    name: "PostgreSQL 方言 Grammar 实现"
+    description: |
+      实现完整的 PostgreSQL 方言支持
+      - PostgreSQL 12+ 版本特性
+      - CTE (WITH 子句)
+      - LATERAL JOIN
+      - DISTINCT ON
+    priority: P0
+    status: done
+    dependencies: ["GRAMMAR-001"]
+    deliverables:
+      - dialect/postgresql.js
+      - postgresql-12.so
+      - postgresql-14.so
+      - 单元测试
 
-- id: IR-001
-  name: "IR 核心类型扩展"
-  description: |
-    扩展现有 IR 类型以支持方言差异
-    - 添加 Window 子句支持
-    - 添加 DialectExtensions 枚举
-    - 定义核心 SQL 子集
-  priority: P0
-  status: done
-  dependencies: []
-  deliverables:
-    - crates/ir/src/query.rs (扩展)
-    - crates/ir/src/stmt.rs (扩展)
-    - 核心子集文档
+  - id: IR-001
+    name: "IR 核心类型扩展"
+    description: |
+      扩展现有 IR 类型以支持方言差异
+      - 添加 Window 子句支持
+      - 添加 DialectExtensions 枚举
+      - 定义核心 SQL 子集
+    priority: P0
+    status: done
+    dependencies: []
+    deliverables:
+      - crates/ir/src/query.rs (扩展)
+      - crates/ir/src/stmt.rs (扩展)
+      - 核心子集文档
 
-- id: LOWERING-001
-  name: "Lowering Trait 定义"
-  description: |
-    定义 CST → IR 转换的统一接口
-    - Lowering trait
-    - 错误处理策略 (Success/Partial/Failed)
-    - 降级补全机制
-  priority: P0
-  status: done
-  dependencies: ["IR-001"]
-  deliverables:
-    - crates/lowering/src/lib.rs
-    - error 类型定义
-    - 文档
+  - id: LOWERING-001
+    name: "Lowering Trait 定义"
+    description: |
+      定义 CST → IR 转换的统一接口
+      - Lowering trait
+      - 错误处理策略 (Success/Partial/Failed)
+      - 降级补全机制
+    priority: P0
+    status: done
+    dependencies: ["IR-001"]
+    deliverables:
+      - crates/lowering/src/lib.rs
+      - error 类型定义
+      - 文档
 
-- id: LOWERING-002
-  name: "MySQL Lowering 实现"
-  description: |
-    实现 MySQL CST → IR 转换
-    - 处理 MySQL 特定语法
-    - 版本兼容（5.7 vs 8.0）
-    - LIMIT/OFFSET 转换
-  priority: P0
-  status: done
-  dependencies: ["LOWERING-001", "GRAMMAR-002"]
-  deliverables:
-    - crates/lowering/src/dialect/mysql.rs
-    - 单元测试
-    - 版本测试矩阵
-    - Note: Fully implemented with MySQL-specific LIMIT syntax (3 forms), backtick identifiers, REPLACE statement support, and comprehensive error handling
+  - id: LOWERING-002
+    name: "MySQL Lowering 实现"
+    description: |
+      实现 MySQL CST → IR 转换
+      - 处理 MySQL 特定语法
+      - 版本兼容（5.7 vs 8.0）
+      - LIMIT/OFFSET 转换
+    priority: P0
+    status: done
+    dependencies: ["LOWERING-001", "GRAMMAR-002"]
+    deliverables:
+      - crates/lowering/src/dialect/mysql.rs
+      - 单元测试
+      - 版本测试矩阵
+      - Note: >-
+          Fully implemented with MySQL-specific LIMIT syntax (3 forms), backtick
+          identifiers, REPLACE statement support, and comprehensive error handling
 
-- id: LOWERING-003
-  name: "PostgreSQL Lowering 实现"
-  description: |
-    实现 PostgreSQL CST → IR 转换
-    - 处理 PostgreSQL 特定语法
-    - CTE 转换
-    - LATERAL JOIN 转换
-  priority: P0
-  status: done
-  dependencies: ["LOWERING-001", "GRAMMAR-003"]
-  deliverables:
-    - crates/lowering/src/dialect/postgresql.rs
-    - 单元测试
-    - 版本测试矩阵
-    - Note: Fully implemented with PostgreSQL-specific syntax support (double-quote identifiers, dollar-quoted strings, LIMIT/OFFSET single form), graceful degradation for unsupported features (DISTINCT ON, RETURNING, LATERAL), and comprehensive unit tests
+  - id: LOWERING-003
+    name: "PostgreSQL Lowering 实现"
+    description: |
+      实现 PostgreSQL CST → IR 转换
+      - 处理 PostgreSQL 特定语法
+      - CTE 转换
+      - LATERAL JOIN 转换
+    priority: P0
+    status: done
+    dependencies: ["LOWERING-001", "GRAMMAR-003"]
+    deliverables:
+      - crates/lowering/src/dialect/postgresql.rs
+      - 单元测试
+      - 版本测试矩阵
+      - Note: >-
+          Fully implemented with PostgreSQL-specific syntax support (double-quote
+          identifiers, dollar-quoted strings, LIMIT/OFFSET single form), graceful
+          degradation for unsupported features (DISTINCT ON, RETURNING, LATERAL),
+          and comprehensive unit tests
 
-- id: LOWERING-004
-  name: "ORDER BY Direction 解析"
-  description: |
-    实现 ORDER BY 方向解析
-    - 解析 ASC/DESC 关键字
-    - 将方向与 order_by 中的表达式关联
-    - 处理多个带有不同方向的排序表达式
-  priority: P1
-  status: done
-  dependencies: ["LOWERING-001"]
-  deliverables:
-    - ORDER BY 方向解析逻辑
-    - 测试用例
-    - Note: Fully implemented for MySQL and PostgreSQL with ASC/DESC keyword parsing, direction association with expressions, support for multiple ORDER BY columns with mixed directions, and comprehensive unit tests (6 tests per dialect)
+  - id: LOWERING-004
+    name: "ORDER BY Direction 解析"
+    description: |
+      实现 ORDER BY 方向解析
+      - 解析 ASC/DESC 关键字
+      - 将方向与 order_by 中的表达式关联
+      - 处理多个带有不同方向的排序表达式
+    priority: P1
+    status: done
+    dependencies: ["LOWERING-001"]
+    deliverables:
+      - ORDER BY 方向解析逻辑
+      - 测试用例
+      - Note: >-
+          Fully implemented for MySQL and PostgreSQL with ASC/DESC keyword parsing,
+          direction association with expressions, support for multiple ORDER BY columns
+          with mixed directions, and comprehensive unit tests (6 tests per dialect)
 
-- id: LOWERING-005
-  name: "CASE 表达式 Lowering"
-  description: |
-    实现 CASE 表达式 CST → IR 转换
-    - 解析 WHEN-THEN-ELSE 子句结构
-    - 支持简单 CASE 和搜索 CASE 两种形式
-    - 支持多个 WHEN 子句，保证正确的求值顺序
-    - 处理 ELSE 子句和 NULL 结果
-  priority: P1
-  status: done
-  dependencies: ["LOWERING-001"]
-  deliverables:
-    - CASE 表达式 lowering 逻辑
-    - 测试用例
-    - Note: Fully implemented for MySQL and PostgreSQL with comprehensive test coverage including nested CASE expressions, multiple WHEN clauses, optional ELSE, and error handling
+  - id: LOWERING-005
+    name: "CASE 表达式 Lowering"
+    description: |
+      实现 CASE 表达式 CST → IR 转换
+      - 解析 WHEN-THEN-ELSE 子句结构
+      - 支持简单 CASE 和搜索 CASE 两种形式
+      - 支持多个 WHEN 子句，保证正确的求值顺序
+      - 处理 ELSE 子句和 NULL 结果
+    priority: P1
+    status: done
+    dependencies: ["LOWERING-001"]
+    deliverables:
+      - CASE 表达式 lowering 逻辑
+      - 测试用例
+      - Note: >-
+          Fully implemented for MySQL and PostgreSQL with comprehensive test coverage
+          including nested CASE expressions, multiple WHEN clauses, optional ELSE,
+          and error handling
 
-# =============================================================================
-# 阶段 1: 语义分析 (Semantic Analysis)
-# =============================================================================
+  # =============================================================================
+  # 阶段 1: 语义分析 (Semantic Analysis)
+  # =============================================================================
 
-- id: SEMANTIC-001
-  name: "Scope 和 Symbol 基础结构"
-  description: |
-    定义语义分析的核心数据结构
-    - Scope, TableSymbol, ColumnSymbol
-    - 作用域管理
-    - 符号表
-  priority: P0
-  dependencies: ["IR-001"]
-  status: done
-  deliverables:
-    - crates/semantic/src/scope.rs
-    - crates/semantic/src/symbol.rs
-    - 单元测试
+  - id: SEMANTIC-001
+    name: "Scope 和 Symbol 基础结构"
+    description: |
+      定义语义分析的核心数据结构
+      - Scope, TableSymbol, ColumnSymbol
+      - 作用域管理
+      - 符号表
+    priority: P0
+    dependencies: ["IR-001"]
+    status: done
+    deliverables:
+      - crates/semantic/src/scope.rs
+      - crates/semantic/src/symbol.rs
+      - 单元测试
 
-- id: SEMANTIC-002
-  name: "Semantic Analyzer 核心逻辑"
-  description: |
-    实现语义分析器
-    - 收集表和列信息
-    - 解析表别名
-    - 解析列引用归属
-  priority: P0
-  status: done
-  dependencies: ["SEMANTIC-001", "LOWERING-002", "LOWERING-003"]
-  deliverables:
-    - crates/semantic/src/analyzer.rs
-    - 集成测试
-    - 错误场景测试
-    - Note: Fully implemented with SemanticAnalyzer struct, table/column resolution, catalog integration, scope management, and comprehensive error handling. Includes TODOs for future features (CTEs, subqueries, function validation).
+  - id: SEMANTIC-002
+    name: "Semantic Analyzer 核心逻辑"
+    description: |
+      实现语义分析器
+      - 收集表和列信息
+      - 解析表别名
+      - 解析列引用归属
+    priority: P0
+    status: done
+    dependencies: ["SEMANTIC-001", "LOWERING-002", "LOWERING-003"]
+    deliverables:
+      - crates/semantic/src/analyzer.rs
+      - 集成测试
+      - 错误场景测试
+      - Note: >-
+          Fully implemented with SemanticAnalyzer struct, table/column resolution,
+          catalog integration, scope management, and comprehensive error handling.
+          Includes TODOs for future features (CTEs, subqueries, function validation).
 
-- id: SEMANTIC-003
-  name: "补全触发点判断"
-  description: |
-    基于语法树判断补全上下文
-    - SelectProjection (SELECT 子句)
-    - FromTable (FROM 子句)
-    - QualifiedColumn (table. 后)
-    - JoinCondition (JOIN ON)
-  priority: P0
-  status: done
-  dependencies: ["SEMANTIC-002", "GRAMMAR-002", "GRAMMAR-003"]
-  deliverables:
-    - crates/lsp/src/completion/context.rs
-    - 单元测试
-    - Note: Fully implemented with SelectProjection, FromClause, WhereClause, and JoinCondition context detection. Includes comprehensive unit tests for all context types.
+  - id: SEMANTIC-003
+    name: "补全触发点判断"
+    description: |
+      基于语法树判断补全上下文
+      - SelectProjection (SELECT 子句)
+      - FromTable (FROM 子句)
+      - QualifiedColumn (table. 后)
+      - JoinCondition (JOIN ON)
+    priority: P0
+    status: done
+    dependencies: ["SEMANTIC-002", "GRAMMAR-002", "GRAMMAR-003"]
+    deliverables:
+      - crates/lsp/src/completion/context.rs
+      - 单元测试
+      - Note: >-
+          Fully implemented with SelectProjection, FromClause, WhereClause, and
+          JoinCondition context detection. Includes comprehensive unit tests for
+          all context types.
 
-- id: SEMANTIC-004
-  name: "列引用解析"
-  description: |
-    解析列引用的归属和歧义
-    - 判断列属于哪个表
-    - 检测歧义列
-    - 提供候选项
-  priority: P0
-  status: done
-  dependencies: ["SEMANTIC-002"]
-  deliverables:
-    - crates/semantic/src/resolution.rs
-    - 测试用例
-    - Note: Fully implemented with ColumnResolver, fuzzy matching (Levenshtein distance), candidate suggestions, ambiguity detection, and 11 comprehensive unit tests. Integrated with SemanticAnalyzer for enhanced resolution with "did you mean?" functionality.
+  - id: SEMANTIC-004
+    name: "列引用解析"
+    description: |
+      解析列引用的归属和歧义
+      - 判断列属于哪个表
+      - 检测歧义列
+      - 提供候选项
+    priority: P0
+    status: done
+    dependencies: ["SEMANTIC-002"]
+    deliverables:
+      - crates/semantic/src/resolution.rs
+      - 测试用例
+      - Note: >-
+          Fully implemented with ColumnResolver, fuzzy matching (Levenshtein distance),
+          candidate suggestions, ambiguity detection, and 11 comprehensive unit tests.
+          Integrated with SemanticAnalyzer for enhanced resolution with "did you mean?"
+          functionality.
 
-- id: SEMANTIC-005
-  name: "高级查询子句验证"
-  description: |
-    实现高级 SQL 子句的语义验证
-    - GROUP BY / HAVING 子句验证
-    - ORDER BY 子句验证
-    - Wildcard 展开 (table.*)
-    - 聚合函数上下文验证
-  priority: P1
-  status: done
-  dependencies: ["SEMANTIC-002"]
-  deliverables:
-    - GROUP BY / HAVING / ORDER BY 验证逻辑
-    - Wildcard 展开实现
-    - 聚合上下文跟踪
-    - 测试用例
-    - Note: Fully implemented with GROUP BY validation, HAVING validation (with/without GROUP BY),
-      ORDER BY validation at Query level, wildcard expansion functionality (expand_wildcard and
-      expand_projection_wildcards methods), catalog-based aggregate function detection using
-      FunctionMetadata from catalog instead of hardcoded list, and comprehensive unit tests
-      (15 new tests: 10 for validation, 5 for wildcard expansion, 3 for catalog aggregates).
-      Added new error types: NonAggregateColumnInHaving, WildcardTableNotFound.
+  - id: SEMANTIC-005
+    name: "高级查询子句验证"
+    description: |
+      实现高级 SQL 子句的语义验证
+      - GROUP BY / HAVING 子句验证
+      - ORDER BY 子句验证
+      - Wildcard 展开 (table.*)
+      - 聚合函数上下文验证
+    priority: P1
+    status: done
+    dependencies: ["SEMANTIC-002"]
+    deliverables:
+      - GROUP BY / HAVING / ORDER BY 验证逻辑
+      - Wildcard 展开实现
+      - 聚合上下文跟踪
+      - 测试用例
+      - Note: >-
+          Fully implemented with GROUP BY validation, HAVING validation (with/without
+          GROUP BY), ORDER BY validation at Query level, wildcard expansion functionality
+          (expand_wildcard and expand_projection_wildcards methods), catalog-based aggregate
+          function detection using FunctionMetadata from catalog instead of hardcoded list,
+          and comprehensive unit tests (15 new tests: 10 for validation, 5 for wildcard
+          expansion, 3 for catalog aggregates). Added new error types:
+          NonAggregateColumnInHaving, WildcardTableNotFound.
 
-- id: SEMANTIC-006
-  name: "CTE 和集合操作支持"
-  description: |
-    实现 CTE 和集合操作的语义分析
-    - CTE 作用域创建和合成表
-    - CTE 输出列推断
-    - UNION / INTERSECT / EXCEPT 作用域处理
-    - 递归 CTE 支持
-  priority: P1
-  status: done
-  dependencies: ["SEMANTIC-002"]
-  deliverables:
-    - CTE 作用域层次结构
-    - 合成表创建逻辑
-    - 集合操作验证
-    - 测试用例
-    - Note: Fully implemented with CTE scope creation (process_ctes method),
-      synthetic table management, column inference (explicit and implicit),
-      circular dependency detection (detect_cte_cycles), set operation support
-      (analyze_set_operation_recursive for UNION/INTERSECT/EXCEPT), column count
-      validation, and recursive set operation analysis. Includes 6 new unit tests
-      and 5 new error types (CircularCteDependency, CteColumnCountMismatch, CteNameConflict,
-      SetOperationColumnCountMismatch, RecursiveCteDepthLimit).
+  - id: SEMANTIC-006
+    name: "CTE 和集合操作支持"
+    description: |
+      实现 CTE 和集合操作的语义分析
+      - CTE 作用域创建和合成表
+      - CTE 输出列推断
+      - UNION / INTERSECT / EXCEPT 作用域处理
+      - 递归 CTE 支持
+    priority: P1
+    status: done
+    dependencies: ["SEMANTIC-002"]
+    deliverables:
+      - CTE 作用域层次结构
+      - 合成表创建逻辑
+      - 集合操作验证
+      - 测试用例
+      - Note: >-
+          Fully implemented with CTE scope creation (process_ctes method), synthetic
+          table management, column inference (explicit and implicit), circular
+          dependency detection (detect_cte_cycles), set operation support
+          (analyze_set_operation_recursive for UNION/INTERSECT/EXCEPT), column
+          count validation, and recursive set operation analysis. Includes 6 new
+          unit tests and 5 new error types (CircularCteDependency, CteColumnCountMismatch,
+          CteNameConflict, SetOperationColumnCountMismatch, RecursiveCteDepthLimit).
 
-# =============================================================================
-# 阶段 2: Catalog (Schema 抽象)
-# =============================================================================
+  # =============================================================================
+  # 阶段 2: Catalog (Schema 抽象)
+  # =============================================================================
 
-- id: CATALOG-001
-  name: "Catalog Trait 定义"
-  description: |
-    定义数据库 Schema 抽象接口
-    - list_tables, get_columns, list_functions
-    - 表/列/函数元数据结构
-  priority: P0
-  status: done
-  dependencies: []
-  deliverables:
-    - crates/catalog/src/lib.rs
-    - Trait 定义
-    - 元数据类型
+  - id: CATALOG-001
+    name: "Catalog Trait 定义"
+    description: |
+      定义数据库 Schema 抽象接口
+      - list_tables, get_columns, list_functions
+      - 表/列/函数元数据结构
+    priority: P0
+    status: done
+    dependencies: []
+    deliverables:
+      - crates/catalog/src/lib.rs
+      - Trait 定义
+      - 元数据类型
 
-- id: CATALOG-002
-  name: "LiveCatalog 实现（MySQL）"
-  description: |
-    实现动态 MySQL Catalog
-    - 连接池管理（默认 10 连接）
-    - 查询超时（5 秒）
-    - 健康检查
-    - 从数据库实时查询 schema
-  priority: P0
-  status: done
-  dependencies: ["CATALOG-001"]
-  deliverables:
-    - crates/catalog/src/live_mysql.rs
-    - 连接池实现
-    - 测试
+  - id: CATALOG-002
+    name: "LiveCatalog 实现（MySQL）"
+    description: |
+      实现动态 MySQL Catalog
+      - 连接池管理（默认 10 连接）
+      - 查询超时（5 秒）
+      - 健康检查
+      - 从数据库实时查询 schema
+    priority: P0
+    status: done
+    dependencies: ["CATALOG-001"]
+    deliverables:
+      - crates/catalog/src/live_mysql.rs
+      - 连接池实现
+      - 测试
 
-- id: CATALOG-003
-  name: "LiveCatalog 实现（PostgreSQL）"
-  description: |
-    实现动态 PostgreSQL Catalog
-    - 连接池管理
-    - 超时和健康检查
-    - 从数据库实时查询 schema
-  priority: P0
-  status: done
-  dependencies: ["CATALOG-001"]
-  deliverables:
-    - crates/catalog/src/live_postgres.rs
-    - 测试
+  - id: CATALOG-003
+    name: "LiveCatalog 实现（PostgreSQL）"
+    description: |
+      实现动态 PostgreSQL Catalog
+      - 连接池管理
+      - 超时和健康检查
+      - 从数据库实时查询 schema
+    priority: P0
+    status: done
+    dependencies: ["CATALOG-001"]
+    deliverables:
+      - crates/catalog/src/live_postgres.rs
+      - 测试
 
-- id: CATALOG-004
-  name: "CachedCatalog 实现"
-  description: |
-    实现带缓存的 Catalog
-    - LRU 缓存
-    - TTL（默认 5 分钟）
-    - 批量查询优化
-  priority: P1
-  dependencies: ["CATALOG-002", "CATALOG-003"]
-  deliverables:
-    - crates/catalog/src/cached.rs
-    - 缓存测试
-    - 性能基准
+  - id: CATALOG-004
+    name: "CachedCatalog 实现"
+    description: |
+      实现带缓存的 Catalog
+      - LRU 缓存
+      - TTL（默认 5 分钟）
+      - 批量查询优化
+    priority: P1
+    dependencies: ["CATALOG-002", "CATALOG-003"]
+    deliverables:
+      - crates/catalog/src/cached.rs
+      - 缓存测试
+      - 性能基准
 
-- id: CATALOG-005
-  name: "SchemaFilter 支持"
-  description: |
-    实现 Schema 过滤机制
-    - allowed_schemas, allowed_tables, excluded_tables
-    - glob 模式支持（users_*, temp.*）
-    - FilteredCatalog 包装器
-  priority: P1
-  dependencies: ["CATALOG-001"]
-  deliverables:
-    - crates/catalog/src/filter.rs
-    - 测试
+  - id: CATALOG-005
+    name: "SchemaFilter 支持"
+    description: |
+      实现 Schema 过滤机制
+      - allowed_schemas, allowed_tables, excluded_tables
+      - glob 模式支持（users_*, temp.*）
+      - FilteredCatalog 包装器
+    priority: P1
+    dependencies: ["CATALOG-001"]
+    deliverables:
+      - crates/catalog/src/filter.rs
+      - 测试
 
-# =============================================================================
-# 阶段 3: LSP 基础 (LSP Foundation)
-# =============================================================================
+  # =============================================================================
+  # 阶段 3: LSP 基础 (LSP Foundation)
+  # =============================================================================
 
-- id: LSP-001
-  name: "LSP Backend 基础架构"
-  description: |
-    搭建 LSP 服务器基础架构
-    - tower-lsp 集成
-    - 文档管理（多连接支持）
-    - 引擎配置管理
-  priority: P0
-  status: done
-  dependencies: []
-  deliverables:
-    - crates/lsp/src/backend.rs
-    - crates/lsp/src/document.rs
-    - crates/lsp/src/config.rs
+  - id: LSP-001
+    name: "LSP Backend 基础架构"
+    description: |
+      搭建 LSP 服务器基础架构
+      - tower-lsp 集成
+      - 文档管理（多连接支持）
+      - 引擎配置管理
+    priority: P0
+    status: done
+    dependencies: []
+    deliverables:
+      - crates/lsp/src/backend.rs
+      - crates/lsp/src/document.rs
+      - crates/lsp/src/config.rs
 
-- id: LSP-002
-  name: "文档同步与增量解析"
-  description: |
-    实现文档同步和增量解析
-    - did_open, did_change, did_close
-    - Ropey 文本操作
-    - Tree-sitter 增量解析
-    - 粗粒度缓存失效
-  priority: P0
-  status: done
-  dependencies: ["LSP-001", "GRAMMAR-002", "GRAMMAR-003"]
-  deliverables:
-    - crates/lsp/src/sync.rs
-    - crates/lsp/src/parsing.rs
-    - 增量解析测试
+  - id: LSP-002
+    name: "文档同步与增量解析"
+    description: |
+      实现文档同步和增量解析
+      - did_open, did_change, did_close
+      - Ropey 文本操作
+      - Tree-sitter 增量解析
+      - 粗粒度缓存失效
+    priority: P0
+    status: done
+    dependencies: ["LSP-001", "GRAMMAR-002", "GRAMMAR-003"]
+    deliverables:
+      - crates/lsp/src/sync.rs
+      - crates/lsp/src/parsing.rs
+      - 增量解析测试
 
-- id: LSP-003
-  name: "Completion 基础流程"
-  description: |
-    实现补全基础流程（端到端）
-    - cursor position → syntax context → semantic context → catalog → candidates
-    - 仅支持基础 SELECT 补全
-  priority: P0
-  status: done
-  dependencies:
-    - "LSP-001"
-    - "SEMANTIC-003"
-    - "CATALOG-002"
-    - "CATALOG-003"
-    - "LOWERING-002"
-    - "LOWERING-003"
-  deliverables:
-    - crates/lsp/src/completion/mod.rs (CompletionEngine)
-    - crates/lsp/src/completion/context.rs (context detection)
-    - crates/lsp/src/completion/scopes.rs (scope building)
-    - crates/lsp/src/completion/catalog_integration.rs (catalog integration)
-    - crates/lsp/src/completion/render.rs (LSP rendering)
-    - crates/lsp/src/backend.rs (LSP completion handler)
-    - 集成测试 (tests/completion_tests.rs)
-    - E2E 测试 (tests/e2e_completion_tests.rs)
-    - Note: Fully implemented end-to-end completion flow with context detection,
-      scope building, catalog integration, and LSP rendering. Supports SELECT
-      projection, FROM clause, qualified/unqualified column completion. WHERE
-      and JOIN completion have stubs for future features (COMPLETION-003, COMPLETION-005).
+  - id: LSP-003
+    name: "Completion 基础流程"
+    description: |
+      实现补全基础流程（端到端）
+      - cursor position → syntax context → semantic context → catalog → candidates
+      - 仅支持基础 SELECT 补全
+    priority: P0
+    status: done
+    dependencies:
+      - "LSP-001"
+      - "SEMANTIC-003"
+      - "CATALOG-002"
+      - "CATALOG-003"
+      - "LOWERING-002"
+      - "LOWERING-003"
+    deliverables:
+      - crates/lsp/src/completion/mod.rs (CompletionEngine)
+      - crates/lsp/src/completion/context.rs (context detection)
+      - crates/lsp/src/completion/scopes.rs (scope building)
+      - crates/lsp/src/completion/catalog_integration.rs (catalog integration)
+      - crates/lsp/src/completion/render.rs (LSP rendering)
+      - crates/lsp/src/backend.rs (LSP completion handler)
+      - 集成测试 (tests/completion_tests.rs)
+      - E2E 测试 (tests/e2e_completion_tests.rs)
+      - Note: >-
+          Fully implemented end-to-end completion flow with context detection,
+          scope building, catalog integration, and LSP rendering. Supports SELECT
+          projection, FROM clause, qualified/unqualified column completion. WHERE
+          and JOIN completion have stubs for future features (COMPLETION-003,
+          COMPLETION-005).
 
-- id: LSP-004
-  name: "Go-to-Definition 支持"
-  description: |
-    实现跳转到定义功能
-    - 跳转到表定义
-    - 跳转到列定义
-    - 支持跨文件跳转（如果表定义在其他文件）
-  priority: P2
-  status: done
-  dependencies: ["LSP-003", "SEMANTIC-004"]
-  deliverables:
-    - crates/lsp/src/definition.rs
-    - 测试用例
-    - Note: Fully implemented with DefinitionFinder for table and column navigation,
-      support for qualified references (table.column), aliases, and expression aliases.
-      Uses CST-based approach without modifying semantic layer. Graceful degradation
-      for edge cases (not found, ambiguous, keywords). Cross-file support deferred
-      to future enhancement (would require tracking CREATE TABLE statements).
+  - id: LSP-004
+    name: "Go-to-Definition 支持"
+    description: |
+      实现跳转到定义功能
+      - 跳转到表定义
+      - 跳转到列定义
+      - 支持跨文件跳转（如果表定义在其他文件）
+    priority: P2
+    status: done
+    dependencies: ["LSP-003", "SEMANTIC-004"]
+    deliverables:
+      - crates/lsp/src/definition.rs
+      - 测试用例
+      - Note: >-
+          Fully implemented with DefinitionFinder for table and column navigation,
+          support for qualified references (table.column), aliases, and expression
+          aliases. Uses CST-based approach without modifying semantic layer. Graceful
+          degradation for edge cases (not found, ambiguous, keywords). Cross-file
+          support deferred to future enhancement (would require tracking CREATE TABLE
+          statements).
 
-- id: LSP-005
-  name: "Document Symbols 支持"
-  description: |
-    实现文档符号功能
-    - 显示查询中的表
-    - 显示列
-    - 显示表别名
-    - 支持大纲视图导航
-  priority: P2
-  status: done
-  dependencies: ["LSP-003", "SEMANTIC-002"]
-  deliverables:
-    - crates/lsp/src/symbols.rs
-    - crates/lsp/src/backend.rs (document_symbol handler implementation)
-    - Note: Fully implemented with SymbolBuilder for CST extraction, SymbolCatalogFetcher for column metadata, SymbolRenderer for LSP format conversion, and graceful degradation when catalog is unavailable. Shows tables with columns as children, displays data types, PK/FK indicators, and supports table aliases.
+  - id: LSP-005
+    name: "Document Symbols 支持"
+    description: |
+      实现文档符号功能
+      - 显示查询中的表
+      - 显示列
+      - 显示表别名
+      - 支持大纲视图导航
+    priority: P2
+    status: done
+    dependencies: ["LSP-003", "SEMANTIC-002"]
+    deliverables:
+      - crates/lsp/src/symbols.rs
+      - crates/lsp/src/backend.rs (document_symbol handler implementation)
+      - Note: >-
+          Fully implemented with SymbolBuilder for CST extraction, SymbolCatalogFetcher
+          for column metadata, SymbolRenderer for LSP format conversion, and graceful
+          degradation when catalog is unavailable. Shows tables with columns as children,
+          displays data types, PK/FK indicators, and supports table aliases.
 
-# =============================================================================
-# 阶段 4: Completion 功能完善
-# =============================================================================
+  # =============================================================================
+  # 阶段 4: Completion 功能完善
+  # =============================================================================
 
-- id: COMPLETION-001
-  name: "SELECT 子句列补全"
-  description: |
-    实现 SELECT 子句中的列补全
-    - 显示所有可见表的列
-    - 显示表别名限定符
-    - 支持通配符 (*)
-  priority: P0
-  status: done
-  dependencies: ["LSP-003", "SEMANTIC-004"]
-  deliverables:
-    - 列补全逻辑
-    - 测试用例
-    - Note: Fully implemented with all compilation errors resolved
+  - id: COMPLETION-001
+    name: "SELECT 子句列补全"
+    description: |
+      实现 SELECT 子句中的列补全
+      - 显示所有可见表的列
+      - 显示表别名限定符
+      - 支持通配符 (*)
+    priority: P0
+    status: done
+    dependencies: ["LSP-003", "SEMANTIC-004"]
+    deliverables:
+      - 列补全逻辑
+      - 测试用例
+      - Note: Fully implemented with all compilation errors resolved
 
-- id: COMPLETION-002
-  name: "FROM 子句表补全"
-  description: |
-    实现 FROM 子句中的表补全
-    - 列出 Catalog 中所有表
-    - 应用 SchemaFilter
-    - 显示 schema 限定符
-  priority: P0
-  status: done
-  dependencies: ["LSP-003"]
-  deliverables:
-    - 表补全逻辑
-    - 测试用例
-    - Note: Fully implemented with render_tables(), FROM clause context handling, and comprehensive tests
+  - id: COMPLETION-002
+    name: "FROM 子句表补全"
+    description: |
+      实现 FROM 子句中的表补全
+      - 列出 Catalog 中所有表
+      - 应用 SchemaFilter
+      - 显示 schema 限定符
+    priority: P0
+    status: done
+    dependencies: ["LSP-003"]
+    deliverables:
+      - 表补全逻辑
+      - 测试用例
+      - Note: Fully implemented with render_tables(), FROM clause context handling, and comprehensive tests
 
-- id: COMPLETION-003
-  name: "JOIN 条件列补全"
-  description: |
-    实现 JOIN ON 条件中的列补全
-    - 显示相关表的列
-    - 优先显示主键/外键列
-  priority: P1
-  status: done
-  dependencies: ["COMPLETION-001", "SEMANTIC-004"]
-  deliverables:
-    - JOIN 补全逻辑
-    - 测试用例
-    - Note: Fully implemented with PK/FK-aware column prioritization, three-tier sorting (PK → FK → regular), qualified references, comprehensive error handling, and unit tests for all scenarios
+  - id: COMPLETION-003
+    name: "JOIN 条件列补全"
+    description: |
+      实现 JOIN ON 条件中的列补全
+      - 显示相关表的列
+      - 优先显示主键/外键列
+    priority: P1
+    status: done
+    dependencies: ["COMPLETION-001", "SEMANTIC-004"]
+    deliverables:
+      - JOIN 补全逻辑
+      - 测试用例
+      - Note: >-
+          Fully implemented with PK/FK-aware column prioritization, three-tier sorting
+          (PK → FK → regular), qualified references, comprehensive error handling,
+          and unit tests for all scenarios
 
-- id: COMPLETION-004
-  name: "限定符补全 (table.*)"
-  description: |
-    实现限定符后的列补全
-    - 输入 "table." 后显示该表的列
-    - WHERE 子句中的限定列补全
-  priority: P0
-  status: done
-  dependencies: ["COMPLETION-001"]
-  deliverables:
-    - 限定符补全逻辑
-    - 测试用例
-    - Note: Fully implemented with qualifier resolution logic, filtering, and comprehensive tests
+  - id: COMPLETION-004
+    name: "限定符补全 (table.*)"
+    description: |
+      实现限定符后的列补全
+      - 输入 "table." 后显示该表的列
+      - WHERE 子句中的限定列补全
+    priority: P0
+    status: done
+    dependencies: ["COMPLETION-001"]
+    deliverables:
+      - 限定符补全逻辑
+      - 测试用例
+      - Note: Fully implemented with qualifier resolution logic, filtering, and comprehensive tests
 
-- id: COMPLETION-005
-  name: "WHERE 子句列补全"
-  description: |
-    实现 WHERE 子句中的列补全
-    - 显示可用表的列
-    - 上下文感知（仅显示可比较的列）
-  priority: P1
-  status: done
-  dependencies: ["COMPLETION-001", "SEMANTIC-004"]
-  deliverables:
-    - WHERE 补全逻辑
-    - 测试用例
-    - Note: Fully implemented with unqualified/qualified completion, table alias support,
-      ambiguous column detection, wildcard filtering, and comprehensive unit/integration tests
+  - id: COMPLETION-005
+    name: "WHERE 子句列补全"
+    description: |
+      实现 WHERE 子句中的列补全
+      - 显示可用表的列
+      - 上下文感知（仅显示可比较的列）
+    priority: P1
+    status: done
+    dependencies: ["COMPLETION-001", "SEMANTIC-004"]
+    deliverables:
+      - WHERE 补全逻辑
+      - 测试用例
+      - Note: >-
+          Fully implemented with unqualified/qualified completion, table alias support,
+          ambiguous column detection, wildcard filtering, and comprehensive
+          unit/integration tests
 
-- id: COMPLETION-006
-  name: "函数补全"
-  description: |
-    实现函数名补全
-    - 从 Catalog 获取函数列表
-    - 显示函数签名提示
-    - 版本特性过滤
-  priority: P1
-  dependencies: ["LSP-003"]
-  deliverables:
-    - 函数补全逻辑
-    - 函数元数据
-  status: done
-  notes: |
-    Implemented:
-    - Added list_functions() to CatalogCompletionFetcher
-    - Implemented render_functions() in CompletionRenderer
-    - Integrated function completion in SelectProjection, WhereClause, and JoinCondition contexts
-    - Added context-aware filtering (scalar functions in JOINs, all functions in SELECT/WHERE)
-    - Added function signature display with parameters and return types
-    - Insert text includes opening parenthesis for easier typing
-    - 27 integration tests passing (including 4 new function completion tests)
-    - Updated TESTING.md with function completion testing documentation
+  - id: COMPLETION-006
+    name: "函数补全"
+    description: |
+      实现函数名补全
+      - 从 Catalog 获取函数列表
+      - 显示函数签名提示
+      - 版本特性过滤
+    priority: P1
+    dependencies: ["LSP-003"]
+    deliverables:
+      - 函数补全逻辑
+      - 函数元数据
+    status: done
+    notes: >-
+      Implemented: Added list_functions() to CatalogCompletionFetcher; Implemented
+      render_functions() in CompletionRenderer; Integrated function completion in
+      SelectProjection, WhereClause, and JoinCondition contexts; Added context-aware
+      filtering (scalar functions in JOINs, all functions in SELECT/WHERE); Added
+      function signature display with parameters and return types; Insert text includes
+      opening parenthesis for easier typing; 27 integration tests passing (including 4
+      new function completion tests); Updated TESTING.md with function completion
+      testing documentation
 
-- id: COMPLETION-007
-  name: "关键字补全"
-  description: |
-    实现关键字补全
-    - 在适当位置提示 SQL 关键字
-    - 基于语法上下文过滤
-  priority: P2
-  dependencies: ["LSP-003"]
-  deliverables:
-    - 关键字补全逻辑
-    - 测试
+  - id: COMPLETION-007
+    name: "关键字补全"
+    description: |
+      实现关键字补全
+      - 在适当位置提示 SQL 关键字
+      - 基于语法上下文过滤
+    priority: P2
+    dependencies: ["LSP-003"]
+    deliverables:
+      - 关键字补全逻辑
+      - 测试
 
-# =============================================================================
-# 阶段 5: 错误处理与诊断
-# =============================================================================
+  # =============================================================================
+  # 阶段 5: 错误处理与诊断
+  # =============================================================================
 
-- id: DIAG-001
-  name: "诊断基础架构"
-  description: |
-    建立诊断系统基础架构
-    - Diagnostic 类型定义
-    - 诊断推送机制
-    - 严重级别映射
-  priority: P1
-  dependencies: ["LSP-001"]
-  deliverables:
-    - crates/lsp/src/diagnostic.rs
-    - 类型定义
+  - id: DIAG-001
+    name: "诊断基础架构"
+    description: |
+      建立诊断系统基础架构
+      - Diagnostic 类型定义
+      - 诊断推送机制
+      - 严重级别映射
+    priority: P1
+    dependencies: ["LSP-001"]
+    deliverables:
+      - crates/lsp/src/diagnostic.rs
+      - 类型定义
 
-- id: DIAG-002
-  name: "语法错误诊断"
-  description: |
-    从 Tree-sitter ERROR 节点生成诊断
-    - 捕获语法错误
-    - 显示错误位置和建议
-  priority: P1
-  dependencies: ["DIAG-001", "LSP-002"]
-  deliverables:
-    - 语法错误诊断逻辑
-    - 测试用例
+  - id: DIAG-002
+    name: "语法错误诊断"
+    description: |
+      从 Tree-sitter ERROR 节点生成诊断
+      - 捕获语法错误
+      - 显示错误位置和建议
+    priority: P1
+    dependencies: ["DIAG-001", "LSP-002"]
+    deliverables:
+      - 语法错误诊断逻辑
+      - 测试用例
 
-- id: DIAG-003
-  name: "未定义表诊断"
-  description: |
-    检测未定义的表引用
-    - 在 FROM/JOIN 中检查表是否存在
-    - 提供"您是否是指..."建议
-  priority: P1
-  dependencies: ["DIAG-001", "SEMANTIC-002"]
-  deliverables:
-    - 表检查逻辑
-    - 测试用例
+  - id: DIAG-003
+    name: "未定义表诊断"
+    description: |
+      检测未定义的表引用
+      - 在 FROM/JOIN 中检查表是否存在
+      - 提供"您是否是指..."建议
+    priority: P1
+    dependencies: ["DIAG-001", "SEMANTIC-002"]
+    deliverables:
+      - 表检查逻辑
+      - 测试用例
 
-- id: DIAG-004
-  name: "未定义列诊断"
-  description: |
-    检测未定义的列引用
-    - 在 SELECT/WHERE 中检查列是否存在
-    - 提供候选列名建议
-  priority: P1
-  dependencies: ["DIAG-001", "SEMANTIC-004"]
-  deliverables:
-    - 列检查逻辑
-    - 候选建议算法
-    - 测试用例
+  - id: DIAG-004
+    name: "未定义列诊断"
+    description: |
+      检测未定义的列引用
+      - 在 SELECT/WHERE 中检查列是否存在
+      - 提供候选列名建议
+    priority: P1
+    dependencies: ["DIAG-001", "SEMANTIC-004"]
+    deliverables:
+      - 列检查逻辑
+      - 候选建议算法
+      - 测试用例
 
-- id: DIAG-005
-  name: "歧义列诊断"
-  description: |
-    检测歧义的列引用
-    - 当多个表有相同列名时报错
-    - 列出可能的表限定符
-  priority: P1
-  dependencies: ["DIAG-001", "SEMANTIC-004"]
-  deliverables:
-    - 歧义检测逻辑
-    - 测试用例
+  - id: DIAG-005
+    name: "歧义列诊断"
+    description: |
+      检测歧义的列引用
+      - 当多个表有相同列名时报错
+      - 列出可能的表限定符
+    priority: P1
+    dependencies: ["DIAG-001", "SEMANTIC-004"]
+    deliverables:
+      - 歧义检测逻辑
+      - 测试用例
 
-# =============================================================================
-# 阶段 6: 性能优化
-# =============================================================================
+  # =============================================================================
+  # 阶段 6: 性能优化
+  # =============================================================================
 
-- id: PERF-001
-  name: "三级缓存实现"
-  description: |
-    实现完整的缓存体系
-    - Tree 缓存
-    - IR 缓存（ArcSwap）
-    - Semantic 缓存
-    - 粗粒度失效策略
-  priority: P1
-  dependencies:
-    - "LSP-002"
-    - "SEMANTIC-002"
-    - "CATALOG-004"
-  deliverables:
-    - crates/lsp/src/cache.rs
-    - 缓存管理器
-    - 性能测试
+  - id: PERF-001
+    name: "三级缓存实现"
+    description: |
+      实现完整的缓存体系
+      - Tree 缓存
+      - IR 缓存（ArcSwap）
+      - Semantic 缓存
+      - 粗粒度失效策略
+    priority: P1
+    dependencies:
+      - "LSP-002"
+      - "SEMANTIC-002"
+      - "CATALOG-004"
+    deliverables:
+      - crates/lsp/src/cache.rs
+      - 缓存管理器
+      - 性能测试
 
-- id: PERF-002
-  name: "并发语义分析"
-  description: |
-    实现后台异步语义分析
-    - 不阻塞 LSP 主线程
-    - 工作队列管理
-  priority: P1
-  dependencies: ["LSP-002", "SEMANTIC-002"]
-  deliverables:
-    - crates/lsp/src/worker.rs
-    - 异步任务调度
-    - 测试
+  - id: PERF-002
+    name: "并发语义分析"
+    description: |
+      实现后台异步语义分析
+      - 不阻塞 LSP 主线程
+      - 工作队列管理
+    priority: P1
+    dependencies: ["LSP-002", "SEMANTIC-002"]
+    deliverables:
+      - crates/lsp/src/worker.rs
+      - 异步任务调度
+      - 测试
 
-- id: PERF-003
-  name: "Catalog 批量查询优化"
-  description: |
-    优化 Catalog 查询性能
-    - get_columns_batch 实现
-    - 预加载机制（FROM 时预加载表列表）
-  priority: P2
-  dependencies: ["CATALOG-004"]
-  deliverables:
-    - 批量查询逻辑
-    - 预加载逻辑
-    - 性能测试
+  - id: PERF-003
+    name: "Catalog 批量查询优化"
+    description: |
+      优化 Catalog 查询性能
+      - get_columns_batch 实现
+      - 预加载机制（FROM 时预加载表列表）
+    priority: P2
+    dependencies: ["CATALOG-004"]
+    deliverables:
+      - 批量查询逻辑
+      - 预加载逻辑
+      - 性能测试
 
-- id: PERF-004
-  name: "细粒度缓存失效"
-  description: |
-    实现细粒度缓存失效（Phase 4+）
-    - 仅失效受影响的语句
-    - 受影响作用域分析
-  priority: P2
-  dependencies: ["PERF-001", "SEMANTIC-002"]
-  deliverables:
-    - 失效策略优化
-    - 性能对比测试
-    - 文档
+  - id: PERF-004
+    name: "细粒度缓存失效"
+    description: |
+      实现细粒度缓存失效（Phase 4+）
+      - 仅失效受影响的语句
+      - 受影响作用域分析
+    priority: P2
+    dependencies: ["PERF-001", "SEMANTIC-002"]
+    deliverables:
+      - 失效策略优化
+      - 性能对比测试
+      - 文档
 
-# =============================================================================
-# 阶段 7: 多方言扩展
-# =============================================================================
+  # =============================================================================
+  # 阶段 7: 多方言扩展
+  # =============================================================================
 
-- id: DIALECT-TIDB-001
-  name: "TiDB 方言支持"
-  description: |
-    添加 TiDB 方言支持
-    - 继承 MySQL Grammar
-    - 添加 TiDB 特定关键字（TIDB_SNAPSHOT, TTL）
-    - TiDB Lowering
-    - 版本支持（5.0, 6.0, 7.0, 8.0）
-  priority: P1
-  dependencies:
-    - "GRAMMAR-002"
-    - "LOWERING-002"
-  deliverables:
-    - dialect/tidb.js
-    - tidb.so
-    - lowering/tidb.rs
-    - 测试矩阵
+  - id: DIALECT-TIDB-001
+    name: "TiDB 方言支持"
+    description: |
+      添加 TiDB 方言支持
+      - 继承 MySQL Grammar
+      - 添加 TiDB 特定关键字（TIDB_SNAPSHOT, TTL）
+      - TiDB Lowering
+      - 版本支持（5.0, 6.0, 7.0, 8.0）
+    priority: P1
+    dependencies:
+      - "GRAMMAR-002"
+      - "LOWERING-002"
+    deliverables:
+      - dialect/tidb.js
+      - tidb.so
+      - lowering/tidb.rs
+      - 测试矩阵
 
-- id: DIALECT-MARIADB-001
-  name: "MariaDB 方言支持"
-  description: |
-    添加 MariaDB 方言支持
-    - 继承 MySQL Grammar
-    - MariaDB 特定扩展
-    - 版本支持（10.x, 11.x）
-  priority: P2
-  dependencies:
-    - "GRAMMAR-002"
-    - "LOWERING-002"
-  deliverables:
-    - dialect/mariadb.js
-    - mariadb.so
-    - lowering/mariadb.rs
-    - 测试
+  - id: DIALECT-MARIADB-001
+    name: "MariaDB 方言支持"
+    description: |
+      添加 MariaDB 方言支持
+      - 继承 MySQL Grammar
+      - MariaDB 特定扩展
+      - 版本支持（10.x, 11.x）
+    priority: P2
+    dependencies:
+      - "GRAMMAR-002"
+      - "LOWERING-002"
+    deliverables:
+      - dialect/mariadb.js
+      - mariadb.so
+      - lowering/mariadb.rs
+      - 测试
 
-- id: DIALECT-COCKROACHDB-001
-  name: "CockroachDB 方言支持"
-  description: |
-    添加 CockroachDB 方言支持
-    - 继承 PostgreSQL Grammar
-    - CockroachDB 特定扩展
-    - 版本支持（21.x, 22.x, 23.x）
-  priority: P2
-  dependencies:
-    - "GRAMMAR-003"
-    - "LOWERING-003"
-  deliverables:
-    - dialect/cockroachdb.js
-    - cockroachdb.so
-    - lowering/cockroachdb.rs
-    - 测试
+  - id: DIALECT-COCKROACHDB-001
+    name: "CockroachDB 方言支持"
+    description: |
+      添加 CockroachDB 方言支持
+      - 继承 PostgreSQL Grammar
+      - CockroachDB 特定扩展
+      - 版本支持（21.x, 22.x, 23.x）
+    priority: P2
+    dependencies:
+      - "GRAMMAR-003"
+      - "LOWERING-003"
+    deliverables:
+      - dialect/cockroachdb.js
+      - cockroachdb.so
+      - lowering/cockroachdb.rs
+      - 测试
 
-# =============================================================================
-# 阶段 8: 高级功能
-# =============================================================================
+  # =============================================================================
+  # 阶段 8: 高级功能
+  # =============================================================================
 
-- id: HOVER-001
-  name: "Hover 支持"
-  description: |
-    实现 Hover 功能
-    - 显示列的元数据（类型、注释）
-    - 显示表的元数据（行数、注释）
-    - 显示函数签名
-  priority: P2
-  dependencies:
-    - "LSP-003"
-    - "SEMANTIC-004"
-    - "CATALOG-002"
-  deliverables:
-    - crates/lsp/src/hover.rs
-    - 测试
+  - id: HOVER-001
+    name: "Hover 支持"
+    description: |
+      实现 Hover 功能
+      - 显示列的元数据（类型、注释）
+      - 显示表的元数据（行数、注释）
+      - 显示函数签名
+    priority: P2
+    dependencies:
+      - "LSP-003"
+      - "SEMANTIC-004"
+      - "CATALOG-002"
+    deliverables:
+      - crates/lsp/src/hover.rs
+      - 测试
 
-- id: FORMAT-001
-  name: "SQL 格式化"
-  description: |
-    实现 SQL 格式化功能
-    - 基于 sqlformatter-rs
-    - 可配置格式化风格
-  priority: P3
-  dependencies: ["LSP-001"]
-  deliverables:
-    - crates/lsp/src/format.rs
-    - 格式化测试
+  - id: FORMAT-001
+    name: "SQL 格式化"
+    description: |
+      实现 SQL 格式化功能
+      - 基于 sqlformatter-rs
+      - 可配置格式化风格
+    priority: P3
+    dependencies: ["LSP-001"]
+    deliverables:
+      - crates/lsp/src/format.rs
+      - 格式化测试
 
-# =============================================================================
-# 阶段 9: 配置与工具
-# =============================================================================
+  # =============================================================================
+  # 阶段 9: 配置与工具
+  # =============================================================================
 
-- id: CONFIG-001
-  name: "引擎配置文件支持"
-  description: |
-    支持通过 YAML 文件配置引擎
-    - dialect, version, connection_string
-    - schema_filter
-    - 连接池配置
-  priority: P1
-  dependencies: ["LSP-001"]
-  deliverables:
-    - crates/lsp/src/config/parser.rs
-    - 配置文件 Schema
-    - 示例配置
+  - id: CONFIG-001
+    name: "引擎配置文件支持"
+    description: |
+      支持通过 YAML 文件配置引擎
+      - dialect, version, connection_string
+      - schema_filter
+      - 连接池配置
+    priority: P1
+    dependencies: ["LSP-001"]
+    deliverables:
+      - crates/lsp/src/config/parser.rs
+      - 配置文件 Schema
+      - 示例配置
 
-- id: CONFIG-002
-  name: "配置验证工具"
-  description: |
-    实现配置验证 CLI 工具
-    - --validate-config
-    - --test-connection
-    - --show-config
-  priority: P1
-  dependencies: ["CONFIG-001"]
-  deliverables:
-    - CLI 工具实现
-    - 测试
+  - id: CONFIG-002
+    name: "配置验证工具"
+    description: |
+      实现配置验证 CLI 工具
+      - --validate-config
+      - --test-connection
+      - --show-config
+    priority: P1
+    dependencies: ["CONFIG-001"]
+    deliverables:
+      - CLI 工具实现
+      - 测试
 
-- id: FEATURE-FLAGS-001
-  name: "Rust Feature Flags"
-  description: |
-    实现条件编译支持
-    - mysql, postgresql, tidb features
-    - 减少二进制大小
-  priority: P2
-  dependencies: ["GRAMMAR-002", "GRAMMAR-003"]
-  deliverables:
-    - Cargo.toml features 配置
-    - 构建测试
+  - id: FEATURE-FLAGS-001
+    name: "Rust Feature Flags"
+    description: |
+      实现条件编译支持
+      - mysql, postgresql, tidb features
+      - 减少二进制大小
+    priority: P2
+    dependencies: ["GRAMMAR-002", "GRAMMAR-003"]
+    deliverables:
+      - Cargo.toml features 配置
+      - 构建测试
 
-# =============================================================================
-# 阶段 10: 测试与质量保证
-# =============================================================================
+  # =============================================================================
+  # 阶段 10: 测试与质量保证
+  # =============================================================================
 
-- id: TEST-001
-  name: "单元测试框架"
-  description: |
-    建立完整的单元测试框架
-    - Grammar 测试
-    - Lowering 测试
-    - Semantic 测试
-    - 测试矩阵实现
-  priority: P0
-  status: done
-  dependencies: []
-  deliverables:
-    - tests/ 目录结构
-    - 测试辅助工具
-    - CI 集成
-    - Note: Fully implemented with test-utils crate, CI/CD workflow, and comprehensive TESTING.md guide
+  - id: TEST-001
+    name: "单元测试框架"
+    description: |
+      建立完整的单元测试框架
+      - Grammar 测试
+      - Lowering 测试
+      - Semantic 测试
+      - 测试矩阵实现
+    priority: P0
+    status: done
+    dependencies: []
+    deliverables:
+      - tests/ 目录结构
+      - 测试辅助工具
+      - CI 集成
+      - Note: Fully implemented with test-utils crate, CI/CD workflow, and comprehensive TESTING.md guide
 
-- id: TEST-002
-  name: "集成测试套件"
-  description: |
-    实现端到端集成测试
-    - Completion 流程测试
-    - 多文档并发测试
-    - Catalog 集成测试
-  priority: P0
-  status: done
-  dependencies:
-    - "LSP-003"
-    - "COMPLETION-001"
-    - "CATALOG-002"
-  deliverables:
-    - crates/lsp/tests/integration_tests.rs
-    - 24 comprehensive integration tests
-    - 10 completion flow tests (parse → context → scope → catalog → render)
-    - 6 multi-document concurrent tests (thread-safety, performance)
-    - 8 catalog integration tests (error handling, metadata)
-    - Note: All tests pass successfully. Tests cover completion pipeline validation,
-      concurrent document operations (50 open/close cycles), parsing performance
-      (20 concurrent parses), completion latency (p95 < 200ms), catalog error
-      handling, and cross-dialect compatibility (MySQL vs PostgreSQL).
-- id: TEST-003
-  name: "性能基准测试"
-  description: |
-    建立性能基准测试
-    - 10k 行解析 < 100ms
-    - Completion 延迟 < 50ms (p95)
-    - 内存占用 < 50MB
-  priority: P1
-  dependencies:
-    - "PERF-001"
-    - "SEMANTIC-002"
-  deliverables:
-    - benches/ 目录
-    - Criterion 集成
-    - CI 性能测试
+  - id: TEST-002
+    name: "集成测试套件"
+    description: |
+      实现端到端集成测试
+      - Completion 流程测试
+      - 多文档并发测试
+      - Catalog 集成测试
+    priority: P0
+    status: done
+    dependencies:
+      - "LSP-003"
+      - "COMPLETION-001"
+      - "CATALOG-002"
+    deliverables:
+      - crates/lsp/tests/integration_tests.rs
+      - 24 comprehensive integration tests
+      - 10 completion flow tests (parse → context → scope → catalog → render)
+      - 6 multi-document concurrent tests (thread-safety, performance)
+      - 8 catalog integration tests (error handling, metadata)
+      - Note: >-
+          All tests pass successfully. Tests cover completion pipeline validation,
+          concurrent document operations (50 open/close cycles), parsing performance
+          (20 concurrent parses), completion latency (p95 < 200ms), catalog error
+          handling, and cross-dialect compatibility (MySQL vs PostgreSQL).
+  - id: TEST-003
+    name: "性能基准测试"
+    description: |
+      建立性能基准测试
+      - 10k 行解析 < 100ms
+      - Completion 延迟 < 50ms (p95)
+      - 内存占用 < 50MB
+    priority: P1
+    dependencies:
+      - "PERF-001"
+      - "SEMANTIC-002"
+    deliverables:
+      - benches/ 目录
+      - Criterion 集成
+      - CI 性能测试
 
-- id: TEST-004
-  name: "回归测试矩阵"
-  description: |
-    建立方言版本特性测试矩阵
-    - MySQL 5.7 vs 8.0
-    - PostgreSQL 12 vs 14
-    - 功能支持验证
-  priority: P1
-  dependencies:
-    - "TEST-001"
-    - "DIALECT-TIDB-001"
-  deliverables:
-    - 测试矩阵配置
-    - 自动化测试
-    - 报告生成
+  - id: TEST-004
+    name: "回归测试矩阵"
+    description: |
+      建立方言版本特性测试矩阵
+      - MySQL 5.7 vs 8.0
+      - PostgreSQL 12 vs 14
+      - 功能支持验证
+    priority: P1
+    dependencies:
+      - "TEST-001"
+      - "DIALECT-TIDB-001"
+    deliverables:
+      - 测试矩阵配置
+      - 自动化测试
+      - 报告生成
 
 # =============================================================================
 # 功能组合 (Feature Groups)
@@ -978,49 +1021,73 @@ feature_groups:
 milestones:
   - id: MVP
     name: "MVP: Basic MySQL Completion"
+
     description: |
+
       最小可行产品，支持 MySQL 的基础补全
+
       - 可以补全列和表
       - 支持基础语法
       - 单连接支持
-    features: GROUP-COMPLETION-BASIC
-    estimated_weeks: 8
+      features: GROUP-COMPLETION-BASIC
+
+      estimated_weeks: 8
 
   - id: M1
+
     name: "M1: Multi-dialect Completion"
+
     description: |
+
       支持 MySQL 和 PostgreSQL 的完整补全
+
       - 所有补全上下文
       - 函数补全
       - 多连接支持
-    features: GROUP-COMPLETION-FULL
-    estimated_weeks: 12
+      features: GROUP-COMPLETION-FULL
+
+      estimated_weeks: 12
 
   - id: M2
+
     name: "M2: Diagnostics"
+
     description: |
+
       添加完整的错误诊断功能
+
       - 语法错误
       - 未定义表/列
       - 歧义检测
-    features: GROUP-DIAGNOSTICS
-    estimated_weeks: 14
+      features: GROUP-DIAGNOSTICS
+
+      estimated_weeks: 14
 
   - id: M3
+
     name: "M3: Performance"
+
     description: |
+
       性能优化和生产级特性
+
       - 缓存优化
       - 并发处理
       - Schema 过滤
-    features: GROUP-PERFORMANCE
-    estimated_weeks: 16
+      features: GROUP-PERFORMANCE
+
+      estimated_weeks: 16
 
   - id: M4
+
     name: "M4: TiDB Support"
+
     description: |
+
       添加 TiDB 方言支持
+
       - 完整补全和诊断
       - 版本支持
-    features: GROUP-TIDB-SUPPORT
-    estimated_weeks: 18
+      features: GROUP-TIDB-SUPPORT
+
+      estimated_weeks: 18
