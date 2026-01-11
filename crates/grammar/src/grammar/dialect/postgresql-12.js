@@ -1,9 +1,18 @@
 /**
- * PostgreSQL Dialect
+ * PostgreSQL 12 Dialect
  *
- * PostgreSQL-specific grammar extensions.
- * This file ONLY contains PostgreSQL-specific additions/overrides.
- * Base SQL rules are inherited from dialect/base.js
+ * PostgreSQL 12 is the BASE dialect for the PostgreSQL family.
+ * This file contains all PostgreSQL-specific features up to version 12.
+ * PostgreSQL 14+ extends this dialect with additional features.
+ *
+ * Features in this dialect:
+ * - RETURNING clause
+ * - DEFAULT VALUES
+ * - Dollar-quoted string literals
+ * - Double-quote identifiers
+ *
+ * Source: PostgreSQL 12 Documentation
+ * https://www.postgresql.org/docs/release/12.0/
  */
 
 module.exports = {

@@ -42,6 +42,13 @@ dist/
 # Node modules (for tree-sitter-cli)
 node_modules/
 
+# Tree-sitter generated files
+crates/grammar/src/grammar/gen/
+gen/
+parser-*.c
+grammar.json
+node-types.json
+
 # Environment files
 .env
 .env.claude

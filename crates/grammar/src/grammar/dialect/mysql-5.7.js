@@ -1,8 +1,15 @@
 /**
- * MySQL Dialect
+ * MySQL 5.7 Dialect
  *
- * MySQL-specific grammar extensions.
- * This file extends the base SQL grammar with MySQL-specific features.
+ * MySQL 5.7 is the BASE dialect for the MySQL family.
+ * This file contains all MySQL-specific features up to version 5.7.
+ * MySQL 8.0+ extends this dialect with additional features.
+ *
+ * Features in this dialect:
+ * - REPLACE statement
+ * - LIMIT offset, count syntax
+ * - Backtick identifiers
+ * - SQL_CALC_FOUND_ROWS, SQL_CACHE, SQL_NO_CACHE
  */
 
 module.exports = {

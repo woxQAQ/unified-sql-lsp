@@ -29,8 +29,16 @@ if (DIALECT !== 'base') {
 }
 
 // Export the grammar using tree-sitter's grammar() function
+// Sanitize dialect name: replace hyphens and dots with underscores for valid C identifiers
+const sanitizeDialectName = (name) => {
+  if (name === 'base') return 'unified_sql';
+  // Replace hyphens and dots with underscores for valid C identifiers
+  const sanitizedName = name.replace(/[-.]/g, '_');
+  return `unified_sql_${sanitizedName}`;
+};
+
 module.exports = grammar({
-  name: DIALECT === 'base' ? 'unified_sql' : `unified_sql_${DIALECT}`,
+  name: sanitizeDialectName(DIALECT),
 
   // =============================================================================
   // Extras - Comments and whitespace

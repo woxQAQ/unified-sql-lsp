@@ -10,7 +10,18 @@ fn main() {
     let out_dir = env::var("OUT_DIR").unwrap();
 
     // Dialects to compile
-    let dialects = vec!["base", "mysql", "postgresql"];
+    // Architecture: version-specific dialects are the base
+    // - mysql-5.7 is the base MySQL dialect
+    // - mysql-8.0 extends mysql-5.7
+    // - postgresql-12 is the base PostgreSQL dialect
+    // - postgresql-14 extends postgresql-12
+    let dialects = vec![
+        "base",
+        "mysql-5.7",
+        "mysql-8.0",
+        "postgresql-12",
+        "postgresql-14",
+    ];
 
     for dialect in dialects {
         println!("cargo:warning=Building grammar for dialect: {}", dialect);
