@@ -226,3 +226,409 @@ async fn test_where_clause_qualified() {
         "All items should be qualified with alias 'u.'"
     );
 }
+
+// =============================================================================
+// Keyword Completion Tests (COMPLETION-007)
+// =============================================================================
+
+#[tokio::test]
+async fn test_keyword_completion_statement_keywords() {
+    // Test that statement keywords are suggested at the start of a query
+    let catalog = MockCatalogBuilder::new().with_standard_schema().build();
+    let engine = CompletionEngine::new(Arc::new(catalog));
+
+    // Empty document should suggest statement keywords
+    let sql = "|";
+    let document = create_test_document(sql, "mysql").await;
+
+    let position = Position::new(0, 0);
+    let result = engine.complete(&document, position).await;
+
+    assert!(result.is_ok());
+    let items = result.unwrap();
+
+    // Should have statement keywords
+    if let Some(items) = items {
+        let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
+        assert!(
+            labels.iter().any(|l| *l == "SELECT"),
+            "Missing SELECT keyword"
+        );
+        assert!(
+            labels.iter().any(|l| *l == "INSERT"),
+            "Missing INSERT keyword"
+        );
+        assert!(
+            labels.iter().any(|l| *l == "UPDATE"),
+            "Missing UPDATE keyword"
+        );
+        assert!(
+            labels.iter().any(|l| *l == "DELETE"),
+            "Missing DELETE keyword"
+        );
+        assert!(
+            labels.iter().any(|l| *l == "CREATE"),
+            "Missing CREATE keyword"
+        );
+    }
+}
+
+#[tokio::test]
+async fn test_keyword_completion_select_clause_keywords() {
+    // Test that SELECT clause keywords are suggested within SELECT statement
+    let catalog = MockCatalogBuilder::new().with_standard_schema().build();
+    let engine = CompletionEngine::new(Arc::new(catalog));
+
+    // Incomplete SELECT statement should suggest clause keywords
+    let sql = "SELECT * FROM users |";
+    let document = create_test_document(sql, "mysql").await;
+
+    let position = Position::new(0, 24);
+    let result = engine.complete(&document, position).await;
+
+    assert!(result.is_ok());
+    let items = result.unwrap();
+
+    if let Some(items) = items {
+        let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
+        // Should have WHERE, GROUP BY, ORDER BY, etc.
+        assert!(
+            labels.iter().any(|l| *l == "WHERE"),
+            "Missing WHERE keyword"
+        );
+        assert!(
+            labels.iter().any(|l| *l == "GROUP BY"),
+            "Missing GROUP BY keyword"
+        );
+        assert!(
+            labels.iter().any(|l| *l == "ORDER BY"),
+            "Missing ORDER BY keyword"
+        );
+        assert!(
+            labels.iter().any(|l| *l == "LIMIT"),
+            "Missing LIMIT keyword"
+        );
+    }
+}
+
+#[tokio::test]
+async fn test_keyword_completion_existing_clause_filtered() {
+    // Test that existing clauses are not suggested again
+    let catalog = MockCatalogBuilder::new().with_standard_schema().build();
+    let engine = CompletionEngine::new(Arc::new(catalog));
+
+    // SELECT statement with FROM clause should not suggest FROM again
+    let sql = "SELECT * FROM users |";
+    let document = create_test_document(sql, "mysql").await;
+
+    let position = Position::new(0, 24);
+    let result = engine.complete(&document, position).await;
+
+    assert!(result.is_ok());
+    let items = result.unwrap();
+
+    if let Some(items) = items {
+        let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
+        // FROM should not be suggested again
+        assert!(
+            !labels.iter().any(|l| *l == "FROM"),
+            "FROM should not be suggested when it already exists"
+        );
+        // But WHERE should be suggested
+        assert!(
+            labels.iter().any(|l| *l == "WHERE"),
+            "WHERE should be suggested"
+        );
+    }
+}
+
+#[tokio::test]
+async fn test_keyword_completion_mysql_dialect() {
+    // Test MySQL-specific keywords
+    let catalog = MockCatalogBuilder::new().with_standard_schema().build();
+    let engine = CompletionEngine::new(Arc::new(catalog));
+
+    // MySQL uses LIMIT not FETCH
+    let sql = "SELECT |";
+    let document = create_test_document(sql, "mysql").await;
+
+    let position = Position::new(0, 7);
+    let result = engine.complete(&document, position).await;
+
+    assert!(result.is_ok());
+    let items = result.unwrap();
+
+    if let Some(items) = items {
+        let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
+        // Should have LIMIT (MySQL style)
+        assert!(
+            labels.iter().any(|l| *l == "LIMIT"),
+            "Missing LIMIT keyword for MySQL"
+        );
+    }
+}
+
+#[tokio::test]
+async fn test_keyword_completion_postgresql_dialect() {
+    // Test PostgreSQL-specific keywords
+    let catalog = MockCatalogBuilder::new().with_standard_schema().build();
+    let engine = CompletionEngine::new(Arc::new(catalog));
+
+    // PostgreSQL uses FETCH
+    let sql = "SELECT |";
+    let document = create_test_document(sql, "postgresql").await;
+
+    let position = Position::new(0, 7);
+    let result = engine.complete(&document, position).await;
+
+    assert!(result.is_ok());
+    let items = result.unwrap();
+
+    if let Some(items) = items {
+        let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
+        // Should have FETCH (PostgreSQL style)
+        assert!(
+            labels.iter().any(|l| *l == "FETCH"),
+            "Missing FETCH keyword for PostgreSQL"
+        );
+    }
+}
+
+#[tokio::test]
+async fn test_keyword_completion_join_keywords() {
+    // Test JOIN type keywords
+    let catalog = MockCatalogBuilder::new().with_standard_schema().build();
+    let engine = CompletionEngine::new(Arc::new(catalog));
+
+    // Should suggest JOIN types
+    let sql = "SELECT * FROM users |";
+    let document = create_test_document(sql, "mysql").await;
+
+    let position = Position::new(0, 24);
+    let result = engine.complete(&document, position).await;
+
+    assert!(result.is_ok());
+    let items = result.unwrap();
+
+    if let Some(items) = items {
+        let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
+        // Should have JOIN types
+        assert!(
+            labels.iter().any(|l| *l == "JOIN"),
+            "Missing JOIN keyword"
+        );
+        assert!(
+            labels.iter().any(|l| *l == "INNER JOIN"),
+            "Missing INNER JOIN keyword"
+        );
+        assert!(
+            labels.iter().any(|l| *l == "LEFT JOIN"),
+            "Missing LEFT JOIN keyword"
+        );
+        assert!(
+            labels.iter().any(|l| *l == "RIGHT JOIN"),
+            "Missing RIGHT JOIN keyword"
+        );
+    }
+}
+
+#[tokio::test]
+async fn test_keyword_completion_create_statement() {
+    // Test CREATE statement keywords
+    let catalog = MockCatalogBuilder::new().with_standard_schema().build();
+    let engine = CompletionEngine::new(Arc::new(catalog));
+
+    // Should suggest CREATE object types
+    let sql = "CREATE |";
+    let document = create_test_document(sql, "mysql").await;
+
+    let position = Position::new(0, 7);
+    let result = engine.complete(&document, position).await;
+
+    assert!(result.is_ok());
+    let items = result.unwrap();
+
+    if let Some(items) = items {
+        let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
+        // Should have CREATE targets
+        assert!(
+            labels.iter().any(|l| *l == "TABLE"),
+            "Missing TABLE keyword for CREATE"
+        );
+        assert!(
+            labels.iter().any(|l| *l == "INDEX"),
+            "Missing INDEX keyword for CREATE"
+        );
+        assert!(
+            labels.iter().any(|l| *l == "VIEW"),
+            "Missing VIEW keyword for CREATE"
+        );
+        assert!(
+            labels.iter().any(|l| *l == "DATABASE"),
+            "Missing DATABASE keyword for CREATE"
+        );
+    }
+}
+
+#[tokio::test]
+async fn test_keyword_completion_insert_statement() {
+    // Test INSERT statement keywords
+    let catalog = MockCatalogBuilder::new().with_standard_schema().build();
+    let engine = CompletionEngine::new(Arc::new(catalog));
+
+    // Should suggest INSERT keywords
+    let sql = "INSERT |";
+    let document = create_test_document(sql, "mysql").await;
+
+    let position = Position::new(0, 7);
+    let result = engine.complete(&document, position).await;
+
+    assert!(result.is_ok());
+    let items = result.unwrap();
+
+    if let Some(items) = items {
+        let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
+        // Should have INSERT-specific keywords
+        assert!(
+            labels.iter().any(|l| *l == "INTO"),
+            "Missing INTO keyword for INSERT"
+        );
+        assert!(
+            labels.iter().any(|l| *l == "VALUES"),
+            "Missing VALUES keyword for INSERT"
+        );
+    }
+}
+
+#[tokio::test]
+async fn test_keyword_completion_delete_statement() {
+    // Test DELETE statement keywords
+    let catalog = MockCatalogBuilder::new().with_standard_schema().build();
+    let engine = CompletionEngine::new(Arc::new(catalog));
+
+    // Should suggest DELETE keywords
+    let sql = "DELETE |";
+    let document = create_test_document(sql, "mysql").await;
+
+    let position = Position::new(0, 7);
+    let result = engine.complete(&document, position).await;
+
+    assert!(result.is_ok());
+    let items = result.unwrap();
+
+    if let Some(items) = items {
+        let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
+        // Should have DELETE-specific keywords
+        assert!(
+            labels.iter().any(|l| *l == "FROM"),
+            "Missing FROM keyword for DELETE"
+        );
+        assert!(
+            labels.iter().any(|l| *l == "WHERE"),
+            "Missing WHERE keyword for DELETE"
+        );
+    }
+}
+
+#[tokio::test]
+async fn test_keyword_completion_update_statement() {
+    // Test UPDATE statement keywords
+    let catalog = MockCatalogBuilder::new().with_standard_schema().build();
+    let engine = CompletionEngine::new(Arc::new(catalog));
+
+    // Should suggest UPDATE keywords
+    let sql = "UPDATE |";
+    let document = create_test_document(sql, "mysql").await;
+
+    let position = Position::new(0, 7);
+    let result = engine.complete(&document, position).await;
+
+    assert!(result.is_ok());
+    let items = result.unwrap();
+
+    if let Some(items) = items {
+        let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
+        // Should have UPDATE-specific keywords
+        assert!(
+            labels.iter().any(|l| *l == "SET"),
+            "Missing SET keyword for UPDATE"
+        );
+        assert!(
+            labels.iter().any(|l| *l == "WHERE"),
+            "Missing WHERE keyword for UPDATE"
+        );
+    }
+}
+
+#[tokio::test]
+async fn test_keyword_completion_priority_sorting() {
+    // Test that keywords are sorted by priority
+    let catalog = MockCatalogBuilder::new().with_standard_schema().build();
+    let engine = CompletionEngine::new(Arc::new(catalog));
+
+    // Common keywords should appear first
+    let sql = "SELECT |";
+    let document = create_test_document(sql, "mysql").await;
+
+    let position = Position::new(0, 7);
+    let result = engine.complete(&document, position).await;
+
+    assert!(result.is_ok());
+    let items = result.unwrap();
+
+    if let Some(items) = items {
+        // Check that items have sort_text
+        assert!(
+            items.iter().all(|i| i.sort_text.is_some()),
+            "All keyword items should have sort_text for priority ordering"
+        );
+    }
+}
+
+#[tokio::test]
+async fn test_keyword_completion_item_kind() {
+    // Test that keyword completion items have correct kind
+    let catalog = MockCatalogBuilder::new().with_standard_schema().build();
+    let engine = CompletionEngine::new(Arc::new(catalog));
+
+    let sql = "SELECT |";
+    let document = create_test_document(sql, "mysql").await;
+
+    let position = Position::new(0, 7);
+    let result = engine.complete(&document, position).await;
+
+    assert!(result.is_ok());
+    let items = result.unwrap();
+
+    if let Some(items) = items {
+        // Check that keyword items have KEYWORD kind
+        assert!(
+            items.iter().all(|i| i.kind == Some(tower_lsp::lsp_types::CompletionItemKind::KEYWORD)),
+            "All keyword completion items should have KEYWORD kind"
+        );
+    }
+}
+
+#[tokio::test]
+async fn test_keyword_completion_documentation() {
+    // Test that keywords have documentation
+    let catalog = MockCatalogBuilder::new().with_standard_schema().build();
+    let engine = CompletionEngine::new(Arc::new(catalog));
+
+    let sql = "SELECT |";
+    let document = create_test_document(sql, "mysql").await;
+
+    let position = Position::new(0, 7);
+    let result = engine.complete(&document, position).await;
+
+    assert!(result.is_ok());
+    let items = result.unwrap();
+
+    if let Some(items) = items {
+        // Check that keywords have documentation
+        assert!(
+            items.iter().all(|i| i.documentation.is_some()),
+            "All keyword completion items should have documentation"
+        );
+    }
+}

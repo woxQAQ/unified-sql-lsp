@@ -230,7 +230,12 @@ impl CompletionEngine {
                 existing_clauses,
             } => {
                 // Handle keyword completion
-                let provider = KeywordProvider::new(self.dialect);
+                // Get dialect from document metadata, fallback to stored dialect
+                let dialect = document
+                    .parse_metadata()
+                    .map(|m| m.dialect)
+                    .unwrap_or(self.dialect);
+                let provider = KeywordProvider::new(dialect);
 
                 // Determine which keywords to show based on context
                 let keywords = if let Some(stmt_type) = &statement_type {
