@@ -51,6 +51,16 @@ pub enum CompletionContext {
         right_table: Option<String>,
     },
 
+    /// Keyword completion
+    ///
+    /// User is typing at a position where SQL keywords are appropriate
+    Keywords {
+        /// The type of statement being typed
+        statement_type: Option<String>,
+        /// Existing clauses that should not be suggested again
+        existing_clauses: Vec<String>,
+    },
+
     /// Unknown context
     ///
     /// Cursor is in a position that doesn't match known completion contexts
@@ -76,6 +86,11 @@ impl CompletionContext {
     /// Check if this is a JOIN ON condition context
     pub fn is_join_condition(&self) -> bool {
         matches!(self, CompletionContext::JoinCondition { .. })
+    }
+
+    /// Check if this is a keyword completion context
+    pub fn is_keywords(&self) -> bool {
+        matches!(self, CompletionContext::Keywords { .. })
     }
 }
 
@@ -162,8 +177,83 @@ pub fn detect_completion_context(
         current = n.parent();
     }
 
-    CompletionContext::Unknown
+    // If no specific completion context was found, check for keyword completion
+    // This handles cases where the cursor is at a position where SQL keywords are appropriate
+    // but doesn't interfere with existing table/column/function completion
+    detect_keyword_context(root, position, source)
 }
+
+/// Detect if we should provide keyword completion
+///
+/// This is a fallback detection that only triggers when no other specific
+/// completion context applies. It checks if the cursor is in a position
+/// where SQL keywords would be appropriate (e.g., in a SELECT statement
+/// but not at a table or column completion position).
+fn detect_keyword_context(root: &Node, position: Position, source: &str) -> CompletionContext {
+    // Walk up the tree to find statement context
+    let mut current = match find_node_at_position(root, position, source) {
+        Some(n) => n,
+        None => return CompletionContext::Unknown,
+    };
+
+    let mut statement_type: Option<String> = None;
+    let mut existing_clauses: Vec<String> = Vec::new();
+
+    while let Some(n) = current.parent() {
+        match n.kind() {
+            "select_statement" => {
+                statement_type = Some("SELECT".to_string());
+                // Extract existing clauses
+                let mut walk = n.walk();
+                for child in n.children(&mut walk) {
+                    match child.kind() {
+                        "from_clause" => existing_clauses.push("FROM".to_string()),
+                        "where_clause" => existing_clauses.push("WHERE".to_string()),
+                        "group_by_clause" => existing_clauses.push("GROUP BY".to_string()),
+                        "having_clause" => existing_clauses.push("HAVING".to_string()),
+                        "order_by_clause" => existing_clauses.push("ORDER BY".to_string()),
+                        "limit_clause" => existing_clauses.push("LIMIT".to_string()),
+                        _ => {}
+                    }
+                }
+                break;
+            }
+            "insert_statement" => {
+                statement_type = Some("INSERT".to_string());
+                existing_clauses.push("INSERT".to_string());
+                break;
+            }
+            "update_statement" => {
+                statement_type = Some("UPDATE".to_string());
+                existing_clauses.push("UPDATE".to_string());
+                break;
+            }
+            "delete_statement" => {
+                statement_type = Some("DELETE".to_string());
+                existing_clauses.push("DELETE".to_string());
+                break;
+            }
+            "create_statement" => {
+                statement_type = Some("CREATE".to_string());
+                existing_clauses.push("CREATE".to_string());
+                break;
+            }
+            _ => {}
+        }
+        current = n;
+    }
+
+    // Only return keyword context if we found a statement
+    if statement_type.is_some() {
+        CompletionContext::Keywords {
+            statement_type,
+            existing_clauses,
+        }
+    } else {
+        CompletionContext::Unknown
+    }
+}
+
 
 /// Check if the position is within the SELECT projection list
 fn is_in_projection(select_node: &Node, position: Position) -> bool {

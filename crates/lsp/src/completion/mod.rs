@@ -35,6 +35,7 @@
 pub mod catalog_integration;
 pub mod context;
 pub mod error;
+pub mod keywords;
 pub mod render;
 pub mod scopes;
 
@@ -42,10 +43,12 @@ use std::collections::HashSet;
 use std::sync::Arc;
 use tower_lsp::lsp_types::{CompletionItem, Position};
 use unified_sql_lsp_catalog::{Catalog, FunctionType};
+use unified_sql_lsp_ir::Dialect;
 
 use crate::completion::catalog_integration::CatalogCompletionFetcher;
 use crate::completion::context::{CompletionContext, detect_completion_context};
 use crate::completion::error::CompletionError;
+use crate::completion::keywords::KeywordProvider;
 use crate::completion::render::CompletionRenderer;
 use crate::completion::scopes::ScopeBuilder;
 use crate::document::Document;
@@ -57,6 +60,7 @@ pub use crate::completion::context::CompletionContext as SqlCompletionContext;
 /// Orchestrates the completion flow from context detection to rendering.
 pub struct CompletionEngine {
     catalog_fetcher: CatalogCompletionFetcher,
+    dialect: Dialect,
 }
 
 impl CompletionEngine {
@@ -66,8 +70,10 @@ impl CompletionEngine {
     ///
     /// * `catalog` - The catalog to use for fetching schema information
     pub fn new(catalog: Arc<dyn Catalog>) -> Self {
+        let dialect = Dialect::MySQL; // Default dialect
         Self {
             catalog_fetcher: CatalogCompletionFetcher::new(catalog),
+            dialect,
         }
     }
 
@@ -217,6 +223,39 @@ impl CompletionEngine {
                     CompletionRenderer::render_functions(&functions, Some(FunctionType::Scalar));
                 items.extend(function_items);
 
+                Ok(Some(items))
+            }
+            CompletionContext::Keywords {
+                statement_type,
+                existing_clauses,
+            } => {
+                // Handle keyword completion
+                let provider = KeywordProvider::new(self.dialect);
+
+                // Determine which keywords to show based on context
+                let keywords = if let Some(stmt_type) = &statement_type {
+                    // Show keywords based on statement type
+                    match stmt_type.as_str() {
+                        "SELECT" => {
+                            // Show SELECT clause keywords, excluding existing ones
+                            let all = provider.select_clause_keywords();
+                            let exclude: HashSet<String> =
+                                existing_clauses.into_iter().collect();
+                            all.exclude(&exclude)
+                        }
+                        "INSERT" => provider.insert_keywords().keywords,
+                        "UPDATE" => provider.update_keywords().keywords,
+                        "DELETE" => provider.delete_keywords().keywords,
+                        "CREATE" => provider.create_keywords().keywords,
+                        _ => provider.select_clause_keywords().keywords,
+                    }
+                } else {
+                    // No statement type, show statement keywords
+                    provider.statement_keywords().keywords
+                };
+
+                // Render completion items
+                let items = CompletionRenderer::render_keywords(&keywords);
                 Ok(Some(items))
             }
             CompletionContext::Unknown => Ok(None),

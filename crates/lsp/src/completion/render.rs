@@ -12,6 +12,9 @@ use tower_lsp::lsp_types::{CompletionItem, CompletionItemKind, Documentation};
 use unified_sql_lsp_catalog::{DataType, FunctionMetadata, FunctionType, TableMetadata, TableType};
 use unified_sql_lsp_semantic::{ColumnSymbol, TableSymbol};
 
+// Import keyword types
+use crate::completion::keywords::SqlKeyword;
+
 /// Completion renderer
 ///
 /// Converts semantic symbols to LSP CompletionItem representations.
@@ -480,6 +483,57 @@ impl CompletionRenderer {
             "SQL function".to_string()
         } else {
             parts.join("\n\n")
+        }
+    }
+
+    /// Render keyword completion items
+    ///
+    /// # Arguments
+    ///
+    /// * `keywords` - Vector of SQL keywords
+    ///
+    /// # Returns
+    ///
+    /// Vector of completion items
+    pub fn render_keywords(keywords: &[SqlKeyword]) -> Vec<CompletionItem> {
+        let mut items = Vec::new();
+
+        for keyword in keywords {
+            items.push(Self::keyword_item(keyword));
+        }
+
+        // Sort by priority
+        items.sort_by(|a, b| {
+            let a_sort = a.sort_text.as_ref().unwrap();
+            let b_sort = b.sort_text.as_ref().unwrap();
+            a_sort.cmp(b_sort)
+        });
+
+        items
+    }
+
+    /// Render a single keyword completion item
+    ///
+    /// # Arguments
+    ///
+    /// * `keyword` - The SQL keyword
+    fn keyword_item(keyword: &SqlKeyword) -> CompletionItem {
+        let label = keyword.label.clone();
+        let documentation = if let Some(desc) = &keyword.description {
+            Documentation::String(desc.clone())
+        } else {
+            Documentation::String("SQL keyword".to_string())
+        };
+
+        CompletionItem {
+            label,
+            kind: Some(CompletionItemKind::KEYWORD),
+            detail: Some("SQL keyword".to_string()),
+            documentation: Some(documentation),
+            deprecated: Some(false),
+            preselect: Some(false),
+            sort_text: Some(format!("{:05}_{}", keyword.sort_priority, keyword.label)),
+            ..Default::default()
         }
     }
 }
