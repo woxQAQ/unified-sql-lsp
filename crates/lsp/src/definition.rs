@@ -185,11 +185,20 @@ impl DefinitionFinder {
     ///
     /// # Examples
     ///
-    /// ```ignore
-    /// let result = DefinitionFinder::find_at_position(&root_node, source, position, &uri)?;
-    /// if let Some(Definition::Table(def)) = result {
-    ///     println!("Found table: {} at {:?}", def.table_name, def.location);
-    /// }
+    /// ```
+    /// # use unified_sql_lsp_lsp::definition::DefinitionFinder;
+    /// # use tower_lsp::lsp_types::{Position, Url};
+    /// # use tree_sitter::Parser;
+    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+    /// # let source = "SELECT id FROM users";
+    /// # let mut parser = Parser::new();
+    /// # let tree = parser.parse(source, None).unwrap();
+    /// # let uri = Url::parse("file:///test.sql").unwrap();
+    /// # let position = Position::new(0, 10);
+    /// let result = DefinitionFinder::find_at_position(&tree.root_node(), source, position, &uri)?;
+    /// # let _ = result;
+    /// # Ok(())
+    /// # }
     /// ```
     pub fn find_at_position(
         root_node: &Node,

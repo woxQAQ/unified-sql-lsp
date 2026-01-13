@@ -52,7 +52,7 @@ impl CatalogManager {
     ///
     /// # Examples
     ///
-    /// ```ignore
+    /// ```text,ignore
     /// let catalog = manager.get_catalog(&config).await?;
     /// let columns = catalog.get_columns("users").await?;
     /// ```

@@ -62,9 +62,20 @@ impl Range {
 ///
 /// # Examples
 ///
-/// ```ignore
+/// ```no_run
+/// use unified_sql_lsp_context::cst_utils::{find_node_at_position, Position};
+/// use tree_sitter::Parser;
+/// use unified_sql_grammar::language_for_dialect;
+/// use unified_sql_lsp_ir::Dialect;
+///
+/// let source = "SELECT id FROM users";
+/// let mut parser = Parser::new();
+/// let lang = language_for_dialect(Dialect::MySQL).unwrap();
+/// parser.set_language(&lang).unwrap();
 /// let tree = parser.parse(source, None).unwrap();
-/// let node = find_node_at_position(&tree.root_node(), Position::new(0, 10), source);
+/// let root = tree.root_node();
+/// let node = find_node_at_position(&root, Position::new(0, 10), source);
+/// # let _ = node;
 /// ```
 pub fn find_node_at_position<'a>(
     root: &'a Node,

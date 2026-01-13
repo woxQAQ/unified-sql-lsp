@@ -101,7 +101,7 @@ impl CompletionEngine {
     ///
     /// # Examples
     ///
-    /// ```ignore
+    /// ```text,ignore
     /// let engine = CompletionEngine::new(catalog);
     /// match engine.complete(&document, Position::new(0, 10)).await {
     ///     Ok(Some(items)) => {

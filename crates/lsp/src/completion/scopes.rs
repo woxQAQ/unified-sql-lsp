@@ -60,8 +60,18 @@ impl ScopeBuilder {
     ///
     /// # Examples
     ///
-    /// ```ignore
+    /// ```
+    /// # use unified_sql_lsp_lsp::completion::scopes::ScopeBuilder;
+    /// # use tree_sitter::Parser;
+    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+    /// # let source = "SELECT id FROM users";
+    /// # let mut parser = Parser::new();
+    /// # let tree = parser.parse(source, None).unwrap();
+    /// # let select_node = tree.root_node();
     /// let manager = ScopeBuilder::build_from_select(&select_node, source)?;
+    /// # let _ = manager;
+    /// # Ok(())
+    /// # }
     /// ```
     pub fn build_from_select(
         select_node: &Node,

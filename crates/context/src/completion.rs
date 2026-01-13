@@ -151,13 +151,23 @@ impl CompletionContext {
 ///
 /// # Examples
 ///
-/// ```ignore
+/// ```no_run
+/// use unified_sql_lsp_context::{Position, detect_completion_context};
+/// use tree_sitter::Parser;
+/// use unified_sql_grammar::language_for_dialect;
+/// use unified_sql_lsp_ir::Dialect;
+///
+/// let source = "SELECT id FROM users";
+/// let mut parser = Parser::new();
+/// let lang = language_for_dialect(Dialect::MySQL).unwrap();
+/// parser.set_language(&lang).unwrap();
 /// let tree = parser.parse(source, None).unwrap();
 /// let ctx = detect_completion_context(
 ///     &tree.root_node(),
 ///     Position::new(0, 10),
 ///     source
 /// );
+/// # let _ = ctx;
 /// ```
 pub fn detect_completion_context(
     root: &Node,

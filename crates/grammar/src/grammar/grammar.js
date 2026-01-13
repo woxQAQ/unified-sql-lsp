@@ -80,7 +80,7 @@ module.exports = grammar({
 
   rules: {
     // Source file (root rule)
-    source_file: $ => repeat($._statement),
+    source_file: $ => repeat(seq($._statement, optional(';'))),
 
     _statement: $ => $.statement,
 
@@ -135,7 +135,10 @@ module.exports = grammar({
     from_clause: $ => seq(
       'FROM',
       $.table_reference,
-      repeat(seq(',', $.table_reference))
+      repeat(choice(
+        seq(',', $.table_reference),
+        $.join_clause
+      ))
     ),
 
     // =============================================================================
@@ -270,8 +273,9 @@ module.exports = grammar({
 
     table_reference: $ => choice(
       seq($.table_name, /[Aa][Ss]/, $.alias),
+      seq($.table_name, $.alias),  // optional AS keyword
       $.table_name,
-      $.join_clause
+      seq('(', $.select_statement, ')', optional(seq(/[Aa][Ss]/, $.alias)))  // subquery
     ),
 
     join_clause: $ => seq(

@@ -39,7 +39,7 @@ impl CatalogCompletionFetcher {
     ///
     /// # Examples
     ///
-    /// ```ignore
+    /// ```text,ignore
     /// let tables = fetcher.list_tables().await?;
     /// assert!(!tables.is_empty());
     /// ```
@@ -65,7 +65,7 @@ impl CatalogCompletionFetcher {
     ///
     /// # Examples
     ///
-    /// ```ignore
+    /// ```text,ignore
     /// let functions = fetcher.list_functions().await?;
     /// assert!(!functions.is_empty());
     /// ```
@@ -88,7 +88,7 @@ impl CatalogCompletionFetcher {
     ///
     /// # Examples
     ///
-    /// ```ignore
+    /// ```text,ignore
     /// let mut table = TableSymbol::new("users");
     /// fetcher.populate_table_columns(&mut table).await?;
     /// assert!(!table.columns.is_empty());
@@ -157,7 +157,7 @@ impl CatalogCompletionFetcher {
     ///
     /// # Examples
     ///
-    /// ```ignore
+    /// ```text,ignore
     /// let table = fetcher.populate_single_table("users").await?;
     /// assert!(!table.columns.is_empty());
     /// ```

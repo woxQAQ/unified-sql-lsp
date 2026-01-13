@@ -47,7 +47,9 @@
 //!
 //! ## Usage
 //!
-//! ```rust,ignore
+//! To get a parser for a specific dialect:
+//!
+//! ```text,ignore
 //! use unified_sql_lsp_ir::Dialect;
 //! use unified_sql_grammar::{language_for_dialect, language_for_dialect_with_version, DialectVersion};
 //!

@@ -34,7 +34,16 @@ impl CompletionRenderer {
     ///
     /// # Examples
     ///
-    /// ```ignore
+    /// ```
+    /// # use unified_sql_lsp_lsp::completion::render::CompletionRenderer;
+    /// # use unified_sql_lsp_semantic::{TableSymbol, ColumnSymbol};
+    /// # use unified_sql_lsp_catalog::DataType;
+    /// # let tables = vec![
+    /// #     TableSymbol::new("users").with_columns(vec![
+    /// #         ColumnSymbol::new("id", DataType::Integer, "users"),
+    /// #         ColumnSymbol::new("name", DataType::Text, "users"),
+    /// #     ])
+    /// # ];
     /// let items = CompletionRenderer::render_columns(&tables, false);
     /// assert!(items.iter().any(|i| i.label == "id"));
     /// ```
@@ -92,7 +101,18 @@ impl CompletionRenderer {
     ///
     /// # Examples
     ///
-    /// ```ignore
+    /// ```
+    /// # use unified_sql_lsp_lsp::completion::render::CompletionRenderer;
+    /// # use unified_sql_lsp_semantic::{TableSymbol, ColumnSymbol};
+    /// # use unified_sql_lsp_catalog::DataType;
+    /// # let left_table = TableSymbol::new("users").with_columns(vec![
+    /// #     ColumnSymbol::new("id", DataType::Integer, "users").with_primary_key(),
+    /// #     ColumnSymbol::new("name", DataType::Text, "users"),
+    /// # ]);
+    /// # let right_table = TableSymbol::new("orders").with_columns(vec![
+    /// #     ColumnSymbol::new("id", DataType::Integer, "orders").with_primary_key(),
+    /// #     ColumnSymbol::new("user_id", DataType::Integer, "orders").with_foreign_key(),
+    /// # ]);
     /// let items = CompletionRenderer::render_join_columns(&[left_table, right_table], true);
     /// assert!(items[0].preselect.unwrap()); // PK/FK columns should be preselected
     /// ```
@@ -154,7 +174,19 @@ impl CompletionRenderer {
     ///
     /// # Examples
     ///
-    /// ```ignore
+    /// ```
+    /// # use unified_sql_lsp_lsp::completion::render::CompletionRenderer;
+    /// # use unified_sql_lsp_catalog::{TableMetadata, TableType};
+    /// # let tables = vec![
+    /// #     TableMetadata {
+    /// #         name: "users".to_string(),
+    /// #         schema: "public".to_string(),
+    /// #         columns: vec![],
+    /// #         row_count_estimate: None,
+    /// #         comment: None,
+    /// #         table_type: TableType::Table,
+    /// #     }
+    /// # ];
     /// let items = CompletionRenderer::render_tables(&tables, false);
     /// assert!(items.iter().any(|i| i.label == "users"));
     /// ```
@@ -376,11 +408,15 @@ impl CompletionRenderer {
     ///
     /// # Examples
     ///
-    /// ```ignore
-    /// // Show all functions
-    /// let items = CompletionRenderer::render_functions(&functions, None);
+    /// To show all functions:
     ///
-    /// // Show only aggregate functions
+    /// ```text,ignore
+    /// let items = CompletionRenderer::render_functions(&functions, None);
+    /// ```
+    ///
+    /// To show only aggregate functions:
+    ///
+    /// ```text,ignore
     /// let items = CompletionRenderer::render_functions(
     ///     &functions,
     ///     Some(FunctionType::Aggregate)

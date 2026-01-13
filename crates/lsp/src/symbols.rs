@@ -98,8 +98,17 @@ impl SymbolBuilder {
     ///
     /// # Examples
     ///
-    /// ```ignore
-    /// let queries = SymbolBuilder::build_from_cst(&root_node, source)?;
+    /// ```
+    /// # use unified_sql_lsp_lsp::symbols::SymbolBuilder;
+    /// # use tree_sitter::Parser;
+    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+    /// # let source = "SELECT id FROM users";
+    /// # let mut parser = Parser::new();
+    /// # let tree = parser.parse(source, None).unwrap();
+    /// let queries = SymbolBuilder::build_from_cst(&tree.root_node(), source)?;
+    /// # let _ = queries;
+    /// # Ok(())
+    /// # }
     /// ```
     pub fn build_from_cst(root_node: &Node, source: &str) -> Result<Vec<QuerySymbol>, SymbolError> {
         let mut queries = Vec::new();

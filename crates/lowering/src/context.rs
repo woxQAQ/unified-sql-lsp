@@ -125,8 +125,17 @@ impl LoweringContext {
     ///
     /// # Example
     ///
-    /// ```ignore
+    /// ```
+    /// # use unified_sql_lsp_lowering::context::{LoweringContext, SourceLocation};
+    /// # use unified_sql_lsp_ir::Dialect;
+    /// let mut ctx = LoweringContext::new(Dialect::MySQL);
+    /// let location = SourceLocation {
+    ///     byte_offset: 100,
+    ///     line: 5,
+    ///     column: 10,
+    /// };
     /// let placeholder = ctx.create_placeholder_with_location(Some(location));
+    /// # let _ = placeholder;
     /// ```
     pub fn create_placeholder_with_location(&mut self, location: Option<SourceLocation>) -> Expr {
         let name = format!("__placeholder_{}", self.placeholder_counter);
