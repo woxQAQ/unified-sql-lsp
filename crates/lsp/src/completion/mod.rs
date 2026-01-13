@@ -183,8 +183,14 @@ impl CompletionEngine {
                     "!!! LSP: Matched SelectProjection: tables={:?}, qualifier={:?}",
                     tables, qualifier
                 );
-                self.complete_select_projection(&scope_manager, tables, qualifier, &source, document)
-                    .await
+                self.complete_select_projection(
+                    &scope_manager,
+                    tables,
+                    qualifier,
+                    &source,
+                    document,
+                )
+                .await
             }
             CompletionContext::FromClause { exclude_tables } => {
                 eprintln!(
@@ -768,7 +774,10 @@ impl CompletionEngine {
         }
         if let Some(ref q) = qualifier {
             let qualifier_prefix = format!("{}.", q);
-            eprintln!("!!! LSP: Filtering with qualifier prefix: '{}'", qualifier_prefix);
+            eprintln!(
+                "!!! LSP: Filtering with qualifier prefix: '{}'",
+                qualifier_prefix
+            );
             items.retain(|i| i.label.starts_with(&qualifier_prefix));
             eprintln!("!!! LSP: After qualifier filter: {} items", items.len());
         }
@@ -968,10 +977,7 @@ impl CompletionEngine {
                     // The qualifier could be:
                     // 1. An actual table name (e.g., "users")
                     // 2. A table alias (e.g., "u" for "users")
-                    eprintln!(
-                        "!!! LSP: Qualifier '{}' provided, filtering tables",
-                        q
-                    );
+                    eprintln!("!!! LSP: Qualifier '{}' provided, filtering tables", q);
 
                     // First try to match by exact table name
                     let exact_match: Vec<_> = tables_with_columns
@@ -987,7 +993,11 @@ impl CompletionEngine {
                         // Try to match by alias
                         let alias_match: Vec<_> = tables_with_columns
                             .iter()
-                            .filter(|t| t.alias.as_ref().map_or(false, |a| a.eq_ignore_ascii_case(q)))
+                            .filter(|t| {
+                                t.alias
+                                    .as_ref()
+                                    .map_or(false, |a| a.eq_ignore_ascii_case(q))
+                            })
                             .cloned()
                             .collect();
 
@@ -996,7 +1006,10 @@ impl CompletionEngine {
                             alias_match
                         } else {
                             // Qualifier doesn't match any table - return empty
-                            eprintln!("!!! LSP: Qualifier '{}' doesn't match any table, returning empty", q);
+                            eprintln!(
+                                "!!! LSP: Qualifier '{}' doesn't match any table, returning empty",
+                                q
+                            );
                             return Ok(None);
                         }
                     }

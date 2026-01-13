@@ -695,7 +695,11 @@ fn detect_from_or_join_context(source: &str, text_before: &str) -> Option<Comple
     // Check for FROM pattern (e.g., "...FROM |")
     if is_after_keyword(&text_before_upper, "FROM") {
         let after_from = extract_after_keyword(&text_before_upper, "FROM");
-        eprintln!("!!! LSP: after_from='{}', trimmed.len()={}", after_from, after_from.trim().len());
+        eprintln!(
+            "!!! LSP: after_from='{}', trimmed.len()={}",
+            after_from,
+            after_from.trim().len()
+        );
         if after_from.trim().len() < 10 {
             // Check if we've already typed a table name (FROM <table> <space>)
             // Pattern: "FROM table " should suggest clauses, not tables
@@ -709,9 +713,13 @@ fn detect_from_or_join_context(source: &str, text_before: &str) -> Option<Comple
                 // Check if cursor is after a space or at the end (meaning table name is complete)
                 // Handle test patterns that end with "|" as cursor marker
                 let ends_with_space = after_from.ends_with(' ') || after_from.ends_with('\t');
-                let ends_with_cursor = trimmed.ends_with('|') || words.last().map_or(false, |w| *w == "|");
+                let ends_with_cursor =
+                    trimmed.ends_with('|') || words.last().map_or(false, |w| *w == "|");
 
-                eprintln!("!!! LSP: ends_with_space={}, ends_with_cursor={}", ends_with_space, ends_with_cursor);
+                eprintln!(
+                    "!!! LSP: ends_with_space={}, ends_with_cursor={}",
+                    ends_with_space, ends_with_cursor
+                );
 
                 if ends_with_space || ends_with_cursor {
                     // Check if this is a comma-style join: "FROM table1, table2, |"
@@ -1339,77 +1347,6 @@ fn extract_after_keyword(text: &str, keyword: &str) -> String {
         text[pos + keyword.len()..].to_string()
     } else {
         String::new()
-    }
-}
-
-/// Detect if we should provide keyword completion
-///
-/// This is a fallback detection that only triggers when no other specific
-/// completion context applies. It checks if the cursor is in a position
-/// where SQL keywords would be appropriate (e.g., in a SELECT statement
-/// but not at a table or column completion position).
-fn detect_keyword_context(root: &Node, position: Position, source: &str) -> CompletionContext {
-    // Walk up the tree to find statement context
-    let mut current = match find_node_at_position(root, position, source) {
-        Some(n) => n,
-        None => return CompletionContext::Unknown,
-    };
-
-    let mut statement_type: Option<String> = None;
-    let mut existing_clauses: Vec<String> = Vec::new();
-
-    while let Some(n) = current.parent() {
-        match n.kind() {
-            "select_statement" => {
-                statement_type = Some("SELECT".to_string());
-                // Extract existing clauses
-                let mut walk = n.walk();
-                for child in n.children(&mut walk) {
-                    match child.kind() {
-                        "from_clause" => existing_clauses.push("FROM".to_string()),
-                        "where_clause" => existing_clauses.push("WHERE".to_string()),
-                        "group_by_clause" => existing_clauses.push("GROUP BY".to_string()),
-                        "having_clause" => existing_clauses.push("HAVING".to_string()),
-                        "order_by_clause" => existing_clauses.push("ORDER BY".to_string()),
-                        "limit_clause" => existing_clauses.push("LIMIT".to_string()),
-                        _ => {}
-                    }
-                }
-                break;
-            }
-            "insert_statement" => {
-                statement_type = Some("INSERT".to_string());
-                existing_clauses.push("INSERT".to_string());
-                break;
-            }
-            "update_statement" => {
-                statement_type = Some("UPDATE".to_string());
-                existing_clauses.push("UPDATE".to_string());
-                break;
-            }
-            "delete_statement" => {
-                statement_type = Some("DELETE".to_string());
-                existing_clauses.push("DELETE".to_string());
-                break;
-            }
-            "create_statement" => {
-                statement_type = Some("CREATE".to_string());
-                existing_clauses.push("CREATE".to_string());
-                break;
-            }
-            _ => {}
-        }
-        current = n;
-    }
-
-    // Only return keyword context if we found a statement
-    if statement_type.is_some() {
-        CompletionContext::Keywords {
-            statement_type,
-            existing_clauses,
-        }
-    } else {
-        CompletionContext::Unknown
     }
 }
 

@@ -493,7 +493,6 @@ impl Catalog for LiveMySQLCatalog {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use unified_sql_lsp_ir::FunctionType;
 
     #[test]
     fn test_parse_mysql_varchar() {

@@ -28,19 +28,11 @@ pub enum ScopeType {
 /// Represents a lexical scope in a SQL query
 ///
 /// Scopes form a hierarchy where child scopes can access symbols from parent scopes.
-/// For example, a subquery can access tables from its parent query.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Scope {
-    /// Unique identifier for this scope
     pub id: usize,
-
-    /// Parent scope ID (if any)
     pub parent_id: Option<usize>,
-
-    /// Tables visible in this scope
     pub tables: Vec<TableSymbol>,
-
-    /// Type of this scope
     pub scope_type: ScopeType,
 }
 
@@ -125,15 +117,9 @@ impl Scope {
 }
 
 /// Manages hierarchical scopes and symbol resolution
-///
-/// The ScopeManager maintains a forest of scopes and provides methods for
-/// resolving tables and columns across the scope hierarchy.
 #[derive(Debug, Clone)]
 pub struct ScopeManager {
-    /// All scopes managed by this manager
     scopes: Vec<Scope>,
-
-    /// Next scope ID to assign
     next_id: usize,
 }
 

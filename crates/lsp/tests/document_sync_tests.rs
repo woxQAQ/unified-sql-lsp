@@ -178,7 +178,7 @@ fn test_document_sync_on_change_full_replacement() {
     let config = Arc::new(RwLock::new(None));
     let sync = DocumentSync::new(config);
 
-    let mut doc = create_test_document("SELECT 1", "mysql");
+    let doc = create_test_document("SELECT 1", "mysql");
 
     // Initial parse
     let _ = sync.on_document_open(&doc);

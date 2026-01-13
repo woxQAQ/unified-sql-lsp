@@ -69,33 +69,16 @@ use tracing::{error, info, warn};
 /// LSP backend implementation
 ///
 /// Main entry point for all LSP protocol operations.
-/// Uses tower-lsp framework for protocol handling.
 pub struct LspBackend {
-    /// LSP client for sending notifications and requests
     client: Client,
-
-    /// Document store for managing open documents
     documents: Arc<DocumentStore>,
-
-    /// Engine configuration
     config: Arc<RwLock<Option<EngineConfig>>>,
-
-    /// Document synchronization and parsing manager
     doc_sync: Arc<DocumentSync>,
-
-    /// Catalog manager for database connections
     catalog_manager: Arc<RwLock<CatalogManager>>,
-
-    /// Diagnostic collector for error detection
     diagnostic_collector: DiagnosticCollector,
 }
 
 impl LspBackend {
-    /// Create a new LSP backend
-    ///
-    /// # Arguments
-    ///
-    /// - `client`: LSP client handle
     pub fn new(client: Client) -> Self {
         eprintln!("!!! LSP: LspBackend::new() called");
         let config = Arc::new(RwLock::new(None));
@@ -112,38 +95,27 @@ impl LspBackend {
         }
     }
 
-    /// Get the document store
     pub fn documents(&self) -> &DocumentStore {
         &self.documents
     }
 
-    /// Get the engine configuration
     pub async fn get_config(&self) -> Option<EngineConfig> {
         self.config.read().await.clone()
     }
 
-    /// Set the engine configuration
-    ///
-    /// This is called when the client sends workspace configuration
-    /// or through the `initialize` response.
     pub async fn set_config(&self, config: EngineConfig) {
         info!("Engine configuration updated: dialect={:?}", config.dialect);
         *self.config.write().await = Some(config);
     }
 
-    /// Log a message to the client
     async fn log_message(&self, message: &str, message_type: MessageType) {
         self.client.log_message(message_type, message).await;
     }
 
-    /// Show a message to the user
     async fn show_message(&self, message: &str, message_type: MessageType) {
         self.client.show_message(message_type, message).await;
     }
 
-    /// Publish diagnostics to the client
-    ///
-    /// This will be used extensively in DIAG-001 and subsequent features.
     #[allow(dead_code)]
     async fn publish_diagnostics(&self, uri: Url, diagnostics: Vec<Diagnostic>) {
         self.client

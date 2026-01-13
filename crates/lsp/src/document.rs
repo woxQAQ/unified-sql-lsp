@@ -54,23 +54,12 @@ use tower_lsp::lsp_types::{TextDocumentContentChangeEvent, Url, VersionedTextDoc
 /// Parse metadata
 ///
 /// Contains information about a document parsing operation.
-/// This type is defined in the document module and used by both
-/// document and sync modules to track parse results.
 #[derive(Debug, Clone)]
 pub struct ParseMetadata {
-    /// When the document was parsed
     pub parsed_at: std::time::SystemTime,
-
-    /// Time taken to parse (milliseconds)
     pub parse_time_ms: u64,
-
-    /// SQL dialect used for parsing
     pub dialect: unified_sql_lsp_ir::Dialect,
-
-    /// Whether the parse had errors
     pub has_errors: bool,
-
-    /// Number of parse errors
     pub error_count: usize,
 }
 
@@ -79,17 +68,9 @@ pub struct ParseMetadata {
 /// Contains information about an open document.
 #[derive(Debug, Clone)]
 pub struct DocumentMetadata {
-    /// Document URI
     pub uri: Url,
-
-    /// Language identifier (e.g., "sql", "mysql", "postgresql")
     pub language_id: String,
-
-    /// Document version
-    /// Incremented on each change
     pub version: i32,
-
-    /// Line count
     pub line_count: usize,
 }
 
@@ -108,27 +89,16 @@ impl DocumentMetadata {
 /// A document managed by the LSP server
 ///
 /// Contains the document's content and metadata.
-/// Uses Ropey for efficient text manipulation.
 #[derive(Debug, Clone)]
 pub struct Document {
-    /// Document metadata
     metadata: DocumentMetadata,
-
-    /// Document content as a rope for efficient editing
     content: Rope,
-
-    /// Parsed syntax tree (if available)
     tree: Option<Arc<Mutex<tree_sitter::Tree>>>,
-
-    /// Parse metadata (if parsing has occurred)
     parse_metadata: Option<Arc<ParseMetadata>>,
-
-    /// Previous content (for computing incremental edits)
     previous_content: Option<Rope>,
 }
 
 impl Document {
-    /// Create a new document
     pub fn new(uri: Url, content: String, version: i32, language_id: String) -> Self {
         let rope = Rope::from_str(&content);
         let line_count = rope.len_lines();
@@ -144,27 +114,22 @@ impl Document {
         }
     }
 
-    /// Get the document URI
     pub fn uri(&self) -> &Url {
         &self.metadata.uri
     }
 
-    /// Get the document language ID
     pub fn language_id(&self) -> &str {
         &self.metadata.language_id
     }
 
-    /// Get the document version
     pub fn version(&self) -> i32 {
         self.metadata.version
     }
 
-    /// Get the line count
     pub fn line_count(&self) -> usize {
         self.metadata.line_count
     }
 
-    /// Get the full document content as a string
     pub fn get_content(&self) -> String {
         self.content.to_string()
     }
@@ -351,12 +316,9 @@ impl Document {
     }
 }
 
-/// Document store for managing multiple documents
-///
 /// Thread-safe store for all open documents across all client connections.
 #[derive(Debug, Default)]
 pub struct DocumentStore {
-    /// Map of document URI to document
     documents: Arc<RwLock<HashMap<Url, Document>>>,
 }
 
