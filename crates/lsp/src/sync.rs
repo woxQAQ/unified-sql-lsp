@@ -204,6 +204,7 @@ impl DocumentSync {
                 // Note: We need previous_content to compute the edit
                 // This is stored in Document.previous_content
                 // For now, we'll fall back to full parse if we don't have it
+                // TODO: (PERF-004) Incremental parsing not yet fully implemented, falling back to full parse
                 warn!("Incremental parsing not yet fully implemented, falling back to full parse");
             }
         }
