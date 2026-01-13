@@ -1,0 +1,20 @@
+{
+  "table_name": "posts",
+  "columns": [
+    {"name": "id", "type": "INT", "nullable": false, "key": "PRIMARY KEY", "extra": "AUTO_INCREMENT"},
+    {"name": "title", "type": "VARCHAR(200)", "nullable": false, "key": null},
+    {"name": "slug", "type": "VARCHAR(200)", "nullable": true, "key": "UNIQUE"},
+    {"name": "content", "type": "TEXT", "nullable": false, "key": null},
+    {"name": "excerpt", "type": "TEXT", "nullable": true, "key": null},
+    {"name": "author_id", "type": "INT", "nullable": false, "key": "INDEX"},
+    {"name": "status", "type": "ENUM", "nullable": true, "key": "INDEX", "default": "'draft'", "values": ["draft", "published", "archived"]},
+    {"name": "view_count", "type": "INT", "nullable": true, "key": "INDEX", "default": "0"},
+    {"name": "published_at", "type": "DATETIME", "nullable": true, "key": "INDEX"},
+    {"name": "created_at", "type": "TIMESTAMP", "nullable": true, "default": "CURRENT_TIMESTAMP"},
+    {"name": "updated_at", "type": "TIMESTAMP", "nullable": true, "default": "CURRENT_TIMESTAMP", "extra": "ON UPDATE CURRENT_TIMESTAMP"}
+  ],
+  "foreign_keys": [
+    {"name": "fk_posts_author_id", "columns": ["author_id"], "ref_table": "users", "ref_columns": ["id"], "on_delete": "CASCADE", "on_update": "CASCADE"}
+  ],
+  "row_count": {"basic": 7, "edge_cases": 7, "total": 14}
+}

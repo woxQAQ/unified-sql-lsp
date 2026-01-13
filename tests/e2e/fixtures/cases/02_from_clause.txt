@@ -1,0 +1,250 @@
+# ============================================================================
+# FROM Clause Completion Tests
+# ============================================================================
+# Tests for FROM clause table name and alias completion
+# Context: Database with users, products, orders, order_items, employees, posts, tags, post_tags, logs tables
+
+---
+description: Basic table name completion
+dialect: all
+context: Database contains all standard tables
+input: |
+  SELECT * FROM |
+expected: |
+  users [Table]
+  products [Table]
+  orders [Table]
+  order_items [Table]
+  employees [Table]
+  posts [Table]
+  tags [Table]
+  post_tags [Table]
+  logs [Table]
+options: |
+  min_items: 9
+
+---
+description: Table alias definition
+dialect: all
+input: |
+  SELECT * FROM users |
+expected: |
+  AS [Keyword]
+  INNER [Keyword]
+  LEFT [Keyword]
+  RIGHT [Keyword]
+  CROSS [Keyword]
+  JOIN [Keyword]
+  WHERE [Keyword]
+  GROUP [Keyword]
+  ORDER [Keyword]
+  LIMIT [Keyword]
+options: |
+  contains: AS, JOIN, WHERE
+
+---
+description: AS keyword before alias
+dialect: all
+input: |
+  SELECT * FROM users AS |
+expected: |
+options: |
+  min_items: 0
+
+---
+description: Multiple table names with comma
+dialect: all
+input: |
+  SELECT * FROM users, |
+expected: |
+  products [Table]
+  orders [Table]
+  order_items [Table]
+  employees [Table]
+options: |
+  min_items: 5
+
+---
+description: Table completion after JOIN
+dialect: all
+input: |
+  SELECT * FROM users JOIN |
+expected: |
+  orders [Table]
+  posts [Table]
+  products [Table]
+  employees [Table]
+options: |
+  min_items: 5
+
+---
+description: INNER JOIN table completion
+dialect: all
+input: |
+  SELECT * FROM users INNER JOIN |
+expected: |
+  orders [Table]
+  posts [Table]
+  products [Table]
+  employees [Table]
+options: |
+  min_items: 5
+
+---
+description: LEFT JOIN table completion
+dialect: all
+input: |
+  SELECT * FROM users LEFT JOIN |
+expected: |
+  orders [Table]
+  posts [Table]
+  products [Table]
+options: |
+  min_items: 3
+
+---
+description: RIGHT JOIN table completion
+dialect: all
+input: |
+  SELECT * FROM orders RIGHT JOIN |
+expected: |
+  users [Table]
+  products [Table]
+options: |
+  min_items: 3
+
+---
+description: Multiple JOINs - second table
+dialect: all
+input: |
+  SELECT * FROM users u JOIN orders o ON u.id = o.user_id JOIN |
+expected: |
+  products [Table]
+  posts [Table]
+  order_items [Table]
+options: |
+  min_items: 3
+
+---
+description: Subquery alias completion
+dialect: all
+input: |
+  SELECT * FROM (SELECT id FROM users) |
+expected: |
+  AS [Keyword]
+options: |
+  contains: AS
+
+---
+description: Subquery with AS followed by alias
+dialect: all
+input: |
+  SELECT * FROM (SELECT id FROM users) AS |
+expected: |
+options: |
+  min_items: 0
+
+---
+description: Cross JOIN table completion
+dialect: all
+input: |
+  SELECT * FROM users CROSS JOIN |
+expected: |
+  orders [Table]
+  products [Table]
+  posts [Table]
+options: |
+  min_items: 3
+
+---
+description: FROM after subquery in FROM
+dialect: all
+input: |
+  SELECT * FROM (SELECT * FROM users) AS u, |
+expected: |
+  orders [Table]
+  products [Table]
+  posts [Table]
+options: |
+  min_items: 5
+
+---
+description: MySQL specific - database qualified table
+dialect: mysql
+input: |
+  SELECT * FROM app_db.|
+expected: |
+  users [Table]
+  orders [Table]
+  products [Table]
+options: |
+  min_items: 3
+
+---
+description: PostgreSQL specific - schema qualified table
+dialect: postgresql
+input: |
+  SELECT * FROM public.|
+expected: |
+  users [Table]
+  orders [Table]
+  products [Table]
+options: |
+  min_items: 3
+
+---
+description: Table with dot prefix completion
+dialect: all
+input: |
+  SELECT * FROM |
+expected: |
+  users [Table]
+  orders [Table]
+  products [Table]
+options: |
+  min_items: 3
+
+---
+description: FROM with function call
+dialect: all
+input: |
+  SELECT * FROM |
+expected: |
+  users [Table]
+  orders [Table]
+  products [Table]
+options: |
+  min_items: 5
+
+---
+description: LATERAL join completion (PostgreSQL)
+dialect: postgresql
+input: |
+  SELECT * FROM users u LEFT JOIN LATERAL (|
+expected: |
+  SELECT [Keyword]
+options: |
+  contains: SELECT
+
+---
+description: Multiple tables with partial comma
+dialect: all
+input: |
+  SELECT * FROM users u, orders o, |
+expected: |
+  products [Table]
+  posts [Table]
+  employees [Table]
+options: |
+  min_items: 5
+
+---
+description: Table name starting with prefix
+dialect: all
+input: |
+  SELECT * FROM or|
+expected: |
+  orders [Table]
+  order_items [Table]
+options: |
+  contains: orders

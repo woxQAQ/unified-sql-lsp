@@ -97,36 +97,38 @@ impl KeywordProvider {
     /// Get SELECT clause keywords (for within SELECT statements)
     pub fn select_clause_keywords(&self) -> KeywordSet {
         let mut keywords = vec![
-            SqlKeyword::new("FROM", Some("Specify tables to query"), 1),
-            SqlKeyword::new("WHERE", Some("Filter rows"), 2),
-            SqlKeyword::new("GROUP BY", Some("Group rows by values"), 3),
-            SqlKeyword::new("HAVING", Some("Filter groups"), 4),
-            SqlKeyword::new("ORDER BY", Some("Sort result rows"), 5),
-            SqlKeyword::new("LIMIT", Some("Limit number of rows"), 6),
-            SqlKeyword::new("OFFSET", Some("Skip rows before limiting"), 7),
-            SqlKeyword::new("JOIN", Some("Join with another table"), 8),
-            SqlKeyword::new("INNER JOIN", Some("Inner join with another table"), 9),
-            SqlKeyword::new("LEFT JOIN", Some("Left outer join"), 10),
-            SqlKeyword::new("RIGHT JOIN", Some("Right outer join"), 11),
-            SqlKeyword::new("FULL JOIN", Some("Full outer join"), 12),
-            SqlKeyword::new("CROSS JOIN", Some("Cross join"), 13),
-            SqlKeyword::new("UNION", Some("Combine result sets"), 14),
-            SqlKeyword::new("UNION ALL", Some("Combine result sets with duplicates"), 15),
-            SqlKeyword::new("INTERSECT", Some("Intersection of result sets"), 16),
-            SqlKeyword::new("EXCEPT", Some("Difference of result sets"), 17),
-            SqlKeyword::new("DISTINCT", Some("Remove duplicate rows"), 18),
-            SqlKeyword::new("ALL", Some("Include all rows (default)"), 19),
-            SqlKeyword::new("AS", Some("Alias for columns or tables"), 20),
-            SqlKeyword::new("INTO", Some("Select into variables or table"), 21),
+            SqlKeyword::new("CASE", Some("Conditional expression"), 1),
+            SqlKeyword::new("FROM", Some("Specify tables to query"), 2),
+            SqlKeyword::new("WHERE", Some("Filter rows"), 3),
+            SqlKeyword::new("GROUP BY", Some("Group rows by values"), 4),
+            SqlKeyword::new("HAVING", Some("Filter groups"), 5),
+            SqlKeyword::new("ORDER BY", Some("Sort result rows"), 6),
+            SqlKeyword::new("LIMIT", Some("Limit number of rows"), 7),
+            SqlKeyword::new("OFFSET", Some("Skip rows before limiting"), 8),
+            SqlKeyword::new("JOIN", Some("Join with another table"), 9),
+            SqlKeyword::new("INNER JOIN", Some("Inner join with another table"), 10),
+            SqlKeyword::new("LEFT JOIN", Some("Left outer join"), 11),
+            SqlKeyword::new("RIGHT JOIN", Some("Right outer join"), 12),
+            SqlKeyword::new("FULL JOIN", Some("Full outer join"), 13),
+            SqlKeyword::new("CROSS JOIN", Some("Cross join"), 14),
+            SqlKeyword::new("STRAIGHT_JOIN", Some("Straight join (MySQL)"), 15),
+            SqlKeyword::new("UNION", Some("Combine result sets"), 16),
+            SqlKeyword::new("UNION ALL", Some("Combine result sets with duplicates"), 17),
+            SqlKeyword::new("INTERSECT", Some("Intersection of result sets"), 18),
+            SqlKeyword::new("EXCEPT", Some("Difference of result sets"), 19),
+            SqlKeyword::new("DISTINCT", Some("Remove duplicate rows"), 20),
+            SqlKeyword::new("ALL", Some("Include all rows (default)"), 21),
+            SqlKeyword::new("AS", Some("Alias for columns or tables"), 22),
+            SqlKeyword::new("INTO", Some("Select into variables or table"), 23),
         ];
 
         // Add dialect-specific keywords
         if self.dialect == Dialect::PostgreSQL {
-            keywords.push(SqlKeyword::new("FETCH", Some("Fetch specific rows"), 22));
-            keywords.push(SqlKeyword::new("FOR UPDATE", Some("Lock selected rows"), 23));
+            keywords.push(SqlKeyword::new("FETCH", Some("Fetch specific rows"), 24));
+            keywords.push(SqlKeyword::new("FOR UPDATE", Some("Lock selected rows"), 25));
         } else if self.dialect == Dialect::MySQL || self.dialect == Dialect::TiDB {
-            keywords.push(SqlKeyword::new("FOR UPDATE", Some("Lock selected rows"), 22));
-            keywords.push(SqlKeyword::new("LOCK IN SHARE MODE", Some("Lock rows in share mode"), 23));
+            keywords.push(SqlKeyword::new("FOR UPDATE", Some("Lock selected rows"), 24));
+            keywords.push(SqlKeyword::new("LOCK IN SHARE MODE", Some("Lock rows in share mode"), 25));
         }
 
         KeywordSet::new(keywords)
@@ -192,6 +194,50 @@ impl KeywordProvider {
             SqlKeyword::new("TRIGGER", Some("Create trigger"), 8),
             SqlKeyword::new("TEMPORARY", Some("Temporary object"), 9),
             SqlKeyword::new("OR REPLACE", Some("Replace if exists"), 10),
+        ];
+
+        KeywordSet::new(keywords)
+    }
+
+    /// Get ALTER statement keywords
+    pub fn alter_keywords(&self) -> KeywordSet {
+        let keywords = vec![
+            SqlKeyword::new("TABLE", Some("Alter table"), 1),
+            SqlKeyword::new("VIEW", Some("Alter view"), 2),
+            SqlKeyword::new("DATABASE", Some("Alter database"), 3),
+            SqlKeyword::new("SCHEMA", Some("Alter schema"), 4),
+            SqlKeyword::new("FUNCTION", Some("Alter function"), 5),
+            SqlKeyword::new("PROCEDURE", Some("Alter procedure"), 6),
+            SqlKeyword::new("TRIGGER", Some("Alter trigger"), 7),
+            SqlKeyword::new("INDEX", Some("Alter index"), 8),
+        ];
+
+        KeywordSet::new(keywords)
+    }
+
+    /// Get DROP statement keywords
+    pub fn drop_keywords(&self) -> KeywordSet {
+        let keywords = vec![
+            SqlKeyword::new("TABLE", Some("Drop table"), 1),
+            SqlKeyword::new("INDEX", Some("Drop index"), 2),
+            SqlKeyword::new("VIEW", Some("Drop view"), 3),
+            SqlKeyword::new("DATABASE", Some("Drop database"), 4),
+            SqlKeyword::new("SCHEMA", Some("Drop schema"), 5),
+            SqlKeyword::new("FUNCTION", Some("Drop function"), 6),
+            SqlKeyword::new("PROCEDURE", Some("Drop procedure"), 7),
+            SqlKeyword::new("TRIGGER", Some("Drop trigger"), 8),
+            SqlKeyword::new("TEMPORARY", Some("Temporary object"), 9),
+            SqlKeyword::new("IF EXISTS", Some("Drop if exists"), 10),
+        ];
+
+        KeywordSet::new(keywords)
+    }
+
+    /// Get UNION statement keywords
+    pub fn union_keywords(&self) -> KeywordSet {
+        let keywords = vec![
+            SqlKeyword::new("ALL", Some("Include duplicates"), 1),
+            SqlKeyword::new("SELECT", Some("Select statement"), 2),
         ];
 
         KeywordSet::new(keywords)
@@ -299,6 +345,7 @@ impl KeywordProvider {
         set.insert("RIGHT JOIN".to_string());
         set.insert("FULL JOIN".to_string());
         set.insert("CROSS JOIN".to_string());
+        set.insert("STRAIGHT_JOIN".to_string());
         set.insert("UNION".to_string());
         set.insert("UNION ALL".to_string());
         set.insert("INTERSECT".to_string());
@@ -311,6 +358,38 @@ impl KeywordProvider {
         set.insert("ALTER".to_string());
         set.insert("DROP".to_string());
         set
+    }
+
+    /// Get sort direction keywords (ASC, DESC)
+    pub fn sort_direction_keywords(&self) -> KeywordSet {
+        let keywords = vec![
+            SqlKeyword::new("ASC", Some("Ascending order"), 1),
+            SqlKeyword::new("DESC", Some("Descending order"), 2),
+        ];
+
+        KeywordSet::new(keywords)
+    }
+
+    /// Get HAVING keyword (for after GROUP BY)
+    pub fn having_keywords(&self) -> KeywordSet {
+        let keywords = vec![
+            SqlKeyword::new("HAVING", Some("Filter groups"), 1),
+        ];
+
+        KeywordSet::new(keywords)
+    }
+
+    /// Get LIMIT keywords (common LIMIT values and OFFSET)
+    pub fn limit_keywords(&self) -> KeywordSet {
+        let keywords = vec![
+            SqlKeyword::new("1", Some("Limit to 1 row"), 1),
+            SqlKeyword::new("10", Some("Limit to 10 rows"), 2),
+            SqlKeyword::new("100", Some("Limit to 100 rows"), 3),
+            SqlKeyword::new("1000", Some("Limit to 1000 rows"), 4),
+            SqlKeyword::new("OFFSET", Some("Skip rows before limiting"), 5),
+        ];
+
+        KeywordSet::new(keywords)
     }
 }
 

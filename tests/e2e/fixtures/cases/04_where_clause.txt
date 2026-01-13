@@ -1,0 +1,346 @@
+# ============================================================================
+# WHERE Clause Completion Tests
+# ============================================================================
+# Tests for WHERE clause conditions, operators, and expressions
+
+---
+description: Column name completion after WHERE
+dialect: all
+input: |
+  SELECT * FROM users WHERE |
+expected: |
+  id [Field] users.id
+  username [Field] users.username
+  email [Field] users.email
+  full_name [Field] users.full_name
+  age [Field] users.age
+  balance [Field] users.balance
+  is_active [Field] users.is_active
+  created_at [Field] users.created_at
+options: |
+  min_items: 8
+
+---
+description: Operator completion after column
+dialect: all
+input: |
+  SELECT * FROM users WHERE id |
+expected: |
+  = [Operator]
+  > [Operator]
+  < [Operator]
+  >= [Operator]
+  <= [Operator]
+  <> [Operator]
+  != [Operator]
+  IS [Keyword]
+  IN [Keyword]
+  BETWEEN [Keyword]
+  LIKE [Keyword]
+options: |
+  contains: =, >, <, IS, IN, BETWEEN, LIKE
+
+---
+description: Operator completion after column with space
+dialect: all
+input: |
+  SELECT * FROM users WHERE id |
+expected: |
+  = [Operator]
+  > [Operator]
+  < [Operator]
+  >= [Operator]
+  <= [Operator]
+  <> [Operator]
+  != [Operator]
+  IS [Keyword]
+  IN [Keyword]
+  BETWEEN [Keyword]
+  LIKE [Keyword]
+options: |
+  contains: =, >, <, IS, IN
+
+---
+description: Values after equals operator
+dialect: all
+input: |
+  SELECT * FROM users WHERE id =|
+expected: |
+  1 [Snippet]
+  NULL [Keyword]
+options: |
+  min_items: 2
+
+---
+description: IS NULL completion
+dialect: all
+input: |
+  SELECT * FROM users WHERE last_login |
+expected: |
+  IS [Keyword]
+  = [Operator]
+  > [Operator]
+options: |
+  contains: IS
+
+---
+description: IS NOT NULL completion
+dialect: all
+input: |
+  SELECT * FROM users WHERE last_login IS |
+expected: |
+  NULL [Keyword]
+  NOT [Keyword]
+options: |
+  contains: NULL, NOT
+
+---
+description: IN clause column completion
+dialect: all
+input: |
+  SELECT * FROM users WHERE id IN (|)
+expected: |
+  1 [Snippet]
+  2 [Snippet]
+  3 [Snippet]
+  SELECT [Keyword]
+options: |
+  min_items: 2
+
+---
+description: IN clause with subquery
+dialect: all
+input: |
+  SELECT * FROM users WHERE id IN (SELECT | FROM orders)
+expected: |
+  user_id [Field] orders.user_id
+  id [Field] orders.id
+  * [Operator]
+options: |
+  min_items: 3
+
+---
+description: BETWEEN completion
+dialect: all
+input: |
+  SELECT * FROM users WHERE id BETWEEN |
+expected: |
+  1 [Snippet]
+  0 [Snippet]
+options: |
+  min_items: 2
+
+---
+description: BETWEEN range completion
+dialect: all
+input: |
+  SELECT * FROM users WHERE id BETWEEN 1 AND |
+expected: |
+  100 [Snippet]
+  1000 [Snippet]
+options: |
+  min_items: 2
+
+---
+description: LIKE pattern completion
+dialect: all
+input: |
+  SELECT * FROM users WHERE username LIKE |
+expected: |
+  '%' [Snippet]
+  '_ [Snippet]
+options: |
+  min_items: 1
+
+---
+description: AND logical operator
+dialect: all
+input: |
+  SELECT * FROM users WHERE id = 1 |
+expected: |
+  AND [Keyword]
+  OR [Keyword]
+  ORDER [Keyword]
+  GROUP [Keyword]
+  LIMIT [Keyword]
+options: |
+  contains: AND, OR
+
+---
+description: Column after AND
+dialect: all
+input: |
+  SELECT * FROM users WHERE id = 1 AND |
+expected: |
+  id [Field] users.id
+  username [Field] users.username
+  email [Field] users.email
+  is_active [Field] users.is_active
+options: |
+  min_items: 5
+
+---
+description: OR logical operator
+dialect: all
+input: |
+  SELECT * FROM users WHERE id = 1 OR |
+expected: |
+  id [Field] users.id
+  username [Field] users.username
+options: |
+  min_items: 3
+
+---
+description: NOT operator
+dialect: all
+input: |
+  SELECT * FROM users WHERE |
+expected: |
+  id [Field] users.id
+  username [Field] users.username
+  NOT [Keyword]
+  EXISTS [Keyword]
+options: |
+  contains: NOT, EXISTS
+
+---
+description: EXISTS with subquery
+dialect: all
+input: |
+  SELECT * FROM users WHERE | (SELECT 1 FROM orders WHERE orders.user_id = users.id)
+expected: |
+  EXISTS [Keyword]
+  NOT [Keyword]
+options: |
+  contains: EXISTS
+
+---
+description: EXISTS subquery SELECT
+dialect: all
+input: |
+  SELECT * FROM users WHERE EXISTS (SELECT | FROM orders WHERE orders.user_id = users.id)
+expected: |
+  1 [Snippet]
+  * [Operator]
+  id [Field] orders.id
+  user_id [Field] orders.user_id
+options: |
+  min_items: 3
+
+---
+description: Parenthesized expression
+dialect: all
+input: |
+  SELECT * FROM users WHERE (| OR username = 'test')
+expected: |
+  id [Field] users.id
+  username [Field] users.username
+  email [Field] users.email
+options: |
+  min_items: 5
+
+---
+description: Comparison with function result
+dialect: all
+input: |
+  SELECT * FROM users WHERE |(id) > 0
+expected: |
+  ABS [Function]
+  COUNT [Function]
+  SUM [Function]
+  id [Field]
+options: |
+  min_items: 3
+
+---
+description: WHERE with JOIN
+dialect: all
+input: |
+  SELECT * FROM users u JOIN orders o ON u.id = o.user_id WHERE |
+expected: |
+  u [Table]
+  o [Table]
+  u.id [Field]
+  o.id [Field]
+  u.username [Field]
+  o.status [Field]
+options: |
+  min_items: 5
+
+---
+description: Qualified column in WHERE after JOIN
+dialect: all
+input: |
+  SELECT * FROM users u JOIN orders o ON u.id = o.user_id WHERE u.|
+expected: |
+  id [Field] u.id
+  username [Field] u.username
+  email [Field] u.email
+  is_active [Field] u.is_active
+options: |
+  min_items: 4
+
+---
+description: WHERE with subquery
+dialect: all
+input: |
+  SELECT * FROM users WHERE id IN (SELECT | FROM orders)
+expected: |
+  user_id [Field] orders.user_id
+  id [Field] orders.id
+  * [Operator]
+options: |
+  min_items: 3
+
+---
+description: Nested parentheses
+dialect: all
+input: |
+  SELECT * FROM users WHERE ((|) AND username = 'test')
+expected: |
+  id [Field] users.id
+  age [Field] users.age
+  is_active [Field] users.is_active
+options: |
+  min_items: 3
+
+---
+description: WHERE after GROUP BY
+dialect: all
+input: |
+  SELECT * FROM users GROUP BY id HAVING |
+expected: |
+  id [Field] users.id
+  COUNT [Function]
+  SUM [Function]
+  > [Operator]
+  < [Operator]
+options: |
+  min_items: 3
+
+---
+description: Boolean column comparison
+dialect: all
+input: |
+  SELECT * FROM users WHERE is_active |
+expected: |
+  = [Operator]
+  IS [Keyword]
+options: |
+  contains: IS
+
+---
+description: Date column comparison
+dialect: all
+input: |
+  SELECT * FROM users WHERE created_at |
+expected: |
+  = [Operator]
+  > [Operator]
+  < [Operator]
+  >= [Operator]
+  <= [Operator]
+  BETWEEN [Keyword]
+  IS [Keyword]
+options: |
+  contains: >, <, BETWEEN

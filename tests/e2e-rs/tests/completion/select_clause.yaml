@@ -1,0 +1,34 @@
+name: "SELECT clause completion tests"
+description: "Test column completion in SELECT projection"
+
+database:
+  dialect: "mysql"
+  connection_string: "mysql://test_user:test_password@127.0.0.1:3307/test_db"
+  schemas:
+    - "../../../tests/e2e/fixtures/schema/mysql/01_create_tables.sql"
+  data:
+    - "../../../tests/e2e/fixtures/data/mysql/02_insert_basic_data.sql"
+
+tests:
+  - name: "unqualified column completion"
+    description: "Should suggest all columns when no qualifier"
+    sql: "SELECT | FROM users"
+    expect_completion:
+      contains:
+        - "id"
+        - "username"
+        - "email"
+        - "full_name"
+      min_count: 5
+
+  - name: "qualified column completion"
+    description: "Should suggest only qualified table columns"
+    sql: "SELECT users.| FROM users"
+    expect_completion:
+      contains:
+        - "users.id"
+        - "users.username"
+        - "users.email"
+      not_contains:
+        - "orders"
+      min_count: 5

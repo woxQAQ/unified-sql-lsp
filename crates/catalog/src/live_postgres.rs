@@ -37,12 +37,12 @@
 //! ```
 
 use crate::error::{CatalogError, CatalogResult};
-use crate::metadata::{ColumnMetadata, DataType, FunctionMetadata, FunctionType, TableMetadata};
+use crate::metadata::{ColumnMetadata, DataType, FunctionMetadata, TableMetadata};
 use crate::r#trait::Catalog;
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use unified_sql_lsp_function_registry::FunctionRegistry;
+use unified_sql_lsp_function_registry::{FunctionRegistry, FunctionType};
 use unified_sql_lsp_ir::Dialect;
 
 #[cfg(feature = "postgresql")]
@@ -399,6 +399,10 @@ impl Catalog for LivePostgreSQLCatalog {
             }).collect();
 
             return Ok(tables);
+        } else {
+            return Err(CatalogError::ConnectionFailed(
+                "Database pool not initialized".to_string()
+            ));
         }
 
         #[cfg(not(feature = "postgresql"))]
@@ -470,6 +474,10 @@ impl Catalog for LivePostgreSQLCatalog {
             }).collect();
 
             return Ok(columns);
+        } else {
+            return Err(CatalogError::ConnectionFailed(
+                "Database pool not initialized".to_string()
+            ));
         }
 
         #[cfg(not(feature = "postgresql"))]
@@ -486,7 +494,7 @@ impl Catalog for LivePostgreSQLCatalog {
     /// Returns a list of built-in PostgreSQL functions and custom functions.
     async fn list_functions(&self) -> CatalogResult<Vec<FunctionMetadata>> {
         // Get builtin functions from registry
-        let all_functions = self.registry.get_functions(Dialect::PostgreSQL);
+        let mut all_functions = self.registry.get_functions(Dialect::PostgreSQL);
 
         #[cfg(feature = "postgresql")]
         if let Some(pool) = &self.pool {
@@ -526,6 +534,7 @@ impl Catalog for LivePostgreSQLCatalog {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use unified_sql_lsp_ir::FunctionType;
 
     #[test]
     fn test_parse_postgres_varchar() {

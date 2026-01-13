@@ -1,0 +1,24 @@
+{
+  "table_name": "orders",
+  "columns": [
+    {"name": "id", "type": "INT", "nullable": false, "key": "PRIMARY KEY", "extra": "AUTO_INCREMENT"},
+    {"name": "user_id", "type": "INT", "nullable": false, "key": "INDEX"},
+    {"name": "order_date", "type": "DATETIME", "nullable": false, "key": "INDEX", "default": "CURRENT_TIMESTAMP"},
+    {"name": "total_amount", "type": "DECIMAL(12, 2)", "nullable": false, "key": "INDEX"},
+    {"name": "status", "type": "ENUM", "nullable": false, "key": "INDEX", "default": "'pending'", "values": ["pending", "processing", "shipped", "delivered", "cancelled", "refunded"]},
+    {"name": "payment_method", "type": "ENUM", "nullable": true, "key": null, "values": ["credit_card", "debit_card", "paypal", "bank_transfer", "cash"]},
+    {"name": "shipping_address", "type": "TEXT", "nullable": true, "key": null},
+    {"name": "billing_address", "type": "TEXT", "nullable": true, "key": null},
+    {"name": "notes", "type": "TEXT", "nullable": true, "key": null},
+    {"name": "shipped_at", "type": "DATETIME", "nullable": true, "key": null},
+    {"name": "delivered_at", "type": "DATETIME", "nullable": true, "key": null}
+  ],
+  "foreign_keys": [
+    {"name": "fk_orders_user_id", "columns": ["user_id"], "ref_table": "users", "ref_columns": ["id"], "on_delete": "RESTRICT", "on_update": "CASCADE"}
+  ],
+  "constraints": [
+    {"name": "chk_total_amount_positive", "type": "CHECK", "definition": "total_amount >= 0"},
+    {"name": "chk_delivered_after_shipped", "type": "CHECK", "definition": "delivered_at IS NULL OR shipped_at IS NOT NULL"}
+  ],
+  "row_count": {"basic": 30, "edge_cases": 10, "total": 40}
+}

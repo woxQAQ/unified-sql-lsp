@@ -1,0 +1,48 @@
+name: "FROM clause basic completion"
+description: "Test table name completion in FROM clause"
+
+database:
+  dialect: "mysql"
+  connection_string: "mysql://test_user:test_password@127.0.0.1:3307/test_db"
+  schemas:
+    - "../../../tests/e2e/fixtures/schema/mysql/01_create_tables.sql"
+  data:
+    - "../../../tests/e2e/fixtures/data/mysql/02_insert_basic_data.sql"
+
+tests:
+  - name: "complete table names after FROM"
+    description: "Should suggest all available tables"
+    sql: "SELECT * FROM |"
+    expect_completion:
+      contains:
+        - "users"
+        - "orders"
+        - "products"
+        - "order_items"
+      not_contains:
+        - "information_schema"
+      min_count: 4
+
+  - name: "complete with partial table name"
+    description: "Should filter tables by prefix"
+    sql: "SELECT * FROM or|"
+    expect_completion:
+      contains:
+        - "orders"
+        - "order_items"
+      not_contains:
+        - "users"
+        - "products"
+      min_count: 2
+
+  - name: "complete after JOIN keyword"
+    description: "Should suggest tables in JOIN clause"
+    sql: "SELECT * FROM users u JOIN |"
+    expect_completion:
+      contains:
+        - "orders"
+        - "products"
+        - "order_items"
+      not_contains:
+        - "users"
+      min_count: 3

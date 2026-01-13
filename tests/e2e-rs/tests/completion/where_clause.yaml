@@ -1,0 +1,208 @@
+name: "WHERE clause completion"
+description: "Column and expression completion in WHERE clause"
+
+database:
+  dialect: "mysql"
+  connection_string: "mysql://test_user:test_password@127.0.0.1:3307/test_db"
+  schemas:
+    - "../../../tests/e2e/fixtures/schema/mysql/01_create_tables.sql"
+  data:
+    - "../../../tests/e2e/fixtures/data/mysql/02_insert_basic_data.sql"
+
+tests:
+  # Simple WHERE
+  - name: "columns in WHERE"
+    description: "Should show columns for WHERE condition"
+    sql: "SELECT * FROM users WHERE |"
+    expect_completion:
+      contains:
+        - "id"
+        - "username"
+        - "email"
+        - "is_active"
+        - "age"
+        - "balance"
+      min_count: 8
+
+  # WHERE with AND
+  - name: "columns after AND"
+    description: "Should show columns after AND operator"
+    sql: "SELECT * FROM users WHERE id = 1 AND |"
+    expect_completion:
+      contains:
+        - "username"
+        - "email"
+        - "is_active"
+        - "age"
+      min_count: 5
+
+  # WHERE with OR
+  - name: "columns after OR"
+    description: "Should show columns after OR operator"
+    sql: "SELECT * FROM users WHERE id = 1 OR |"
+    expect_completion:
+      contains:
+        - "username"
+        - "email"
+        - "is_active"
+      min_count: 5
+
+  # WHERE comparison operators
+  - name: "after greater than"
+    description: "Should show columns after > operator"
+    sql: "SELECT * FROM users WHERE age > |"
+    expect_completion:
+      contains:
+        - "age"
+        - "balance"
+        - "id"
+      min_count: 3
+
+  # WHERE with less than
+  - name: "after less than"
+    description: "Should show columns after < operator"
+    sql: "SELECT * FROM products WHERE price < |"
+    expect_completion:
+      contains:
+        - "price"
+        - "cost"
+      min_count: 2
+
+  # WHERE equals
+  - name: "after equals"
+    description: "Should show columns after = operator"
+    sql: "SELECT * FROM orders WHERE status = |"
+    expect_completion:
+      contains:
+        - "status"
+      min_count: 1
+
+  # WHERE function calls
+  - name: "function in WHERE"
+    description: "Should show functions in WHERE clause"
+    sql: "SELECT * FROM users WHERE |"
+    expect_completion:
+      contains:
+        - "COUNT"
+        - "SUM"
+        - "AVG"
+        - "MAX"
+        - "MIN"
+      min_count: 5
+
+  # WHERE with JOIN
+  - name: "qualified columns in WHERE"
+    description: "Should show qualified columns with JOIN"
+    sql: "SELECT * FROM users u JOIN orders o ON u.id = o.user_id WHERE |"
+    expect_completion:
+      contains:
+        - "u.id"
+        - "u.username"
+        - "o.id"
+        - "o.status"
+        - "u.is_active"
+      min_count: 10
+
+  # WHERE IN clause
+  - name: "columns in IN clause"
+    description: "Should show appropriate columns for IN"
+    sql: "SELECT * FROM users WHERE | IN (1, 2, 3)"
+    expect_completion:
+      contains:
+        - "id"
+        - "age"
+      min_count: 2
+
+  # WHERE subquery
+  - name: "subquery in WHERE"
+    description: "Should show columns in WHERE subquery"
+    sql: "SELECT * FROM users WHERE id IN (SELECT | FROM orders)"
+    expect_completion:
+      contains:
+        - "user_id"
+        - "id"
+      min_count: 2
+
+  # WHERE BETWEEN
+  - name: "between clause completion"
+    description: "Should show date/numeric columns for BETWEEN"
+    sql: "SELECT * FROM orders WHERE order_date BETWEEN |"
+    expect_completion:
+      contains:
+        - "order_date"
+        - "shipped_at"
+      min_count: 2
+
+  # WHERE LIKE
+  - name: "like clause completion"
+    description: "Should show string columns for LIKE"
+    sql: "SELECT * FROM users WHERE | LIKE '%@example.com'"
+    expect_completion:
+      contains:
+        - "email"
+        - "username"
+        - "full_name"
+      min_count: 2
+
+  # WHERE IS NULL
+  - name: "is null clause"
+    description: "Should show nullable columns"
+    sql: "SELECT * FROM users WHERE | IS NULL"
+    expect_completion:
+      contains:
+        - "phone"
+        - "bio"
+        - "profile_image"
+      min_count: 3
+
+  # WHERE IS NOT NULL
+  - name: "is not null clause"
+    description: "Should show nullable columns"
+    sql: "SELECT * FROM users WHERE | IS NOT NULL"
+    expect_completion:
+      contains:
+        - "phone"
+        - "email"
+        - "username"
+      min_count: 3
+
+  # WHERE with parentheses
+  - name: "after opening paren"
+    description: "Should show columns in parenthesized expression"
+    sql: "SELECT * FROM users WHERE (|"
+    expect_completion:
+      contains:
+        - "id"
+        - "username"
+        - "email"
+      min_count: 5
+
+  # Complex WHERE with AND/OR
+  - name: "complex WHERE expression"
+    description: "Should show columns in complex WHERE"
+    sql: "SELECT * FROM orders WHERE user_id = 1 AND (status = 'pending' OR |"
+    expect_completion:
+      contains:
+        - "status"
+        - "total_amount"
+        - "order_date"
+      min_count: 3
+
+  # WHERE NOT
+  - name: "after NOT operator"
+    description: "Should show columns after NOT"
+    sql: "SELECT * FROM users WHERE NOT |"
+    expect_completion:
+      contains:
+        - "is_active"
+      min_count: 1
+
+  # WHERE with comparison and value
+  - name: "between value and AND"
+    description: "Should show columns in BETWEEN"
+    sql: "SELECT * FROM products WHERE price BETWEEN 10 AND |"
+    expect_completion:
+      contains:
+        - "price"
+        - "cost"
+      min_count: 2

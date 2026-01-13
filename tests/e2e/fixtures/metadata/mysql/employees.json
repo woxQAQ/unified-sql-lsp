@@ -1,0 +1,19 @@
+{
+  "table_name": "employees",
+  "columns": [
+    {"name": "id", "type": "INT", "nullable": false, "key": "PRIMARY KEY", "extra": "AUTO_INCREMENT"},
+    {"name": "first_name", "type": "VARCHAR(50)", "nullable": false, "key": null},
+    {"name": "last_name", "type": "VARCHAR(50)", "nullable": false, "key": "INDEX"},
+    {"name": "email", "type": "VARCHAR(100)", "nullable": false, "key": "UNIQUE"},
+    {"name": "manager_id", "type": "INT", "nullable": true, "key": "INDEX"},
+    {"name": "department", "type": "VARCHAR(50)", "nullable": true, "key": "INDEX"},
+    {"name": "position", "type": "VARCHAR(100)", "nullable": true, "key": null},
+    {"name": "salary", "type": "DECIMAL(12, 2)", "nullable": true, "key": null},
+    {"name": "hire_date", "type": "DATE", "nullable": false, "key": null},
+    {"name": "is_active", "type": "BOOLEAN", "nullable": true, "key": null, "default": "TRUE"}
+  ],
+  "foreign_keys": [
+    {"name": "fk_employees_manager_id", "columns": ["manager_id"], "ref_table": "employees", "ref_columns": ["id"], "on_delete": "SET NULL", "on_update": "CASCADE"}
+  ],
+  "row_count": {"basic": 12, "edge_cases": 7, "total": 19}
+}

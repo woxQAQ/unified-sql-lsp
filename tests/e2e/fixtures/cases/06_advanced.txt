@@ -1,0 +1,459 @@
+# ============================================================================
+# Advanced SQL Features Completion Tests
+# ============================================================================
+# Tests for CTEs, subqueries, UNION, GROUP BY, HAVING, ORDER BY, and other advanced features
+
+# ========================================
+# CTE (Common Table Expressions)
+# ========================================
+
+---
+description: CTE definition column completion
+dialect: all
+input: |
+  WITH user_stats AS (
+    SELECT | FROM users
+  )
+  SELECT * FROM user_stats
+expected: |
+  id [Field] users.id
+  username [Field] users.username
+  email [Field] users.email
+  COUNT [Function] COUNT(*)
+options: |
+  contains: id, username, COUNT
+
+---
+description: Multiple CTEs - second CTE
+dialect: all
+input: |
+  WITH user_counts AS (
+    SELECT COUNT(*) FROM users
+  ),
+  order_stats AS (|
+  SELECT * FROM order_stats
+expected: |
+  SELECT [Keyword]
+options: |
+  contains: SELECT
+
+---
+description: CTE with alias
+dialect: all
+input: |
+  WITH | AS (SELECT * FROM users)
+  SELECT * FROM u
+expected: |
+  u [Table]
+  user_data [Table]
+  users [Table]
+options: |
+  min_items: 2
+
+---
+description: CTE in FROM clause
+dialect: all
+input: |
+  WITH user_cte AS (SELECT * FROM users)
+  SELECT * FROM |
+expected: |
+  user_cte [Table]
+  users [Table]
+  orders [Table]
+options: |
+  contains: user_cte
+
+---
+description: Nested CTE
+dialect: all
+input: |
+  WITH inner_cte AS (
+    SELECT | FROM users
+  )
+  SELECT * FROM inner_cte
+expected: |
+  id [Field] users.id
+  username [Field] users.username
+options: |
+  min_items: 3
+
+# ========================================
+# UNION
+# ========================================
+
+---
+description: UNION followed by SELECT
+dialect: all
+input: |
+  SELECT id FROM users UNION SELECT | FROM orders
+expected: |
+  id [Field] orders.id
+  user_id [Field] orders.user_id
+  * [Operator]
+options: |
+  min_items: 3
+
+---
+description: UNION ALL followed by SELECT
+dialect: all
+input: |
+  SELECT id FROM users UNION ALL SELECT | FROM orders
+expected: |
+  id [Field] orders.id
+  user_id [Field] orders.user_id
+  * [Operator]
+options: |
+  min_items: 3
+
+---
+description: Multiple UNIONs
+dialect: all
+input: |
+  SELECT id FROM users
+  UNION
+  SELECT id FROM orders
+  UNION
+  SELECT | FROM products
+expected: |
+  id [Field] products.id
+  name [Field] products.name
+  * [Operator]
+options: |
+  min_items: 3
+
+# ========================================
+# Subqueries
+# ========================================
+
+---
+description: FROM subquery
+dialect: all
+input: |
+  SELECT * FROM (SELECT | FROM users) AS t
+expected: |
+  id [Field] users.id
+  username [Field] users.username
+  email [Field] users.email
+  COUNT [Function] COUNT(*)
+options: |
+  contains: id, username, COUNT
+
+---
+description: WHERE subquery with IN
+dialect: all
+input: |
+  SELECT * FROM users WHERE id IN (SELECT | FROM orders)
+expected: |
+  user_id [Field] orders.user_id
+  id [Field] orders.id
+  * [Operator]
+options: |
+  contains: user_id, id
+
+---
+description: SELECT list subquery
+dialect: all
+input: |
+  SELECT id, (SELECT | FROM orders WHERE orders.user_id = users.id) FROM users
+expected: |
+  COUNT [Function] COUNT(*)
+  SUM [Function] SUM(total_amount)
+  id [Field] orders.id
+  total_amount [Field] orders.total_amount
+options: |
+  min_items: 3
+
+---
+description: Nested subquery in WHERE
+dialect: all
+input: |
+  SELECT * FROM users WHERE id IN (
+    SELECT user_id FROM orders WHERE id IN (
+      SELECT | FROM order_items
+    )
+  )
+expected: |
+  order_id [Field] order_items.order_id
+  product_id [Field] order_items.product_id
+  * [Operator]
+options: |
+  min_items: 3
+
+---
+description: Correlated subquery
+dialect: all
+input: |
+  SELECT * FROM users u WHERE EXISTS (
+    SELECT | FROM orders o WHERE o.user_id = u.id
+  )
+expected: |
+  1 [Snippet]
+  * [Operator]
+  id [Field] o.id
+  user_id [Field] o.user_id
+options: |
+  min_items: 3
+
+# ========================================
+# GROUP BY and HAVING
+# ========================================
+
+---
+description: GROUP BY column completion
+dialect: all
+input: |
+  SELECT name, COUNT(*) FROM users GROUP BY |
+expected: |
+  id [Field] users.id
+  username [Field] users.username
+  email [Field] users.email
+options: |
+  min_items: 3
+
+---
+description: Multiple GROUP BY columns
+dialect: all
+input: |
+  SELECT status, user_id, COUNT(*) FROM orders GROUP BY status, |
+expected: |
+  user_id [Field] orders.user_id
+  id [Field] orders.id
+  order_date [Field] orders.order_date
+options: |
+  contains: user_id, order_date
+
+---
+description: HAVING clause
+dialect: all
+input: |
+  SELECT username, COUNT(*) FROM users GROUP BY username HAVING |
+expected: |
+  COUNT [Function] COUNT(*)
+  SUM [Function] SUM(expr)
+  > [Operator]
+  < [Operator]
+  username [Field] users.username
+options: |
+  min_items: 3
+
+---
+description: HAVING with aggregate function
+dialect: all
+input: |
+  SELECT user_id, COUNT(*) FROM orders GROUP BY user_id HAVING COUNT(*) |
+expected: |
+  > [Operator]
+  < [Operator]
+  >= [Operator]
+  <= [Operator]
+  = [Operator]
+options: |
+  contains: >, <, =
+
+---
+description: HAVING with column reference
+dialect: all
+input: |
+  SELECT user_id, COUNT(*) as cnt FROM orders GROUP BY user_id HAVING | > 5
+expected: |
+  COUNT [Function] COUNT(*)
+  SUM [Function] SUM(expr)
+  cnt [Field]
+options: |
+  min_items: 2
+
+# ========================================
+# ORDER BY
+# ========================================
+
+---
+description: ORDER BY column completion
+dialect: all
+input: |
+  SELECT * FROM users ORDER BY |
+expected: |
+  id [Field] users.id
+  username [Field] users.username
+  email [Field] users.email
+  created_at [Field] users.created_at
+options: |
+  min_items: 4
+
+---
+description: ORDER BY with ASC/DESC
+dialect: all
+input: |
+  SELECT * FROM users ORDER BY username |
+expected: |
+  ASC [Keyword]
+  DESC [Keyword]
+  , [Operator]
+options: |
+  contains: ASC, DESC
+
+---
+description: ORDER BY multiple columns
+dialect: all
+input: |
+  SELECT * FROM users ORDER BY username DESC, |
+expected: |
+  id [Field] users.id
+  email [Field] users.email
+  created_at [Field] users.created_at
+options: |
+  min_items: 3
+
+---
+description: ORDER BY with ordinal position
+dialect: all
+input: |
+  SELECT id, username, email FROM users ORDER BY |
+expected: |
+  1 [Snippet]
+  2 [Snippet]
+  3 [Snippet]
+  id [Field]
+  username [Field]
+options: |
+  min_items: 4
+
+---
+description: ORDER BY with expression
+dialect: all
+input: |
+  SELECT * FROM products ORDER BY | * 2
+expected: |
+  price [Field] products.price
+  cost [Field] products.cost
+  quantity_in_stock [Field] products.quantity_in_stock
+options: |
+  contains: price, cost
+
+# ========================================
+# LIMIT and OFFSET
+# ========================================
+
+---
+description: LIMIT value
+dialect: all
+input: |
+  SELECT * FROM users LIMIT |
+expected: |
+  10 [Snippet]
+  100 [Snippet]
+  1000 [Snippet]
+options: |
+  min_items: 3
+
+---
+description: LIMIT with OFFSET
+dialect: all
+input: |
+  SELECT * FROM users LIMIT 10 |
+expected: |
+  OFFSET [Keyword]
+options: |
+  contains: OFFSET
+
+---
+description: OFFSET value
+dialect: all
+input: |
+  SELECT * FROM users LIMIT 10 OFFSET |
+expected: |
+  0 [Snippet]
+  10 [Snippet]
+  100 [Snippet]
+options: |
+  min_items: 3
+
+---
+description: MySQL LIMIT OFFSET syntax
+dialect: mysql
+input: |
+  SELECT * FROM users LIMIT |
+expected: |
+  10 [Snippet]
+  100 [Snippet]
+options: |
+  min_items: 2
+
+# ========================================
+# Complex Combinations
+# ========================================
+
+---
+description: CTE with JOIN and GROUP BY
+dialect: all
+input: |
+  WITH order_counts AS (
+    SELECT user_id, COUNT(*) as cnt FROM orders GROUP BY |
+  )
+  SELECT * FROM order_counts
+expected: |
+  user_id [Field] orders.user_id
+  id [Field] orders.id
+  status [Field] orders.status
+options: |
+  min_items: 3
+
+---
+description: Subquery in JOIN
+dialect: all
+input: |
+  SELECT * FROM users u JOIN (
+    SELECT | FROM orders
+  ) o ON u.id = o.user_id
+expected: |
+  user_id [Field] orders.user_id
+  id [Field] orders.id
+  * [Operator]
+options: |
+  min_items: 3
+
+---
+description: GROUP BY with ROLLUP
+dialect: all
+input: |
+  SELECT user_id, status, COUNT(*) FROM orders GROUP BY |
+expected: |
+  user_id [Field] orders.user_id
+  status [Field] orders.status
+  ROLLUP [Keyword]
+options: |
+  contains: ROLLUP
+
+---
+description: DISTINCT ON (PostgreSQL)
+dialect: postgresql
+input: |
+  SELECT DISTINCT ON (|) * FROM users
+expected: |
+  id [Field] users.id
+  username [Field] users.username
+  email [Field] users.email
+options: |
+  min_items: 3
+
+---
+description: WINDOW clause (PostgreSQL)
+dialect: postgresql
+input: |
+  SELECT *, ROW_NUMBER() OVER (my_window) FROM users
+  WINDOW |
+expected: |
+  my_window [Table]
+  AS [Keyword]
+options: |
+  min_items: 2
+
+---
+description: FILTER clause (PostgreSQL)
+dialect: postgresql
+input: |
+  SELECT username, COUNT(*) FILTER (WHERE |) FROM users GROUP BY username
+expected: |
+  is_active [Field] users.is_active
+  id [Field] users.id
+options: |
+  min_items: 2

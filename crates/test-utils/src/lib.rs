@@ -15,7 +15,11 @@ pub mod assertions;
 pub mod fixtures;
 pub mod mock_catalog;
 pub mod mock_cst;
+pub mod test_case_parser;
+pub mod test_case_validator;
 
 // Re-exports for convenience
 pub use mock_catalog::{MockCatalog, MockCatalogBuilder};
 pub use mock_cst::{MockCstBuilder, MockCstNode};
+pub use test_case_parser::{TestCase, Dialect, ExpectedItem, parse_test_file, parse_test_content};
+pub use test_case_validator::{validate_completion, get_cursor_position, remove_cursor_marker};

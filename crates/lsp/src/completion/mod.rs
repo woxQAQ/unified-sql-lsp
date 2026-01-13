@@ -41,9 +41,10 @@ pub mod scopes;
 
 use std::collections::HashSet;
 use std::sync::Arc;
-use tower_lsp::lsp_types::{CompletionItem, Position};
+use tower_lsp::lsp_types::{CompletionItem, CompletionItemKind, Position};
 use unified_sql_lsp_catalog::{Catalog, FunctionType};
 use unified_sql_lsp_ir::Dialect;
+use unified_sql_lsp_semantic::TableSymbol;
 
 use crate::completion::catalog_integration::CatalogCompletionFetcher;
 use crate::completion::context::{CompletionContext, detect_completion_context};
@@ -126,11 +127,23 @@ impl CompletionEngine {
             // Detect completion context (synchronous)
             let ctx = detect_completion_context(&root_node, position, &source);
 
+            eprintln!("!!! LSP: Detected context: {:?}", ctx);
+            if let CompletionContext::FromClause { exclude_tables } = &ctx {
+                eprintln!("!!! LSP: FromClause exclude_tables: {:?}", exclude_tables);
+            }
+
             // Build scope synchronously if needed
             let scope_manager = match &ctx {
                 CompletionContext::SelectProjection { .. }
                 | CompletionContext::WhereClause { .. } => {
-                    Some(ScopeBuilder::build_from_select(&root_node, &source)?)
+                    // Try to build scope from CST, but don't fail if it's incomplete
+                    match ScopeBuilder::build_from_select(&root_node, &source) {
+                        Ok(scope) => Some(scope),
+                        Err(e) => {
+                            eprintln!("!!! LSP: Failed to build scope from CST (will use context_tables): {:?}", e);
+                            None
+                        }
+                    }
                 }
                 _ => None,
             };
@@ -138,83 +151,272 @@ impl CompletionEngine {
             (ctx, scope_manager)
         }; // root_node and tree_lock dropped here
 
+        eprintln!("!!! LSP: About to match on ctx, scope_manager.is_some() = {}", scope_manager.is_some());
+        eprintln!("!!! LSP: ctx is JoinCondition: {}", matches!(ctx, CompletionContext::JoinCondition { .. }));
+
         // Now handle async operations with only owned data
         match ctx {
-            CompletionContext::SelectProjection { qualifier, .. } => {
-                self.complete_with_scope(
+            CompletionContext::SelectProjection { tables, qualifier } => {
+                eprintln!("!!! LSP: Matched SelectProjection: tables={:?}, qualifier={:?}", tables, qualifier);
+                self.complete_select_projection(
                     &scope_manager,
+                    tables,
                     qualifier,
-                    false, // include_wildcard
-                    None,  // function_filter
+                    &source,
                 )
                 .await
             }
-            CompletionContext::FromClause => {
+            CompletionContext::FromClause { exclude_tables } => {
+                eprintln!("!!! LSP: Matched FromClause: exclude_tables={:?}", exclude_tables);
+                // Extract prefix from source for filtering
+                // Only filter if the prefix looks like a table name (not SQL keywords)
+                let prefix = Self::extract_prefix_from_document(&document, position)
+                    .filter(|p| {
+                        let p_upper = p.to_uppercase();
+                        // Don't filter if the "prefix" is a SQL keyword
+                        !matches!(p_upper.as_str(),
+                            "FROM" | "JOIN" | "INNER" | "LEFT" | "RIGHT" | "FULL" | "CROSS" | "STRAIGHT"
+                            | "UPDATE" | "INSERT" | "DELETE" | "CREATE" | "ALTER" | "DROP" | "INTO"
+                        )
+                    });
+
                 // Fetch all tables from catalog
-                let tables = self.catalog_fetcher.list_tables().await?;
+                eprintln!("!!! LSP: Fetching tables from catalog (prefix: {:?}, exclude_tables: {:?})", prefix, exclude_tables);
+                let mut tables = match self.catalog_fetcher.list_tables().await {
+                    Ok(t) => {
+                        eprintln!("!!! LSP: Got {} tables from catalog", t.len());
+                        t
+                    }
+                    Err(e) => {
+                        eprintln!("!!! LSP: Failed to fetch tables from catalog: {}", e);
+                        return Err(e);
+                    }
+                };
+
+                // Filter out excluded tables (already in FROM clause)
+                if !exclude_tables.is_empty() {
+                    let exclude_lower: Vec<String> = exclude_tables.iter()
+                        .map(|n| n.to_lowercase())
+                        .collect();
+                    tables.retain(|t| !exclude_lower.contains(&t.name.to_lowercase()));
+                    eprintln!("!!! LSP: Filtered out {} excluded tables", exclude_tables.len());
+                }
+
+                // Filter tables by prefix if present
+                if let Some(ref p) = prefix {
+                    if !p.is_empty() {
+                        let p_lower = p.to_lowercase();
+                        tables.retain(|t| t.name.to_lowercase().starts_with(&p_lower));
+                        eprintln!("!!! LSP: Filtered to {} tables matching prefix '{}'", tables.len(), p);
+                    }
+                }
 
                 // Check if we should show schema qualifier
-                // Show if multiple schemas exist or schema is not 'public'
+                // Show if multiple schemas exist
                 let schemas: HashSet<&str> = tables.iter().map(|t| t.schema.as_str()).collect();
-                let show_schema = schemas.len() > 1 || !schemas.iter().any(|&s| s == "public");
+                let show_schema = schemas.len() > 1;
 
                 // Render completion items
                 let items = CompletionRenderer::render_tables(&tables, show_schema);
+                eprintln!("!!! LSP: Rendered {} completion items", items.len());
                 Ok(Some(items))
             }
-            CompletionContext::WhereClause { qualifier } => {
-                self.complete_with_scope(
+            CompletionContext::WhereClause { tables, qualifier } => {
+                self.complete_where_clause(
                     &scope_manager,
+                    tables,
                     qualifier,
-                    true, // exclude_wildcard
-                    None, // function_filter
                 )
                 .await
             }
             CompletionContext::JoinCondition {
                 left_table,
                 right_table,
+                qualifier,
             } => {
-                // Handle incomplete context (still typing table names)
-                let (left_name, right_name) = match (left_table, right_table) {
-                    (Some(l), Some(r)) => (l, r),
-                    _ => return Ok(None), // Not ready for completion yet
-                };
+                eprintln!("!!! LSP: Matched JoinCondition: left_table={:?}, right_table={:?}", left_table, right_table);
+                // We can complete if we have at least one table
+                match (left_table.as_ref(), right_table.as_ref()) {
+                    (None, None) => return Ok(None),
+                    _ => {}
+                }
 
-                // Fetch both tables from catalog
-                let left_table_symbol =
-                    match self.catalog_fetcher.populate_single_table(&left_name).await {
-                        Ok(table) => table,
+                // Helper function to load table by alias or real name
+                async fn load_table_by_alias(
+                    catalog_fetcher: &CatalogCompletionFetcher,
+                    alias: String,
+                ) -> Result<TableSymbol, CompletionError> {
+                    eprintln!("!!! LSP: *** NEW CODE *** load_table_by_alias called with alias='{}'", alias);
+                    // Try to load by exact name first
+                    match catalog_fetcher.populate_single_table(&alias).await {
+                        Ok(table) => {
+                            eprintln!("!!! LSP: load_table_by_alias: loaded by exact name, has {} columns", table.columns.len());
+                            // Check if table has columns (if not, it might be an alias that doesn't match a real table)
+                            if table.columns.is_empty() {
+                                eprintln!("!!! LSP: load_table_by_alias: table has no columns, trying to match alias to real table name");
+                                // Try to match alias to real table name
+                                match catalog_fetcher.list_tables().await {
+                                    Ok(all_tables) => {
+                                        eprintln!("!!! LSP: load_table_by_alias: got {} tables to search", all_tables.len());
+                                        let mut matched_table = None;
+
+                                        // Strategy 1: Try to find a table that starts with the alias
+                                        for table in &all_tables {
+                                            let table_name_lower = table.name.to_lowercase();
+                                            let alias_lower = alias.to_lowercase();
+
+                                            eprintln!("!!! LSP: load_table_by_alias: checking '{}' starts with '{}'", table_name_lower, alias_lower);
+
+                                            if table_name_lower.starts_with(&alias_lower) {
+                                                eprintln!("!!! LSP: load_table_by_alias: found match '{}' (starts with)", table.name);
+                                                matched_table = Some(table.name.clone());
+                                                break;
+                                            }
+                                        }
+
+                                        eprintln!("!!! LSP: load_table_by_alias: after strategy 1, matched_table = {:?}", matched_table);
+
+                                        // Strategy 2: If no match, try matching first letter (e.g., e1 -> employees)
+                                        if matched_table.is_none() {
+                                            eprintln!("!!! LSP: load_table_by_alias: trying strategy 2 (first letter match)");
+                                            if alias.len() >= 1 {
+                                                let alias_first_char = alias.chars().next().unwrap().to_lowercase().to_string();
+                                                eprintln!("!!! LSP: load_table_by_alias: alias first char = '{}'", alias_first_char);
+                                                for table in &all_tables {
+                                                    if let Some(table_first_char) = table.name.chars().next() {
+                                                        let table_first_char = table_first_char.to_lowercase().to_string();
+                                                        eprintln!("!!! LSP: load_table_by_alias: {} first char = '{}'", table.name, table_first_char);
+                                                        if table_first_char == alias_first_char {
+                                                            // Check if the rest of the alias is just numbers (e1, e2, etc.)
+                                                            let alias_rest: String = alias.chars().skip(1).collect();
+                                                            eprintln!("!!! LSP: load_table_by_alias: alias rest = '{}', is_numeric = {}", alias_rest, alias_rest.chars().all(|c| c.is_numeric()));
+                                                            if alias_rest.chars().all(|c| c.is_numeric()) {
+                                                                eprintln!("!!! LSP: load_table_by_alias: found match '{}' (first letter + numeric suffix)", table.name);
+                                                                matched_table = Some(table.name.clone());
+                                                                break;
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+
+                                        // Strategy 3: If only one table exists, use it (fallback for self-join)
+                                        if matched_table.is_none() && all_tables.len() == 1 {
+                                            eprintln!("!!! LSP: load_table_by_alias: only one table available, using '{}'", all_tables[0].name);
+                                            matched_table = Some(all_tables[0].name.clone());
+                                        }
+
+                                        if let Some(table_name) = matched_table {
+                                            match catalog_fetcher.populate_single_table(&table_name).await {
+                                                Ok(mut populated_table) => {
+                                                    eprintln!("!!! LSP: load_table_by_alias: loaded real table with {} columns", populated_table.columns.len());
+                                                    populated_table.alias = Some(alias.clone());
+                                                    return Ok(populated_table);
+                                                }
+                                                Err(e) => {
+                                                    eprintln!("!!! LSP: load_table_by_alias: failed to populate table '{}': {}", table_name, e);
+                                                    Ok(table)
+                                                }
+                                            }
+                                        } else {
+                                            // No match found
+                                            eprintln!("!!! LSP: load_table_by_alias: no match found, returning empty table");
+                                            Ok(table)
+                                        }
+                                    }
+                                    Err(e) => {
+                                        eprintln!("!!! LSP: load_table_by_alias: list_tables error: {}", e);
+                                        Ok(table)
+                                    }
+                                }
+                            } else {
+                                eprintln!("!!! LSP: load_table_by_alias: table has columns, returning as-is");
+                                Ok(table)
+                            }
+                        }
+                        Err(e) => {
+                            eprintln!("!!! LSP: load_table_by_alias: populate_single_table error: {}", e);
+                            Err(e)
+                        }
+                    }
+                }
+
+                eprintln!("!!! LSP: JoinCondition: loading tables - left={:?}, right={:?}", left_table, right_table);
+
+                // Fetch the available tables
+                let mut tables_with_columns = Vec::new();
+
+                if let Some(left_name) = &left_table {
+                    eprintln!("!!! LSP: JoinCondition: loading left table '{}'", left_name);
+                    match load_table_by_alias(&self.catalog_fetcher, left_name.clone()).await {
+                        Ok(table) => {
+                            eprintln!("!!! LSP: JoinCondition: loaded left table '{}' with {} columns", table.table_name, table.columns.len());
+                            tables_with_columns.push(table);
+                        }
                         Err(e) => {
                             eprintln!("Warning: Failed to load left table '{}': {}", left_name, e);
-                            return Ok(None);
                         }
-                    };
-
-                let right_table_symbol = match self
-                    .catalog_fetcher
-                    .populate_single_table(&right_name)
-                    .await
-                {
-                    Ok(table) => table,
-                    Err(e) => {
-                        eprintln!(
-                            "Warning: Failed to load right table '{}': {}",
-                            right_name, e
-                        );
-                        return Ok(None);
                     }
+                }
+
+                if let Some(right_name) = &right_table {
+                    eprintln!("!!! LSP: JoinCondition: loading right table '{}'", right_name);
+                    match load_table_by_alias(&self.catalog_fetcher, right_name.clone()).await {
+                        Ok(table) => {
+                            eprintln!("!!! LSP: JoinCondition: loaded right table '{}' with {} columns", table.table_name, table.columns.len());
+                            tables_with_columns.push(table);
+                        }
+                        Err(e) => {
+                            eprintln!("Warning: Failed to load right table '{}': {}", right_name, e);
+                        }
+                    }
+                }
+
+                eprintln!("!!! LSP: JoinCondition: loaded {} tables", tables_with_columns.len());
+
+                if tables_with_columns.is_empty() {
+                    eprintln!("!!! LSP: JoinCondition: no tables loaded, returning None");
+                    return Ok(None);
+                }
+
+                // Determine if we should force qualification
+                // Force qualification when multiple tables are in the JOIN
+                // BUT: For USING clause, never force qualification (USING syntax doesn't use qualifiers)
+                let is_using_clause = source.to_uppercase().contains("USING");
+                let force_qualifier = if is_using_clause {
+                    false  // USING clause doesn't use table qualifiers
+                } else {
+                    tables_with_columns.len() > 1
                 };
 
                 // Fetch functions from catalog (scalar functions only for JOINs)
                 let functions = self.catalog_fetcher.list_functions().await?;
 
-                // Always force qualification for JOINs (best practice)
-                let force_qualifier = true;
+                // Filter tables based on qualifier if provided
+                let tables_to_render = if let Some(ref q) = qualifier {
+                    // Only show columns from the table matching the qualifier
+                    tables_with_columns
+                        .into_iter()
+                        .filter(|t| {
+                            t.alias.as_ref().map(|a| a == q).unwrap_or(false)
+                                || t.table_name == *q
+                        })
+                        .collect()
+                } else {
+                    tables_with_columns
+                };
+
+                eprintln!("!!! LSP: JoinCondition: filtered to {} tables to render", tables_to_render.len());
+
+                if tables_to_render.is_empty() {
+                    eprintln!("!!! LSP: JoinCondition: no tables after filtering, returning None");
+                    return Ok(None);
+                }
 
                 // Render with PK/FK prioritization
                 let mut items = CompletionRenderer::render_join_columns(
-                    &[left_table_symbol, right_table_symbol],
+                    &tables_to_render,
                     force_qualifier,
                 );
 
@@ -252,6 +454,9 @@ impl CompletionEngine {
                         "UPDATE" => provider.update_keywords().keywords,
                         "DELETE" => provider.delete_keywords().keywords,
                         "CREATE" => provider.create_keywords().keywords,
+                        "ALTER" => provider.alter_keywords().keywords,
+                        "DROP" => provider.drop_keywords().keywords,
+                        "UNION" => provider.union_keywords().keywords,
                         _ => provider.select_clause_keywords().keywords,
                     }
                 } else {
@@ -263,8 +468,171 @@ impl CompletionEngine {
                 let items = CompletionRenderer::render_keywords(&keywords);
                 Ok(Some(items))
             }
+            CompletionContext::OrderByClause { tables, qualifier } => {
+                self.complete_order_by_clause(
+                    &scope_manager,
+                    tables,
+                    qualifier,
+                )
+                .await
+            }
+            CompletionContext::GroupByClause { tables, qualifier } => {
+                self.complete_group_by_clause(
+                    &scope_manager,
+                    tables,
+                    qualifier,
+                )
+                .await
+            }
+            CompletionContext::LimitClause => {
+                self.complete_limit_clause().await
+            }
+            CompletionContext::HavingClause { tables, qualifier } => {
+                self.complete_having_clause(
+                    &scope_manager,
+                    tables,
+                    qualifier,
+                )
+                .await
+            }
             CompletionContext::Unknown => Ok(None),
         }
+    }
+
+    /// Complete SELECT projection with columns, functions, and SELECT modifiers
+    ///
+    /// This is specialized for SELECT clause completion.
+    async fn complete_select_projection(
+        &self,
+        scope_manager: &Option<unified_sql_lsp_semantic::ScopeManager>,
+        tables: Vec<String>,
+        qualifier: Option<String>,
+        source: &str,
+    ) -> Result<Option<Vec<CompletionItem>>, CompletionError> {
+        eprintln!("!!! LSP: complete_select_projection called");
+
+        // Get columns and functions using the shared scope completion logic
+        let mut items = match self.complete_with_scope(
+            scope_manager,
+            tables,
+            qualifier.clone(),
+            false, // include_wildcard
+            None,  // function_filter (show all)
+        )
+        .await?
+        {
+            Some(items) => items,
+            None => vec![],
+        };
+
+        // Exclude columns that are already selected in the SELECT clause
+        // Pattern: "SELECT id, username, | FROM users" -> exclude "id" and "username"
+        if let Some(select_pos) = source.to_uppercase().find("SELECT") {
+            // Get text between SELECT and FROM
+            let after_select = &source[select_pos + 6..]; // +6 for "SELECT"
+            if let Some(from_pos) = after_select.to_uppercase().find("FROM") {
+                let select_clause = &after_select[..from_pos];
+                eprintln!("!!! LSP: SELECT clause part: '{}'", select_clause);
+
+                // Extract selected column names
+                let mut selected_columns = std::collections::HashSet::new();
+                for part in select_clause.split(',') {
+                    let part = part.trim();
+                    if !part.is_empty() && !part.starts_with('(') {
+                        // Simple column name (not a function call)
+                        // Remove any alias (AS xxx)
+                        let col_name = if let Some(as_pos) = part.to_uppercase().find(" AS ") {
+                            &part[..as_pos]
+                        } else {
+                            part
+                        }.trim();
+
+                        // Extract just the column name (without table qualifier)
+                        let final_col = if let Some(dot_pos) = col_name.find('.') {
+                            &col_name[dot_pos + 1..]
+                        } else {
+                            col_name
+                        };
+
+                        if !final_col.is_empty() && !final_col.ends_with('*') {
+                            selected_columns.insert(final_col.to_uppercase());
+                            eprintln!("!!! LSP: Excluding already selected column: {}", final_col);
+                        }
+                    }
+                }
+
+                // Filter out selected columns
+                if !selected_columns.is_empty() {
+                    items.retain(|item| {
+                        !selected_columns.contains(&item.label.to_uppercase())
+                    });
+                }
+            }
+        }
+
+        // Add SELECT clause keywords (DISTINCT, ALL, etc.)
+        let dialect = self.dialect;
+        let provider = KeywordProvider::new(dialect);
+        let select_keywords = provider.select_clause_keywords().keywords;
+        let keyword_items = CompletionRenderer::render_keywords(&select_keywords);
+        items.extend(keyword_items);
+
+        // Add expression keywords (WHEN, THEN, ELSE, etc.) if we're in a CASE expression
+        // Check if source text ends with "CASE " (or CASE followed by whitespace)
+        let text_upper = source.to_uppercase();
+        let ends_with_case = text_upper.ends_with("CASE ") || text_upper.ends_with("CASE\t")
+            || text_upper.ends_with(" CASE ") || text_upper.ends_with(" CASE\t");
+
+        if ends_with_case {
+            eprintln!("!!! LSP: Detected CASE expression, adding expression keywords");
+            let expr_keywords = provider.expression_keywords().keywords;
+            let expr_items = CompletionRenderer::render_keywords(&expr_keywords);
+            items.extend(expr_items);
+        }
+
+        Ok(Some(items))
+    }
+
+    /// Complete WHERE clause with columns, operators, and clause keywords
+    ///
+    /// This is specialized for WHERE clause completion.
+    async fn complete_where_clause(
+        &self,
+        scope_manager: &Option<unified_sql_lsp_semantic::ScopeManager>,
+        tables: Vec<String>,
+        qualifier: Option<String>,
+    ) -> Result<Option<Vec<CompletionItem>>, CompletionError> {
+        eprintln!("!!! LSP: complete_where_clause called");
+
+        // Get columns using the shared scope completion logic
+        let mut items = match self.complete_with_scope(
+            scope_manager,
+            tables,
+            qualifier.clone(),
+            true, // exclude_wildcard
+            None, // function_filter (show all)
+        )
+        .await?
+        {
+            Some(items) => items,
+            None => vec![],
+        };
+
+        // Add WHERE clause keywords (AND, OR, etc.) and subsequent clauses
+        let dialect = self.dialect;
+        let provider = KeywordProvider::new(dialect);
+
+        // Get expression keywords (AND, OR, NOT, etc.)
+        let expr_keywords = provider.expression_keywords().keywords;
+        let expr_items = CompletionRenderer::render_keywords(&expr_keywords);
+        items.extend(expr_items);
+
+        // Get keywords after WHERE clause (GROUP BY, ORDER BY, etc.)
+        let clause_keywords = provider.keywords_after_clause("WHERE");
+        let clause_items = CompletionRenderer::render_keywords(&clause_keywords);
+        items.extend(clause_items);
+
+        Ok(Some(items))
     }
 
     /// Shared completion logic for contexts with scope (SELECT/WHERE)
@@ -273,10 +641,177 @@ impl CompletionEngine {
     async fn complete_with_scope(
         &self,
         scope_manager: &Option<unified_sql_lsp_semantic::ScopeManager>,
+        context_tables: Vec<String>,
         qualifier: Option<String>,
         exclude_wildcard: bool,
         function_filter: Option<FunctionType>,
     ) -> Result<Option<Vec<CompletionItem>>, CompletionError> {
+        eprintln!("!!! LSP: complete_with_scope called: context_tables={:?}, scope_manager.is_some()={}",
+                  context_tables, scope_manager.is_some());
+
+        // Check if we should use context_tables instead of CST-based scope
+        let use_context_tables = if !context_tables.is_empty() {
+            // Check if the CST-based scope exists and has tables
+            if let Some(manager) = scope_manager {
+                let scope = manager.get_scope(0);
+                match scope {
+                    Some(s) => {
+                        eprintln!("!!! LSP: CST scope has {} tables", s.tables.len());
+                        s.tables.is_empty()
+                    }
+                    None => {
+                        eprintln!("!!! LSP: CST scope is None");
+                        true
+                    }
+                }
+            } else {
+                eprintln!("!!! LSP: scope_manager is None");
+                true
+            }
+        } else {
+            eprintln!("!!! LSP: context_tables is empty");
+            false
+        };
+
+        eprintln!("!!! LSP: use_context_tables = {}", use_context_tables);
+
+        // If we have context tables (from text-based fallback) but no scope or empty scope,
+        // fetch tables directly from catalog using the context table names
+        eprintln!("!!! LSP: About to check if use_context_tables...");
+
+        if use_context_tables {
+            eprintln!("!!! LSP: === ENTERING use_context_tables block ===");
+            eprintln!("!!! LSP: Using context_tables (CST scope is empty or missing): {:?}", context_tables);
+
+            let mut tables_with_columns = Vec::new();
+
+            // First, try to fetch tables by their exact name (could be alias or real table name)
+            let mut unfound_aliases = Vec::new();
+
+            for table_name in &context_tables {
+                eprintln!("!!! LSP: Fetching table '{}' from catalog", table_name);
+                match self.catalog_fetcher.populate_single_table(table_name).await {
+                    Ok(table) => {
+                        eprintln!("!!! LSP: Fetched table '{}' with {} columns", table.table_name, table.columns.len());
+                        // If the table has no columns, it might be an alias that doesn't match a real table
+                        if table.columns.is_empty() {
+                            eprintln!("!!! LSP: Table '{}' has no columns, treating as potential alias", table_name);
+                            unfound_aliases.push(table_name.clone());
+                        } else {
+                            tables_with_columns.push(table);
+                        }
+                    }
+                    Err(e) => {
+                        eprintln!("!!! LSP: Failed to fetch table '{}': {:?}", table_name, e);
+                        // This might be an alias - save it for later processing
+                        unfound_aliases.push(table_name.clone());
+                    }
+                }
+            }
+
+            // For any unfound aliases, fetch all tables and try to match by partial name
+            if !unfound_aliases.is_empty() {
+                eprintln!("!!! LSP: Some tables not found, trying to match aliases: {:?}", unfound_aliases);
+                match self.catalog_fetcher.list_tables().await {
+                    Ok(all_tables) => {
+                        for alias in &unfound_aliases {
+                            // Try to find a table that starts with the alias
+                            // e.g., alias "u" matches table "users"
+                            // or alias "o" matches table "orders"
+                            let mut best_match: Option<String> = None;
+
+                            for table in &all_tables {
+                                let table_name_lower = table.name.to_lowercase();
+                                let alias_lower = alias.to_lowercase();
+
+                                // Match if table name starts with alias (e.g., "users" starts with "u")
+                                if table_name_lower.starts_with(&alias_lower) {
+                                    best_match = Some(table.name.clone());
+                                    eprintln!("!!! LSP: Found match: alias '{}' -> table '{}' (starts_with)", alias, table.name);
+                                    break; // Use first exact match
+                                }
+                            }
+
+                            // If no starts_with match, try contains as fallback (but less preferred)
+                            if best_match.is_none() {
+                                for table in &all_tables {
+                                    let table_name_lower = table.name.to_lowercase();
+                                    let alias_lower = alias.to_lowercase();
+
+                                    if table_name_lower.contains(&alias_lower) {
+                                        best_match = Some(table.name.clone());
+                                        eprintln!("!!! LSP: Found fallback match: alias '{}' -> table '{}' (contains)", alias, table.name);
+                                        break;
+                                    }
+                                }
+                            }
+
+                            if let Some(table_name) = best_match {
+                                match self.catalog_fetcher.populate_single_table(&table_name).await {
+                                    Ok(mut populated_table) => {
+                                        // Set the alias for rendering
+                                        populated_table.alias = Some(alias.clone());
+                                        tables_with_columns.push(populated_table);
+                                    }
+                                    Err(e) => {
+                                        eprintln!("!!! LSP: Failed to populate matched table '{}': {:?}", table_name, e);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        eprintln!("!!! LSP: Failed to list all tables: {:?}", e);
+                    }
+                }
+            }
+
+            eprintln!("!!! LSP: Total tables with columns: {}", tables_with_columns.len());
+
+            // Fetch functions from catalog
+            let functions = self.catalog_fetcher.list_functions().await?;
+
+            // Resolve qualifier if present to filter tables
+            // Also handle table aliases by updating the alias field
+            let tables_to_render = match &qualifier {
+                Some(q) => {
+                    // The qualifier could be:
+                    // 1. An actual table name (e.g., "users")
+                    // 2. A table alias (e.g., "u" for "users")
+                    // If it's an alias, set it in the table symbol so the renderer uses it
+                    eprintln!("!!! LSP: Qualifier '{}' provided, setting as table alias", q);
+                    tables_with_columns.iter().map(|t| {
+                        let mut modified = t.clone();
+                        modified.alias = Some(q.clone());
+                        modified
+                    }).collect()
+                }
+                None => tables_with_columns,
+            };
+
+            eprintln!("!!! LSP: Rendering {} tables", tables_to_render.len());
+
+            // Render completion items
+            // Force qualifier if there are multiple tables or if an explicit qualifier was provided
+            let force_qualifier = qualifier.is_some() || tables_to_render.len() > 1;
+            let mut items = CompletionRenderer::render_columns(&tables_to_render, force_qualifier);
+
+            eprintln!("!!! LSP: Rendered {} column items", items.len());
+
+            // Filter out wildcard if needed
+            if exclude_wildcard {
+                items.retain(|i| i.label != "*");
+            }
+
+            // Add function completion items
+            let function_items = CompletionRenderer::render_functions(&functions, function_filter);
+            items.extend(function_items);
+
+            eprintln!("!!! LSP: Total items after adding functions: {}", items.len());
+            return Ok(Some(items));
+        }
+
+        // Original logic for CST-based scope
         let mut scope_manager = match scope_manager {
             Some(manager) => manager.clone(),
             None => return Ok(None),
@@ -322,6 +857,143 @@ impl CompletionEngine {
         // Add function completion items
         let function_items = CompletionRenderer::render_functions(&functions, function_filter);
         items.extend(function_items);
+
+        Ok(Some(items))
+    }
+
+    /// Extract the prefix being typed before cursor for filtering
+    ///
+    /// For example, in "SELECT * FROM or|", returns "or"
+    fn extract_prefix_from_document(document: &Document, position: Position) -> Option<String> {
+        use ropey::Rope;
+
+        let content = document.get_content();
+        let rope = Rope::from_str(content.as_str());
+        let line = rope.get_line(position.line as usize)?;
+
+        // Convert line to string
+        let line_text = line.to_string();
+
+        // Get text up to cursor position
+        let up_to_cursor = &line_text[..position.character as usize];
+
+        // If cursor is immediately after a comma or space, there's no prefix
+        // Check BEFORE trimming to detect trailing delimiters
+        if up_to_cursor.ends_with(',') || up_to_cursor.ends_with(' ') || up_to_cursor.ends_with('\t') {
+            return None;
+        }
+
+        // Find the last word before cursor
+        let last_word = up_to_cursor.split_whitespace().last()?;
+
+        // Strip trailing non-alphanumeric characters (commas, semicolons, etc.)
+        // For example: "users," -> "users" for comma-style joins
+        let last_word_clean = last_word.trim_end_matches(|c: char| !c.is_alphanumeric());
+
+        Some(last_word_clean.to_string())
+    }
+
+    /// Complete ORDER BY clause with columns and sort directions
+    async fn complete_order_by_clause(
+        &self,
+        scope_manager: &Option<unified_sql_lsp_semantic::ScopeManager>,
+        tables: Vec<String>,
+        qualifier: Option<String>,
+    ) -> Result<Option<Vec<CompletionItem>>, CompletionError> {
+        eprintln!("!!! LSP: complete_order_by_clause called");
+
+        // Get columns using the shared scope completion logic
+        let mut items = match self.complete_with_scope(
+            scope_manager,
+            tables,
+            qualifier.clone(),
+            true, // exclude_wildcard
+            None, // function_filter (show all)
+        )
+        .await?
+        {
+            Some(items) => items,
+            None => vec![],
+        };
+
+        // Add sort direction keywords (ASC, DESC)
+        let dialect = self.dialect;
+        let provider = KeywordProvider::new(dialect);
+        let sort_keywords = provider.sort_direction_keywords().keywords;
+        let sort_items = CompletionRenderer::render_keywords(&sort_keywords);
+        items.extend(sort_items);
+
+        Ok(Some(items))
+    }
+
+    /// Complete GROUP BY clause with columns and HAVING
+    async fn complete_group_by_clause(
+        &self,
+        scope_manager: &Option<unified_sql_lsp_semantic::ScopeManager>,
+        tables: Vec<String>,
+        qualifier: Option<String>,
+    ) -> Result<Option<Vec<CompletionItem>>, CompletionError> {
+        eprintln!("!!! LSP: complete_group_by_clause called");
+
+        // Get columns using the shared scope completion logic
+        let mut items = match self.complete_with_scope(
+            scope_manager,
+            tables,
+            qualifier.clone(),
+            true, // exclude_wildcard
+            None, // function_filter (show all)
+        )
+        .await?
+        {
+            Some(items) => items,
+            None => vec![],
+        };
+
+        // Add HAVING keyword
+        let dialect = self.dialect;
+        let provider = KeywordProvider::new(dialect);
+        let having_keywords = provider.having_keywords().keywords;
+        let having_items = CompletionRenderer::render_keywords(&having_keywords);
+        items.extend(having_items);
+
+        Ok(Some(items))
+    }
+
+    /// Complete LIMIT clause with numbers and OFFSET
+    async fn complete_limit_clause(&self) -> Result<Option<Vec<CompletionItem>>, CompletionError> {
+        eprintln!("!!! LSP: complete_limit_clause called");
+
+        // Add common LIMIT numbers and OFFSET keyword
+        let dialect = self.dialect;
+        let provider = KeywordProvider::new(dialect);
+        let limit_keywords = provider.limit_keywords().keywords;
+        let items = CompletionRenderer::render_keywords(&limit_keywords);
+
+        Ok(Some(items))
+    }
+
+    /// Complete HAVING clause with columns and aggregations
+    async fn complete_having_clause(
+        &self,
+        scope_manager: &Option<unified_sql_lsp_semantic::ScopeManager>,
+        tables: Vec<String>,
+        qualifier: Option<String>,
+    ) -> Result<Option<Vec<CompletionItem>>, CompletionError> {
+        eprintln!("!!! LSP: complete_having_clause called");
+
+        // Get columns using the shared scope completion logic
+        let items = match self.complete_with_scope(
+            scope_manager,
+            tables,
+            qualifier.clone(),
+            true, // exclude_wildcard
+            None, // function_filter (show all)
+        )
+        .await?
+        {
+            Some(items) => items,
+            None => vec![],
+        };
 
         Ok(Some(items))
     }

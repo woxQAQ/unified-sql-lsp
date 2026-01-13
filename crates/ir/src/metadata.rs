@@ -55,13 +55,14 @@ pub enum DataType {
 }
 
 /// Table type classification
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum TableType {
     Table,
     View,
     MaterializedView,
     Temporary,
     System,
+    Other(String),
 }
 
 /// Reference to a table (for foreign keys)

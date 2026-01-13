@@ -11,7 +11,7 @@
 use crate::{CstNode, LoweringContext, LoweringError, LoweringResult};
 use unified_sql_lsp_ir::expr::{BinaryOp, ColumnRef, Literal, UnaryOp};
 use unified_sql_lsp_ir::query::{OrderBy, SelectItem, SortDirection, TableRef};
-use unified_sql_lsp_ir::{Dialect, Expr, Join, JoinCondition, JoinType};
+use unified_sql_lsp_ir::{Expr, Join, JoinCondition, JoinType};
 
 /// Shared lowering utilities for all dialects
 pub struct SharedLowering;
@@ -855,6 +855,7 @@ impl SharedLowering {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use unified_sql_lsp_ir::Dialect;
 
     #[test]
     fn test_parse_binary_op_standard() {

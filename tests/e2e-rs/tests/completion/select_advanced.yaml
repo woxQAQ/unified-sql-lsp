@@ -1,0 +1,236 @@
+name: "SELECT clause advanced completion"
+description: "Advanced SELECT projection scenarios"
+
+database:
+  dialect: "mysql"
+  connection_string: "mysql://test_user:test_password@127.0.0.1:3307/test_db"
+  schemas:
+    - "../../../tests/e2e/fixtures/schema/mysql/01_create_tables.sql"
+  data:
+    - "../../../tests/e2e/fixtures/data/mysql/02_insert_basic_data.sql"
+
+tests:
+  # Multi-table SELECT with JOIN
+  - name: "select columns from joined tables"
+    description: "Should show columns from joined tables with proper qualifiers"
+    sql: "SELECT u.| FROM users u JOIN orders o ON u.id = o.user_id"
+    expect_completion:
+      contains:
+        - "u.id"
+        - "u.username"
+        - "u.email"
+        - "u.full_name"
+        - "u.age"
+        - "u.balance"
+        - "u.is_active"
+      not_contains:
+        - "o.id"
+        - "orders"
+      min_count: 10
+
+  # Aggregate functions
+  - name: "aggregate function completion"
+    description: "Should show columns and wildcards in aggregate function"
+    sql: "SELECT COUNT(|) FROM users"
+    expect_completion:
+      contains:
+        - "id"
+        - "username"
+        - "email"
+        - "*"
+      min_count: 3
+
+  # SUM function with columns
+  - name: "sum function argument completion"
+    description: "Should show numeric columns in SUM function"
+    sql: "SELECT SUM(|) FROM products"
+    expect_completion:
+      contains:
+        - "price"
+        - "cost"
+        - "quantity_in_stock"
+        - "weight"
+      min_count: 3
+
+  # CASE expressions
+  - name: "case expression column completion"
+    description: "Should show columns in CASE WHEN clause"
+    sql: "SELECT CASE WHEN | THEN 1 END FROM users"
+    expect_completion:
+      contains:
+        - "is_active"
+        - "age"
+        - "balance"
+        - "id"
+      min_count: 5
+
+  # Nested subqueries
+  - name: "subquery in SELECT clause"
+    description: "Should show columns from subquery"
+    sql: "SELECT (SELECT | FROM orders WHERE user_id = u.id) FROM users u"
+    expect_completion:
+      contains:
+        - "id"
+        - "user_id"
+        - "total_amount"
+        - "status"
+      min_count: 5
+
+  # DISTINCT
+  - name: "distinct column completion"
+    description: "Should show all columns after DISTINCT"
+    sql: "SELECT DISTINCT | FROM products"
+    expect_completion:
+      contains:
+        - "category"
+        - "is_available"
+        - "name"
+        - "sku"
+      min_count: 5
+
+  # Expression context
+  - name: "arithmetic expression completion"
+    description: "Should show numeric columns in arithmetic expression"
+    sql: "SELECT price + | FROM products"
+    expect_completion:
+      contains:
+        - "cost"
+        - "quantity_in_stock"
+        - "price"
+      min_count: 3
+
+  # Function arguments
+  - name: "function argument completion"
+    description: "Should show columns as function arguments"
+    sql: "SELECT COALESCE(|, 0) FROM users"
+    expect_completion:
+      contains:
+        - "email"
+        - "full_name"
+        - "phone"
+        - "bio"
+      min_count: 5
+
+  # Wildcard contexts
+  - name: "after wildcard completion"
+    description: "Should show additional columns after wildcard"
+    sql: "SELECT *, | FROM users"
+    expect_completion:
+      contains:
+        - "id"
+        - "username"
+        - "email"
+      min_count: 5
+
+  # Qualifier with table name
+  - name: "table-qualified columns"
+    description: "Should show all qualified columns"
+    sql: "SELECT users.| FROM users"
+    expect_completion:
+      contains:
+        - "users.id"
+        - "users.username"
+        - "users.email"
+        - "users.full_name"
+      not_contains:
+        - "orders.id"
+      min_count: 10
+
+  # Alias with dot
+  - name: "alias-qualified columns"
+    description: "Should show columns with table alias"
+    sql: "SELECT u.| FROM users u"
+    expect_completion:
+      contains:
+        - "u.id"
+        - "u.username"
+        - "u.email"
+        - "u.full_name"
+      not_contains:
+        - "users.id"
+        - "orders.id"
+      min_count: 10
+
+  # Multiple SELECT columns
+  - name: "completion after comma"
+    description: "Should show columns after comma"
+    sql: "SELECT id, username, | FROM users"
+    expect_completion:
+      contains:
+        - "email"
+        - "full_name"
+        - "age"
+        - "balance"
+      not_contains:
+        - "id"
+        - "username"
+      min_count: 10
+
+  # AVG function
+  - name: "avg function completion"
+    description: "Should show numeric columns for AVG"
+    sql: "SELECT AVG(|) FROM order_items"
+    expect_completion:
+      contains:
+        - "quantity"
+        - "unit_price"
+        - "discount_percent"
+      min_count: 3
+
+  # CONCAT function
+  - name: "concat function arguments"
+    description: "Should show string columns for CONCAT"
+    sql: "SELECT CONCAT(|, ' ', last_name) FROM users"
+    expect_completion:
+      contains:
+        - "username"
+        - "email"
+        - "full_name"
+      min_count: 3
+
+  # Multiple joins
+  - name: "completion with multiple joins"
+    description: "Should show columns from all joined tables with qualifiers"
+    sql: "SELECT u.| FROM users u JOIN orders o ON u.id = o.user_id JOIN order_items oi ON o.id = oi.order_id"
+    expect_completion:
+      contains:
+        - "u.id"
+        - "u.username"
+        - "u.email"
+      not_contains:
+        - "o.id"
+        - "oi.id"
+      min_count: 10
+
+  # MAX function
+  - name: "max function completion"
+    description: "Should show columns for MAX aggregate"
+    sql: "SELECT MAX(|) FROM orders"
+    expect_completion:
+      contains:
+        - "total_amount"
+        - "order_date"
+        - "id"
+      min_count: 3
+
+  # MIN function
+  - name: "min function completion"
+    description: "Should show columns for MIN aggregate"
+    sql: "SELECT MIN(|) FROM products"
+    expect_completion:
+      contains:
+        - "price"
+        - "cost"
+        - "quantity_in_stock"
+      min_count: 3
+
+  # GROUP BY column reference
+  - name: "column after GROUP BY"
+    description: "Should show columns for grouping"
+    sql: "SELECT category, COUNT(*) FROM products GROUP BY |"
+    expect_completion:
+      contains:
+        - "category"
+        - "is_available"
+        - "id"
+      min_count: 3

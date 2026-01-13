@@ -206,12 +206,13 @@ impl CompletionRenderer {
     ///
     /// Shows the schema name and table type
     fn format_table_detail(table: &TableMetadata) -> String {
-        let type_str = match table.table_type {
+        let type_str = match &table.table_type {
             TableType::Table => "TABLE",
             TableType::View => "VIEW",
             TableType::MaterializedView => "MATERIALIZED VIEW",
             TableType::Temporary => "TEMPORARY",
             TableType::System => "SYSTEM",
+            TableType::Other(s) => s,
         };
         format!("{}.{} [{}]", table.schema, table.name, type_str)
     }

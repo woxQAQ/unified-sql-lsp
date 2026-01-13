@@ -1350,6 +1350,7 @@ impl PostgreSQLLowering {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::cst::MockCstNode;
 
     #[test]
     fn test_normalize_identifier_with_quotes() {

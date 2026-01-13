@@ -1,0 +1,131 @@
+name: "Basic hover information tests"
+description: "Type information and documentation on hover"
+
+database:
+  dialect: "mysql"
+  connection_string: "mysql://test_user:test_password@127.0.0.1:3307/test_db"
+  schemas:
+    - "../../../tests/e2e/fixtures/schema/mysql/01_create_tables.sql"
+  data:
+    - "../../../tests/e2e/fixtures/data/mysql/02_insert_basic_data.sql"
+
+tests:
+  # Column hover - integer types
+  - name: "integer column type information"
+    description: "Should show INT type on hover"
+    sql: "SELECT |id|, username FROM users"
+    expect_hover:
+      contains: "INT"
+      is_markdown: true
+
+  - name: "bigint column hover"
+    description: "Should show BIGINT type"
+    sql: "SELECT |id| FROM logs"
+    expect_hover:
+      contains: "BIGINT"
+      is_markdown: true
+
+  # Column hover - string types
+  - name: "varchar column hover"
+    description: "Should show VARCHAR with length"
+    sql: "SELECT id, |username| FROM users"
+    expect_hover:
+      contains: "VARCHAR(50)"
+      is_markdown: true
+
+  - name: "text column hover"
+    description: "Should show TEXT type"
+    sql: "SELECT |bio| FROM users"
+    expect_hover:
+      contains: "TEXT"
+      is_markdown: true
+
+  # Column hover - numeric types
+  - name: "decimal column hover"
+    description: "Should show DECIMAL with precision"
+    sql: "SELECT |price| FROM products"
+    expect_hover:
+      contains: "DECIMAL"
+      is_markdown: true
+
+  - name: "balance decimal column"
+    description: "Should show DECIMAL type for balance"
+    sql: "SELECT |balance| FROM users"
+    expect_hover:
+      contains: "DECIMAL"
+      is_markdown: true
+
+  # Column hover - boolean and date types
+  - name: "boolean column hover"
+    description: "Should show BOOLEAN type"
+    sql: "SELECT |is_active| FROM users"
+    expect_hover:
+      contains: "BOOLEAN"
+      is_markdown: true
+
+  - name: "timestamp column hover"
+    description: "Should show TIMESTAMP type"
+    sql: "SELECT |created_at| FROM users"
+    expect_hover:
+      contains: "TIMESTAMP"
+      is_markdown: true
+
+  - name: "datetime column hover"
+    description: "Should show DATETIME type"
+    sql: "SELECT |order_date| FROM orders"
+    expect_hover:
+      contains: "DATETIME"
+      is_markdown: true
+
+  # Table hover
+  - name: "table hover information"
+    description: "Should show table name on hover"
+    sql: "SELECT * FROM |users|"
+    expect_hover:
+      contains: "users"
+      is_markdown: true
+
+  - name: "table hover with alias"
+    description: "Should show table info for aliased table"
+    sql: "SELECT * FROM |users| u"
+    expect_hover:
+      contains: "users"
+      is_markdown: true
+
+  # Qualified column hover
+  - name: "qualified column hover"
+    description: "Should show column info for qualified column"
+    sql: "SELECT |users|.username FROM users"
+    expect_hover:
+      contains: "users"
+      is_markdown: true
+
+  - name: "aliased column hover"
+    description: "Should show column info for aliased column"
+    sql: "SELECT |u|.username FROM users u"
+    expect_hover:
+      contains: "u"
+      is_markdown: true
+
+  # Function hover
+  - name: "aggregate function signature"
+    description: "Should show function signature"
+    sql: "SELECT |COUNT|(*) FROM users"
+    expect_hover:
+      contains: "COUNT"
+      is_markdown: true
+
+  - name: "string function hover"
+    description: "Should show CONCAT function"
+    sql: "SELECT |CONCAT|(a, b) FROM users"
+    expect_hover:
+      contains: "CONCAT"
+      is_markdown: true
+
+  # View hover
+  - name: "view hover information"
+    description: "Should show view name"
+    sql: "SELECT * FROM |v_active_users|"
+    expect_hover:
+      contains: "v_active_users"
+      is_markdown: true

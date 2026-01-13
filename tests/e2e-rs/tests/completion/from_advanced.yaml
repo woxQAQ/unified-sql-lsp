@@ -1,0 +1,198 @@
+name: "FROM clause advanced completion"
+description: "Table and subquery completion in FROM clause"
+
+database:
+  dialect: "mysql"
+  connection_string: "mysql://test_user:test_password@127.0.0.1:3307/test_db"
+  schemas:
+    - "../../../tests/e2e/fixtures/schema/mysql/01_create_tables.sql"
+  data:
+    - "../../../tests/e2e/fixtures/data/mysql/02_insert_basic_data.sql"
+
+tests:
+  # Basic FROM
+  - name: "all tables after FROM"
+    description: "Should suggest all available tables"
+    sql: "SELECT * FROM |"
+    expect_completion:
+      contains:
+        - "users"
+        - "orders"
+        - "products"
+        - "order_items"
+        - "posts"
+        - "tags"
+        - "post_tags"
+        - "employees"
+        - "logs"
+      not_contains:
+        - "information_schema"
+        - "performance_schema"
+        - "sys"
+      min_count: 8
+
+  # Partial table name
+  - name: "filtered by prefix"
+    description: "Should filter tables by prefix"
+    sql: "SELECT * FROM or|"
+    expect_completion:
+      contains:
+        - "orders"
+        - "order_items"
+      not_contains:
+        - "users"
+        - "products"
+      min_count: 2
+
+  # FROM with JOIN
+  - name: "join target tables"
+    description: "Should suggest tables to join"
+    sql: "SELECT * FROM users u JOIN |"
+    expect_completion:
+      contains:
+        - "orders"
+        - "products"
+        - "order_items"
+        - "posts"
+      not_contains:
+        - "users"
+      min_count: 3
+
+  # Multiple JOINs
+  - name: "third table in joins"
+    description: "Should suggest remaining tables for multi-join"
+    sql: "SELECT * FROM users u JOIN orders o ON u.id = o.user_id JOIN |"
+    expect_completion:
+      contains:
+        - "products"
+        - "order_items"
+        - "posts"
+      not_contains:
+        - "users"
+        - "orders"
+      min_count: 2
+
+  # LEFT JOIN
+  - name: "left join tables"
+    description: "Should suggest tables for LEFT JOIN"
+    sql: "SELECT * FROM users LEFT JOIN |"
+    expect_completion:
+      contains:
+        - "orders"
+        - "products"
+        - "posts"
+      min_count: 3
+
+  # RIGHT JOIN
+  - name: "right join tables"
+    description: "Should suggest tables for RIGHT JOIN"
+    sql: "SELECT * FROM orders RIGHT JOIN |"
+    expect_completion:
+      contains:
+        - "users"
+      min_count: 1
+
+  # INNER JOIN
+  - name: "inner join tables"
+    description: "Should suggest tables for INNER JOIN"
+    sql: "SELECT * FROM orders INNER JOIN |"
+    expect_completion:
+      contains:
+        - "users"
+        - "products"
+      min_count: 2
+
+  # Subquery in FROM
+  - name: "subquery from clause"
+    description: "Should show columns in subquery"
+    sql: "SELECT * FROM (SELECT | FROM users) AS sub"
+    expect_completion:
+      contains:
+        - "id"
+        - "username"
+        - "email"
+        - "*"
+      min_count: 5
+
+  # View completion
+  - name: "view completion"
+    description: "Should suggest views"
+    sql: "SELECT * FROM |"
+    expect_completion:
+      contains:
+        - "v_active_users"
+        - "v_order_summaries"
+      min_count: 2
+
+  # Table alias filtering
+  - name: "no duplicate tables"
+    description: "Should not suggest already used tables"
+    sql: "SELECT * FROM users u JOIN orders o ON u.id = o.user_id JOIN |"
+    expect_completion:
+      not_contains:
+        - "users"
+        - "orders"
+      min_count: 2
+
+  # Self-referencing table
+  - name: "self-join table completion"
+    description: "Should suggest same table for self-join"
+    sql: "SELECT * FROM employees e1 JOIN |"
+    expect_completion:
+      contains:
+        - "employees"
+      min_count: 1
+
+  # Comma-style joins
+  - name: "comma-style join"
+    description: "Should suggest tables after comma"
+    sql: "SELECT * FROM users, |"
+    expect_completion:
+      contains:
+        - "orders"
+        - "products"
+      not_contains:
+        - "users"
+      min_count: 2
+
+  # Multiple tables with comma
+  - name: "multiple tables with comma"
+    description: "Should suggest tables after multiple commas"
+    sql: "SELECT * FROM users, orders, |"
+    expect_completion:
+      contains:
+        - "products"
+        - "order_items"
+      not_contains:
+        - "users"
+        - "orders"
+      min_count: 2
+
+  # JOIN with USING preview
+  - name: "using clause table"
+    description: "Should suggest tables for USING clause"
+    sql: "SELECT * FROM orders JOIN | USING"
+    expect_completion:
+      contains:
+        - "users"
+      min_count: 1
+
+  # CROSS JOIN
+  - name: "cross join tables"
+    description: "Should suggest tables for CROSS JOIN"
+    sql: "SELECT * FROM users CROSS JOIN |"
+    expect_completion:
+      contains:
+        - "orders"
+        - "products"
+      min_count: 2
+
+  # STRAIGHT_JOIN (MySQL specific)
+  - name: "straight_join tables"
+    description: "Should suggest tables for STRAIGHT_JOIN"
+    sql: "SELECT * FROM users STRAIGHT_JOIN |"
+    expect_completion:
+      contains:
+        - "orders"
+        - "products"
+      min_count: 2

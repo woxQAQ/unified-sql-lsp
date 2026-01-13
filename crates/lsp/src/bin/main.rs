@@ -1,16 +1,13 @@
 use tower_lsp::{LspService, Server};
-use tracing_subscriber::{EnvFilter, FmtSubscriber};
 
 #[tokio::main]
 async fn main() {
-    // Initialize logging
-    let subscriber = FmtSubscriber::builder()
-        .with_env_filter(EnvFilter::from_default_env())
-        .finish();
+    eprintln!("!!! LSP SERVER: Starting up");
 
-    tracing::subscriber::set_global_default(subscriber).expect("Failed to set tracing subscriber");
-
-    tracing::info!("Starting Unified SQL LSP server");
+    // DO NOT initialize logging - it interferes with JSON-RPC protocol on stdout
+    // The LSP protocol requires stdout to be used exclusively for JSON-RPC messages
+    // Logs should only go to stderr, but tracing_subscriber doesn't respect this in all cases
+    // So we completely disable logging when running as LSP server
 
     // Create stdin/stdout streams
     let stdin = tokio::io::stdin();

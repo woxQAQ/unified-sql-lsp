@@ -44,10 +44,13 @@ impl CatalogCompletionFetcher {
     /// assert!(!tables.is_empty());
     /// ```
     pub async fn list_tables(&self) -> Result<Vec<TableMetadata>, CompletionError> {
-        self.catalog
+        eprintln!("!!! LSP: CatalogCompletionFetcher::list_tables() called");
+        let result = self.catalog
             .list_tables()
             .await
-            .map_err(CompletionError::Catalog)
+            .map_err(CompletionError::Catalog);
+        eprintln!("!!! LSP: CatalogCompletionFetcher::list_tables() returned: {:?}", result.as_ref().map(|t| t.len()));
+        result
     }
 
     /// List all functions from the catalog

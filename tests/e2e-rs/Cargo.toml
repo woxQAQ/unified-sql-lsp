@@ -1,0 +1,46 @@
+[package]
+name = "unified-sql-lsp-e2e"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[workspace]
+# This is a separate workspace for E2E tests
+
+[dependencies]
+# Internal dependencies
+unified-sql-lsp-lsp = { path = "../../crates/lsp" }
+unified-sql-lsp-catalog = { path = "../../crates/catalog" }
+unified-sql-lsp-ir = { path = "../../crates/ir" }
+unified-sql-lsp-test-utils = { path = "../../crates/test-utils" }
+
+# LSP framework
+tower-lsp = "0.20"
+lsp-types = "0.95"
+
+# Async runtime
+tokio = { version = "1.35", features = ["full", "test-util"] }
+tokio-util = { version = "0.7", features = ["io"] }
+async-trait = "0.1"
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_yaml = "0.9"
+serde_json = "1.0"
+
+# Error handling
+thiserror = "2.0"
+anyhow = "1.0"
+
+# Process spawning
+command-group = "5.0"
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# Test utilities
+tempfile = "3.8"
+
+[dev-dependencies]
+tokio-test = "0.4"

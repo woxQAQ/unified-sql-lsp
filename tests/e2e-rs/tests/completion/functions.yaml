@@ -1,0 +1,196 @@
+name: "Function completion tests"
+description: "Built-in and aggregate function completion"
+
+database:
+  dialect: "mysql"
+  connection_string: "mysql://test_user:test_password@127.0.0.1:3307/test_db"
+  schemas:
+    - "../../../tests/e2e/fixtures/schema/mysql/01_create_tables.sql"
+  data:
+    - "../../../tests/e2e/fixtures/data/mysql/02_insert_basic_data.sql"
+
+tests:
+  # Aggregate functions
+  - name: "aggregate functions"
+    description: "Should show aggregate functions"
+    sql: "SELECT | FROM users"
+    expect_completion:
+      contains:
+        - "COUNT"
+        - "SUM"
+        - "AVG"
+        - "MIN"
+        - "MAX"
+        - "GROUP_CONCAT"
+      min_count: 10
+
+  # String functions
+  - name: "string functions"
+    description: "Should show string manipulation functions"
+    sql: "SELECT | FROM users"
+    expect_completion:
+      contains:
+        - "CONCAT"
+        - "SUBSTRING"
+        - "LOWER"
+        - "UPPER"
+        - "TRIM"
+        - "LENGTH"
+        - "REPLACE"
+      min_count: 15
+
+  # Date functions
+  - name: "date functions"
+    description: "Should show date/time functions"
+    sql: "SELECT | FROM orders"
+    expect_completion:
+      contains:
+        - "NOW"
+        - "DATE"
+        - "YEAR"
+        - "MONTH"
+        - "DAY"
+        - "DATEDIFF"
+        - "DATE_FORMAT"
+        - "CURDATE"
+        - "CURTIME"
+      min_count: 10
+
+  # Math functions
+  - name: "math functions"
+    description: "Should show mathematical functions"
+    sql: "SELECT | FROM products"
+    expect_completion:
+      contains:
+        - "ABS"
+        - "ROUND"
+        - "CEIL"
+        - "FLOOR"
+        - "POW"
+        - "SQRT"
+        - "MOD"
+        - "RAND"
+      min_count: 10
+
+  # Conditional functions
+  - name: "conditional functions"
+    description: "Should show conditional/control flow functions"
+    sql: "SELECT | FROM users"
+    expect_completion:
+      contains:
+        - "IF"
+        - "IFNULL"
+        - "COALESCE"
+        - "NULLIF"
+        - "CASE"
+      min_count: 5
+
+  # Function arguments
+  - name: "function parameter completion"
+    description: "Should show columns as function arguments"
+    sql: "SELECT CONCAT(|, ' ', last_name) FROM users"
+    expect_completion:
+      contains:
+        - "username"
+        - "email"
+        - "full_name"
+      min_count: 5
+
+  # Nested functions
+  - name: "nested function calls"
+    description: "Should show options in nested function context"
+    sql: "SELECT COUNT(|) FROM users"
+    expect_completion:
+      contains:
+        - "DISTINCT"
+        - "id"
+        - "*"
+      min_count: 3
+
+  # CAST and CONVERT
+  - name: "type conversion functions"
+    description: "Should show type conversion functions"
+    sql: "SELECT | FROM users"
+    expect_completion:
+      contains:
+        - "CAST"
+        - "CONVERT"
+      min_count: 2
+
+  # JSON functions
+  - name: "json functions"
+    description: "Should show JSON functions"
+    sql: "SELECT | FROM logs"
+    expect_completion:
+      contains:
+        - "JSON_EXTRACT"
+        - "JSON_ARRAY"
+        - "JSON_OBJECT"
+      min_count: 3
+
+  # String aggregation
+  - name: "group_concat function"
+    description: "Should show GROUP_CONCAT"
+    sql: "SELECT |, COUNT(*) FROM users GROUP BY username"
+    expect_completion:
+      contains:
+        - "GROUP_CONCAT"
+      min_count: 1
+
+  # Window functions (MySQL 8.0+)
+  - name: "window functions"
+    description: "Should show window functions"
+    sql: "SELECT | FROM orders"
+    expect_completion:
+      contains:
+        - "ROW_NUMBER"
+        - "RANK"
+        - "DENSE_RANK"
+        - "LAG"
+        - "LEAD"
+      min_count: 5
+
+  # COALESCE with multiple args
+  - name: "coalesce arguments"
+    description: "Should show columns for COALESCE"
+    sql: "SELECT COALESCE(|, NULL, '') FROM users"
+    expect_completion:
+      contains:
+        - "email"
+        - "full_name"
+        - "phone"
+        - "username"
+      min_count: 5
+
+  # CASE expression
+  - name: "case expression"
+    description: "Should complete CASE expression"
+    sql: "SELECT CASE |"
+    expect_completion:
+      contains:
+        - "WHEN"
+      min_count: 1
+
+  # Date arithmetic
+  - name: "date arithmetic functions"
+    description: "Should show date calculation functions"
+    sql: "SELECT | FROM orders"
+    expect_completion:
+      contains:
+        - "DATE_ADD"
+        - "DATE_SUB"
+        - "TIMESTAMPADD"
+        - "TIMESTAMPDIFF"
+      min_count: 4
+
+  # String search functions
+  - name: "string search functions"
+    description: "Should show string search functions"
+    sql: "SELECT | FROM users"
+    expect_completion:
+      contains:
+        - "LOCATE"
+        - "POSITION"
+        - "INSTR"
+        - "STRCMP"
+      min_count: 4

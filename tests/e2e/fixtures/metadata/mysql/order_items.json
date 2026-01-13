@@ -1,0 +1,18 @@
+{
+  "table_name": "order_items",
+  "columns": [
+    {"name": "id", "type": "INT", "nullable": false, "key": "PRIMARY KEY", "extra": "AUTO_INCREMENT"},
+    {"name": "order_id", "type": "INT", "nullable": false, "key": "UNIQUE"},
+    {"name": "product_id", "type": "INT", "nullable": false, "key": "UNIQUE"},
+    {"name": "quantity", "type": "INT", "nullable": false, "key": null, "default": "1"},
+    {"name": "unit_price", "type": "DECIMAL(10, 2)", "nullable": false, "key": null},
+    {"name": "discount_percent", "type": "DECIMAL(5, 2)", "nullable": true, "key": null, "default": "0.00"},
+    {"name": "subtotal", "type": "DECIMAL(10, 2)", "nullable": true, "key": null, "extra": "GENERATED ALWAYS AS"},
+    {"name": "notes", "type": "TEXT", "nullable": true, "key": null}
+  ],
+  "foreign_keys": [
+    {"name": "fk_order_items_order_id", "columns": ["order_id"], "ref_table": "orders", "ref_columns": ["id"], "on_delete": "CASCADE", "on_update": "CASCADE"},
+    {"name": "fk_order_items_product_id", "columns": ["product_id"], "ref_table": "products", "ref_columns": ["id"], "on_delete": "RESTRICT", "on_update": "CASCADE"}
+  ],
+  "row_count": {"basic": 50, "edge_cases": 8, "total": 58}
+}

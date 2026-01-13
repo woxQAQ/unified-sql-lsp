@@ -1,0 +1,12 @@
+{
+  "table_name": "tags",
+  "columns": [
+    {"name": "id", "type": "INT", "nullable": false, "key": "PRIMARY KEY", "extra": "AUTO_INCREMENT"},
+    {"name": "name", "type": "VARCHAR(50)", "nullable": false, "key": "UNIQUE"},
+    {"name": "slug", "type": "VARCHAR(50)", "nullable": true, "key": "UNIQUE"},
+    {"name": "description", "type": "TEXT", "nullable": true, "key": null},
+    {"name": "color", "type": "VARCHAR(7)", "nullable": true, "key": null},
+    {"name": "created_at", "type": "TIMESTAMP", "nullable": true, "default": "CURRENT_TIMESTAMP"}
+  ],
+  "row_count": {"basic": 10, "edge_cases": 10, "total": 20}
+}

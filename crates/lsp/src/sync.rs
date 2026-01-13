@@ -90,9 +90,12 @@ impl DocumentSync {
     /// The resolved SQL dialect
     pub fn resolve_dialect(&self, document: &Document) -> Dialect {
         // 1. Check engine config
-        if let Some(config) = self.config.blocking_read().as_ref() {
-            debug!("Using dialect from engine config: {:?}", config.dialect);
-            return config.dialect;
+        // Note: We use try_read() to avoid blocking in async context
+        if let Ok(config_guard) = self.config.try_read() {
+            if let Some(config) = config_guard.as_ref() {
+                debug!("Using dialect from engine config: {:?}", config.dialect);
+                return config.dialect;
+            }
         }
 
         // 2. Check language_id

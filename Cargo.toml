@@ -10,9 +10,13 @@ license = "MIT OR Apache-2.0"
 repository = "https://github.com/vibe-kanban/unified-sql-lsp"
 
 [workspace.dependencies]
+# LSP types
+lsp-types = "0.95"
+
 # Serde for serialization
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
+serde_yaml = "0.9"
 
 # Error handling
 thiserror = "2.0"

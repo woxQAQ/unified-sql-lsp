@@ -1,0 +1,23 @@
+[package]
+name = "unified-sql-lsp-e2e-tests"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[workspace]
+# This is a separate workspace for E2E test case validation
+
+[[bin]]
+name = "validate"
+path = "src/bin/validate.rs"
+
+[dependencies]
+# Internal dependencies
+unified-sql-lsp-test-utils = { path = "../../crates/test-utils" }
+
+# Error handling
+anyhow = "1.0"
+
+[dev-dependencies]
+# Test utilities
+tokio-test = "0.4"

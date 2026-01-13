@@ -1,0 +1,358 @@
+# ============================================================================
+# Function Completion Tests
+# ============================================================================
+# Tests for function name completion and parameter completion
+
+---
+description: Function completion starting with C
+dialect: all
+input: |
+  SELECT C| FROM users
+expected: |
+  COUNT [Function] COUNT(*) - count rows
+  COALESCE [Function] COALESCE(val1, val2, ...) - return first non-null value
+  CAST [Function] CAST(expr AS type) - convert type
+  CONCAT [Function] CONCAT(str1, str2, ...) - concatenate strings
+  CURRENT_DATE [Function] CURRENT_DATE() - current date
+  CURRENT_TIME [Function] CURRENT_TIME() - current time
+  CURRENT_TIMESTAMP [Function] CURRENT_TIMESTAMP() - current timestamp
+  CEIL [Function] CEIL(num) - round up
+  CEILING [Function] CEILING(num) - round up
+options: |
+  contains: COUNT, COALESCE, CAST, CONCAT
+  min_items: 5
+
+---
+description: Aggregate function COUNT
+dialect: all
+input: |
+  SELECT COUNT(|) FROM users
+expected: |
+  * [Operator]
+  id [Field] users.id
+  username [Field] users.username
+  email [Field] users.email
+options: |
+  min_items: 3
+
+---
+description: Aggregate function SUM
+dialect: all
+input: |
+  SELECT SUM(|) FROM orders
+expected: |
+  total_amount [Field] orders.total_amount
+  id [Field] orders.id
+  user_id [Field] orders.user_id
+options: |
+  contains: total_amount
+
+---
+description: Aggregate function AVG
+dialect: all
+input: |
+  SELECT AVG(|) FROM orders
+expected: |
+  total_amount [Field] orders.total_amount
+  id [Field] orders.id
+options: |
+  contains: total_amount
+
+---
+description: Aggregate function MIN
+dialect: all
+input: |
+  SELECT MIN(|) FROM products
+expected: |
+  price [Field] products.price
+  cost [Field] products.cost
+  quantity_in_stock [Field] products.quantity_in_stock
+  id [Field] products.id
+options: |
+  contains: price, cost
+
+---
+description: Aggregate function MAX
+dialect: all
+input: |
+  SELECT MAX(|) FROM products
+expected: |
+  price [Field] products.price
+  cost [Field] products.cost
+  quantity_in_stock [Field] products.quantity_in_stock
+options: |
+  contains: price, cost
+
+---
+description: String function UPPER
+dialect: all
+input: |
+  SELECT UPPER(|) FROM users
+expected: |
+  username [Field] users.username
+  email [Field] users.email
+  full_name [Field] users.full_name
+options: |
+  min_items: 3
+
+---
+description: String function LOWER
+dialect: all
+input: |
+  SELECT LOWER(|) FROM users
+expected: |
+  username [Field] users.username
+  email [Field] users.email
+options: |
+  min_items: 3
+
+---
+description: String function SUBSTRING
+dialect: all
+input: |
+  SELECT SUBSTRING(|, 1, 5) FROM users
+expected: |
+  username [Field] users.username
+  email [Field] users.email
+  full_name [Field] users.full_name
+options: |
+  min_items: 3
+
+---
+description: String function TRIM
+dialect: all
+input: |
+  SELECT TRIM(|) FROM users
+expected: |
+  username [Field] users.username
+  email [Field] users.email
+options: |
+  min_items: 3
+
+---
+description: Date function NOW
+dialect: all
+input: |
+  SELECT | FROM users
+expected: |
+  NOW [Function]
+  COUNT [Function]
+  id [Field]
+  username [Field]
+options: |
+  contains: NOW, COUNT
+
+---
+description: Date function DATE_FORMAT
+dialect: mysql
+input: |
+  SELECT DATE_FORMAT(|, '%Y-%m-%d') FROM orders
+expected: |
+  order_date [Field] orders.order_date
+  created_at [Field] orders.created_at
+options: |
+  min_items: 2
+
+---
+description: Date function TO_CHAR (PostgreSQL)
+dialect: postgresql
+input: |
+  SELECT TO_CHAR(|, 'YYYY-MM-DD') FROM orders
+expected: |
+  order_date [Field] orders.order_date
+  created_at [Field] orders.created_at
+options: |
+  min_items: 2
+
+---
+description: Nested function completion
+dialect: all
+input: |
+  SELECT ROUND(SUM(|), 2) FROM orders
+expected: |
+  total_amount [Field] orders.total_amount
+options: |
+  contains: total_amount
+
+---
+description: Function in WHERE clause
+dialect: all
+input: |
+  SELECT * FROM users WHERE |(username) = 'test'
+expected: |
+  UPPER [Function]
+  LOWER [Function]
+  TRIM [Function]
+  username [Field]
+options: |
+  contains: UPPER, LOWER
+
+---
+description: COALESCE function parameters
+dialect: all
+input: |
+  SELECT COALESCE(|, NULL) FROM users
+expected: |
+  username [Field] users.username
+  email [Field] users.email
+  full_name [Field] users.full_name
+options: |
+  min_items: 3
+
+---
+description: CASE WHEN function
+dialect: all
+input: |
+  SELECT CASE WHEN | THEN 1 END FROM users
+expected: |
+  id [Field] users.id
+  username [Field] users.username
+  is_active [Field] users.is_active
+options: |
+  min_items: 3
+
+---
+description: Window function ROW_NUMBER
+dialect: all
+input: |
+  SELECT ROW_NUMBER() OVER (|) FROM users
+expected: |
+  ORDER [Keyword]
+  PARTITION [Keyword]
+options: |
+  contains: ORDER, PARTITION
+
+---
+description: Window function partition by
+dialect: all
+input: |
+  SELECT ROW_NUMBER() OVER (PARTITION BY |) FROM users
+expected: |
+  id [Field] users.id
+  username [Field] users.username
+  department [Field] users.department
+options: |
+  min_items: 3
+
+---
+description: Window function order by
+dialect: all
+input: |
+  SELECT ROW_NUMBER() OVER (ORDER BY |) FROM users
+expected: |
+  id [Field] users.id
+  created_at [Field] users.created_at
+  username [Field] users.username
+options: |
+  min_items: 3
+
+---
+description: Function completion starting with S
+dialect: all
+input: |
+  SELECT S| FROM users
+expected: |
+  SUM [Function] SUM(expr) - sum of values
+  SUBSTRING [Function] SUBSTRING(str, pos, len) - extract substring
+  SUBSTR [Function] SUBSTR(str, pos, len) - extract substring
+  SQRT [Function] SQRT(num) - square root
+  STR_TO_DATE [Function] STR_TO_DATE(str, format) - convert string to date
+options: |
+  contains: SUM, SUBSTRING, SQRT
+
+---
+description: Function completion starting with L
+dialect: all
+input: |
+  SELECT L| FROM users
+expected: |
+  LOWER [Function] LOWER(str) - convert to lowercase
+  LEFT [Function] LEFT(str, len) - left substring
+  LENGTH [Function] LENGTH(str) - string length
+  LN [Function] LN(num) - natural logarithm
+  LOG [Function] LOG(num) - logarithm
+options: |
+  contains: LOWER, LEFT, LENGTH
+
+---
+description: Math function ROUND
+dialect: all
+input: |
+  SELECT ROUND(|, 2) FROM products
+expected: |
+  price [Field] products.price
+  cost [Field] products.cost
+options: |
+  contains: price
+
+---
+description: Function with table qualified column
+dialect: all
+input: |
+  SELECT COUNT(u.|) FROM users u
+expected: |
+  id [Field] u.id
+  username [Field] u.username
+  email [Field] u.email
+options: |
+  min_items: 3
+
+---
+description: Function in JOIN condition
+dialect: all
+input: |
+  SELECT * FROM users u JOIN orders o ON |(u.id) = o.user_id
+expected: |
+  CAST [Function]
+  ABS [Function]
+  u.id [Field]
+options: |
+  min_items: 2
+
+---
+description: GROUP_CONCAT (MySQL)
+dialect: mysql
+input: |
+  SELECT | FROM users GROUP BY id
+expected: |
+  id [Field] users.id
+  username [Field] users.username
+  GROUP_CONCAT [Function] GROUP_CONCAT(expr) - concatenate values
+options: |
+  contains: GROUP_CONCAT
+
+---
+description: STRING_AGG (PostgreSQL)
+dialect: postgresql
+input: |
+  SELECT | FROM users GROUP BY id
+expected: |
+  id [Field] users.id
+  username [Field] users.username
+  STRING_AGG [Function] STRING_AGG(expr, delimiter) - concatenate values
+options: |
+  contains: STRING_AGG
+
+---
+description: DISTINCT aggregate function
+dialect: all
+input: |
+  SELECT COUNT(DISTINCT |) FROM orders
+expected: |
+  user_id [Field] orders.user_id
+  status [Field] orders.status
+  id [Field] orders.id
+options: |
+  contains: user_id, status
+
+---
+description: Function in ORDER BY
+dialect: all
+input: |
+  SELECT * FROM users ORDER BY |(username)
+expected: |
+  UPPER [Function]
+  LOWER [Function]
+  username [Field]
+options: |
+  contains: UPPER, LOWER

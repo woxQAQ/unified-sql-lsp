@@ -1,0 +1,136 @@
+name: "Basic diagnostics tests"
+description: "SQL syntax and semantic error detection"
+
+database:
+  dialect: "mysql"
+  connection_string: "mysql://test_user:test_password@127.0.0.1:3307/test_db"
+  schemas:
+    - "../../../tests/e2e/fixtures/schema/mysql/01_create_tables.sql"
+  data:
+    - "../../../tests/e2e/fixtures/data/mysql/02_insert_basic_data.sql"
+
+tests:
+  # Syntax errors
+  - name: "missing FROM clause"
+    description: "Should detect missing FROM clause"
+    sql: "SELECT * WHERE id = 1|"
+    expect_diagnostics:
+      error_count: 1
+      warning_count: 0
+
+  - name: "unterminated string"
+    description: "Should detect unterminated string literal"
+    sql: "SELECT * FROM users WHERE username = '|"
+    expect_diagnostics:
+      error_count: 1
+      warning_count: 0
+
+  - name: "missing comma between columns"
+    description: "Should detect missing comma"
+    sql: "SELECT id username FROM users|"
+    expect_diagnostics:
+      error_count: 1
+      warning_count: 0
+
+  - name: "unbalanced parentheses"
+    description: "Should detect unbalanced parentheses"
+    sql: "SELECT * FROM users WHERE (id = 1|"
+    expect_diagnostics:
+      error_count: 1
+      warning_count: 0
+
+  # Semantic errors
+  - name: "unknown table"
+    description: "Should detect non-existent table"
+    sql: "SELECT * FROM nonexistent_table|"
+    expect_diagnostics:
+      error_count: 1
+      warning_count: 0
+
+  - name: "unknown column"
+    description: "Should detect non-existent column"
+    sql: "SELECT nonexistent_column FROM users|"
+    expect_diagnostics:
+      error_count: 1
+      warning_count: 0
+
+  - name: "ambiguous column"
+    description: "Should detect ambiguous column reference"
+    sql: "SELECT * FROM users u JOIN orders o ON u.id = o.user_id WHERE id = 1|"
+    expect_diagnostics:
+      error_count: 1
+      warning_count: 0
+
+  - name: "column from wrong table"
+    description: "Should detect column from unrelated table"
+    sql: "SELECT u.order_date FROM users u|"
+    expect_diagnostics:
+      error_count: 1
+      warning_count: 0
+
+  # Type mismatches
+  - name: "type mismatch in comparison"
+    description: "Should detect type mismatch"
+    sql: "SELECT * FROM users WHERE username = 123|"
+    expect_diagnostics:
+      error_count: 1
+      warning_count: 0
+
+  - name: "invalid aggregate usage"
+    description: "Should detect invalid aggregate function usage"
+    sql: "SELECT id, COUNT(*) FROM users|"
+    expect_diagnostics:
+      error_count: 1
+      warning_count: 0
+
+  # Invalid function usage
+  - name: "unknown function"
+    description: "Should detect non-existent function"
+    sql: "SELECT UNKNOWN_FUNCTION(id) FROM users|"
+    expect_diagnostics:
+      error_count: 1
+      warning_count: 0
+
+  - name: "wrong function arguments"
+    description: "Should detect incorrect number of arguments"
+    sql: "SELECT CONCAT() FROM users|"
+    expect_diagnostics:
+      error_count: 1
+      warning_count: 0
+
+  # JOIN errors
+  - name: "missing ON clause"
+    description: "Should detect missing ON clause for JOIN"
+    sql: "SELECT * FROM users JOIN orders|"
+    expect_diagnostics:
+      error_count: 1
+      warning_count: 0
+
+  - name: "invalid join column"
+    description: "Should detect invalid column in JOIN ON"
+    sql: "SELECT * FROM users u JOIN orders o ON u.invalid_col = o.id|"
+    expect_diagnostics:
+      error_count: 1
+      warning_count: 0
+
+  # Valid SQL
+  - name: "valid query no errors"
+    description: "Valid query should have no diagnostics"
+    sql: "SELECT id, username FROM users WHERE is_active = TRUE|"
+    expect_diagnostics:
+      error_count: 0
+      warning_count: 0
+
+  - name: "valid join query"
+    description: "Valid JOIN should have no diagnostics"
+    sql: "SELECT u.username, o.order_date FROM users u JOIN orders o ON u.id = o.user_id|"
+    expect_diagnostics:
+      error_count: 0
+      warning_count: 0
+
+  - name: "valid subquery"
+    description: "Valid subquery should have no diagnostics"
+    sql: "SELECT * FROM users WHERE id IN (SELECT user_id FROM orders)|"
+    expect_diagnostics:
+      error_count: 0
+      warning_count: 0

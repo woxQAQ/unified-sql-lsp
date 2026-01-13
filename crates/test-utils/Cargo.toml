@@ -13,7 +13,10 @@ unified-sql-lsp-catalog = { path = "../catalog" }
 unified-sql-lsp-ir = { path = "../ir" }
 unified-sql-lsp-lowering = { path = "../lowering" }
 
+lsp-types = { workspace = true }
 async-trait = { workspace = true }
 tokio = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+serde_yaml = { workspace = true }
+thiserror = { workspace = true }

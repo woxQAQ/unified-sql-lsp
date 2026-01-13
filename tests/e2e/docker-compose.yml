@@ -1,0 +1,52 @@
+version: '3.8'
+
+services:
+  mysql:
+    image: mysql:5.7
+    container_name: unified-sql-lsp-mysql
+    ports:
+      - "3307:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: root_password
+      MYSQL_DATABASE: test_db
+      MYSQL_USER: test_user
+      MYSQL_PASSWORD: test_password
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-proot_password"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - sql_lsp_network
+
+  # PostgreSQL service (reserved for future use)
+  # postgresql:
+  #   image: postgres:12
+  #   container_name: unified-sql-lsp-postgresql
+  #   ports:
+  #     - "5433:5432"
+  #   environment:
+  #     POSTGRES_USER: test_user
+  #     POSTGRES_PASSWORD: test_password
+  #     POSTGRES_DB: test_db
+  #   volumes:
+  #     - postgres_data:/var/lib/postgresql/data
+  #   healthcheck:
+  #     test: ["CMD-SHELL", "pg_isready -U test_user"]
+  #     interval: 5s
+  #     timeout: 5s
+  #     retries: 5
+  #   networks:
+  #     - sql_lsp_network
+
+  # Reserved for additional database services
+
+volumes:
+  mysql_data:
+  # postgres_data:
+
+networks:
+  sql_lsp_network:
+    driver: bridge

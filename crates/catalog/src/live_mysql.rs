@@ -37,12 +37,12 @@
 //! ```
 
 use crate::error::{CatalogError, CatalogResult};
-use crate::metadata::{ColumnMetadata, DataType, FunctionMetadata, FunctionType, TableMetadata};
+use crate::metadata::{ColumnMetadata, DataType, FunctionMetadata, TableMetadata};
 use crate::r#trait::Catalog;
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use unified_sql_lsp_function_registry::FunctionRegistry;
+use unified_sql_lsp_function_registry::{FunctionRegistry, FunctionType};
 use unified_sql_lsp_ir::Dialect;
 
 #[cfg(feature = "mysql")]
@@ -352,6 +352,10 @@ impl Catalog for LiveMySQLCatalog {
             }).collect();
 
             return Ok(tables);
+        } else {
+            return Err(CatalogError::ConnectionFailed(
+                "Database pool not initialized".to_string()
+            ));
         }
 
         #[cfg(not(feature = "mysql"))]
@@ -412,6 +416,10 @@ impl Catalog for LiveMySQLCatalog {
             }).collect();
 
             return Ok(columns);
+        } else {
+            return Err(CatalogError::ConnectionFailed(
+                "Database pool not initialized".to_string()
+            ));
         }
 
         #[cfg(not(feature = "mysql"))]
@@ -428,7 +436,7 @@ impl Catalog for LiveMySQLCatalog {
     /// Returns a list of built-in MySQL functions and custom stored procedures/functions.
     async fn list_functions(&self) -> CatalogResult<Vec<FunctionMetadata>> {
         // Get builtin functions from registry
-        let all_functions = self.registry.get_functions(Dialect::MySQL);
+        let mut all_functions = self.registry.get_functions(Dialect::MySQL);
 
         #[cfg(feature = "mysql")]
         if let Some(pool) = &self.pool {
@@ -468,6 +476,7 @@ impl Catalog for LiveMySQLCatalog {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use unified_sql_lsp_ir::FunctionType;
 
     #[test]
     fn test_parse_mysql_varchar() {

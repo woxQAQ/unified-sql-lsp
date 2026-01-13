@@ -1,0 +1,208 @@
+name: "Keyword completion tests"
+description: "Context-aware SQL keyword suggestions"
+
+database:
+  dialect: "mysql"
+  connection_string: "mysql://test_user:test_password@127.0.0.1:3307/test_db"
+  schemas:
+    - "../../../tests/e2e/fixtures/schema/mysql/01_create_tables.sql"
+  data:
+    - "../../../tests/e2e/fixtures/data/mysql/02_insert_basic_data.sql"
+
+tests:
+  # Top-level keywords
+  - name: "statement keywords"
+    description: "Should show SQL statement keywords"
+    sql: "|"
+    expect_completion:
+      contains:
+        - "SELECT"
+        - "INSERT"
+        - "UPDATE"
+        - "DELETE"
+        - "CREATE"
+        - "DROP"
+        - "ALTER"
+        - "TRUNCATE"
+        - "WITH"
+      min_count: 9
+
+  # SELECT context
+  - name: "after SELECT keyword"
+    description: "Should show SELECT modifiers and columns"
+    sql: "SELECT | FROM users"
+    expect_completion:
+      contains:
+        - "DISTINCT"
+        - "*"
+        - "id"
+        - "username"
+      min_count: 5
+
+  # FROM context
+  - name: "after table name"
+    description: "Should show clauses after FROM"
+    sql: "SELECT * FROM users |"
+    expect_completion:
+      contains:
+        - "WHERE"
+        - "GROUP BY"
+        - "ORDER BY"
+        - "LIMIT"
+        - "JOIN"
+        - "LEFT JOIN"
+        - "INNER JOIN"
+      not_contains:
+        - "SELECT"
+        - "INSERT"
+        - "FROM"
+      min_count: 5
+
+  # WHERE context
+  - name: "after WHERE clause"
+    description: "Should show operators and clauses after WHERE"
+    sql: "SELECT * FROM users WHERE id = 1 |"
+    expect_completion:
+      contains:
+        - "AND"
+        - "OR"
+        - "GROUP BY"
+        - "ORDER BY"
+        - "LIMIT"
+      not_contains:
+        - "FROM"
+        - "WHERE"
+      min_count: 5
+
+  # JOIN context
+  - name: "after FROM keyword"
+    description: "Should show JOIN variations"
+    sql: "SELECT * FROM users |"
+    expect_completion:
+      contains:
+        - "JOIN"
+        - "LEFT JOIN"
+        - "RIGHT JOIN"
+        - "INNER JOIN"
+        - "CROSS JOIN"
+        - "STRAIGHT_JOIN"
+      min_count: 4
+
+  # ORDER BY context
+  - name: "after ORDER BY"
+    description: "Should show columns and sort directions"
+    sql: "SELECT * FROM users ORDER BY |"
+    expect_completion:
+      contains:
+        - "id"
+        - "username"
+        - "ASC"
+        - "DESC"
+      min_count: 5
+
+  # GROUP BY context
+  - name: "after GROUP BY"
+    description: "Should show columns and HAVING"
+    sql: "SELECT * FROM users GROUP BY |"
+    expect_completion:
+      contains:
+        - "id"
+        - "username"
+        - "HAVING"
+      min_count: 5
+
+  # LIMIT context
+  - name: "after LIMIT"
+    description: "Should show numbers and OFFSET"
+    sql: "SELECT * FROM users LIMIT |"
+    expect_completion:
+      contains:
+        - "10"
+        - "100"
+        - "OFFSET"
+      min_count: 2
+
+  # CREATE context
+  - name: "after CREATE"
+    description: "Should show creatable objects"
+    sql: "CREATE |"
+    expect_completion:
+      contains:
+        - "TABLE"
+        - "INDEX"
+        - "VIEW"
+        - "DATABASE"
+        - "SCHEMA"
+        - "TRIGGER"
+      min_count: 5
+
+  # DROP context
+  - name: "after DROP"
+    description: "Should show droppable objects"
+    sql: "DROP |"
+    expect_completion:
+      contains:
+        - "TABLE"
+        - "INDEX"
+        - "VIEW"
+        - "DATABASE"
+      min_count: 4
+
+  # ALTER context
+  - name: "after ALTER"
+    description: "Should show alterable objects"
+    sql: "ALTER |"
+    expect_completion:
+      contains:
+        - "TABLE"
+        - "VIEW"
+        - "DATABASE"
+      min_count: 3
+
+  # INSERT context
+  - name: "after INSERT"
+    description: "Should show INTO after INSERT"
+    sql: "INSERT |"
+    expect_completion:
+      contains:
+        - "INTO"
+      min_count: 1
+
+  # UPDATE context
+  - name: "after UPDATE"
+    description: "Should show tables after UPDATE"
+    sql: "UPDATE |"
+    expect_completion:
+      contains:
+        - "users"
+        - "orders"
+      min_count: 2
+
+  # DELETE context
+  - name: "after DELETE"
+    description: "Should show FROM after DELETE"
+    sql: "DELETE |"
+    expect_completion:
+      contains:
+        - "FROM"
+      min_count: 1
+
+  # HAVING context
+  - name: "after HAVING"
+    description: "Should show columns for HAVING"
+    sql: "SELECT category, COUNT(*) FROM products GROUP BY category HAVING |"
+    expect_completion:
+      contains:
+        - "COUNT"
+        - "category"
+      min_count: 2
+
+  # UNION context
+  - name: "after UNION"
+    description: "Should show UNION modifiers"
+    sql: "SELECT * FROM users UNION |"
+    expect_completion:
+      contains:
+        - "ALL"
+        - "SELECT"
+      min_count: 2

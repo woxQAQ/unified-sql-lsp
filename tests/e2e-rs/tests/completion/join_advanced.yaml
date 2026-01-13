@@ -1,0 +1,159 @@
+name: "Advanced JOIN completion tests"
+description: "Complex JOIN scenarios with PK/FK suggestions"
+
+database:
+  dialect: "mysql"
+  connection_string: "mysql://test_user:test_password@127.0.0.1:3307/test_db"
+  schemas:
+    - "../../../tests/e2e/fixtures/schema/mysql/01_create_tables.sql"
+  data:
+    - "../../../tests/e2e/fixtures/data/mysql/02_insert_basic_data.sql"
+
+tests:
+  # Primary key detection
+  - name: "pk priority in join"
+    description: "Should prioritize tables with PK relationships"
+    sql: "SELECT * FROM orders JOIN |"
+    expect_completion:
+      contains:
+        - "users"
+      min_count: 1
+
+  # Foreign key suggestions
+  - name: "fk-based join targets"
+    description: "Should suggest tables related by FK"
+    sql: "SELECT * FROM users JOIN |"
+    expect_completion:
+      contains:
+        - "orders"
+        - "posts"
+      min_count: 2
+
+  # Self-referencing joins
+  - name: "self-referencing table"
+    description: "Should support self-joins"
+    sql: "SELECT * FROM employees e1 JOIN employees e2 ON |"
+    expect_completion:
+      contains:
+        - "e1.id"
+        - "e2.manager_id"
+      min_count: 2
+
+  # Multi-table JOIN order
+  - name: "third table in chain"
+    description: "Should suggest tables in logical join order"
+    sql: "SELECT * FROM users u JOIN orders o ON u.id = o.user_id JOIN |"
+    expect_completion:
+      contains:
+        - "order_items"
+        - "products"
+      min_count: 2
+
+  # JOIN column suggestions
+  - name: "join on pk column"
+    description: "Should suggest FK columns in ON clause"
+    sql: "SELECT * FROM orders o JOIN users u ON o.|"
+    expect_completion:
+      contains:
+        - "user_id"
+        - "id"
+        - "order_date"
+      min_count: 5
+
+  # Multiple join conditions
+  - name: "and in join condition"
+    description: "Should show columns for additional join conditions"
+    sql: "SELECT * FROM orders o JOIN users u ON o.user_id = u.id AND |"
+    expect_completion:
+      contains:
+        - "o.status"
+        - "u.is_active"
+        - "o.total_amount"
+      min_count: 5
+
+  # Different JOIN types
+  - name: "left join targets"
+    description: "Should suggest tables for LEFT JOIN"
+    sql: "SELECT * FROM orders LEFT JOIN |"
+    expect_completion:
+      contains:
+        - "users"
+        - "products"
+      min_count: 2
+
+  - name: "right join targets"
+    description: "Should suggest tables for RIGHT JOIN"
+    sql: "SELECT * FROM order_items RIGHT JOIN |"
+    expect_completion:
+      contains:
+        - "orders"
+        - "products"
+      min_count: 1
+
+  - name: "inner join targets"
+    description: "Should suggest tables for INNER JOIN"
+    sql: "SELECT * FROM orders INNER JOIN |"
+    expect_completion:
+      contains:
+        - "users"
+      min_count: 1
+
+  # JOIN with USING
+  - name: "using clause completion"
+    description: "Should suggest common columns for USING"
+    sql: "SELECT * FROM orders JOIN users USING (|"
+    expect_completion:
+      contains:
+        - "user_id"
+      min_count: 1
+
+  # Complex multi-join
+  - name: "four table join"
+    description: "Should handle complex multi-table joins"
+    sql: "SELECT * FROM users u JOIN orders o ON u.id = o.user_id JOIN order_items oi ON o.id = oi.order_id JOIN |"
+    expect_completion:
+      contains:
+        - "products"
+      min_count: 1
+
+  # JOIN with subquery
+  - name: "join with subquery"
+    description: "Should show columns in subquery JOIN"
+    sql: "SELECT * FROM users u JOIN (SELECT | FROM orders) AS o ON u.id = o.user_id"
+    expect_completion:
+      contains:
+        - "id"
+        - "user_id"
+        - "total_amount"
+      min_count: 5
+
+  # Many-to-many relationship
+  - name: "many-to-many join"
+    description: "Should handle junction table joins"
+    sql: "SELECT * FROM posts JOIN |"
+    expect_completion:
+      contains:
+        - "post_tags"
+        - "users"
+      min_count: 2
+
+  # JOIN ON qualified columns
+  - name: "qualified columns in ON"
+    description: "Should show qualified columns in ON clause"
+    sql: "SELECT * FROM users u JOIN orders o ON |"
+    expect_completion:
+      contains:
+        - "u.id"
+        - "o.user_id"
+        - "u.username"
+        - "o.order_date"
+      min_count: 10
+
+  # JOIN after WHERE
+  - name: "join suggestion availability"
+    description: "Should suggest all possible JOIN targets"
+    sql: "SELECT * FROM users u WHERE u.id = 1 JOIN |"
+    expect_completion:
+      contains:
+        - "orders"
+      min_count: 1

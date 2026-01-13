@@ -1,0 +1,35 @@
+name: "JOIN completion tests"
+description: "Test table and column completion in JOIN clauses"
+
+database:
+  dialect: "mysql"
+  connection_string: "mysql://test_user:test_password@127.0.0.1:3307/test_db"
+  schemas:
+    - "../../../tests/e2e/fixtures/schema/mysql/01_create_tables.sql"
+  data:
+    - "../../../tests/e2e/fixtures/data/mysql/02_insert_basic_data.sql"
+
+tests:
+  - name: "table completion after JOIN"
+    description: "Should suggest all tables for JOIN"
+    sql: "SELECT * FROM users JOIN |"
+    expect_completion:
+      contains:
+        - "orders"
+        - "products"
+        - "order_items"
+      not_contains:
+        - "users"
+      min_count: 3
+
+  - name: "column completion in ON clause"
+    description: "Should suggest columns from left table in JOIN ON"
+    sql: "SELECT * FROM users u JOIN orders o ON u.|"
+    expect_completion:
+      contains:
+        - "id"
+        - "username"
+        - "email"
+      not_contains:
+        - "o.id"
+      min_count: 5
