@@ -62,7 +62,7 @@
 //!
 //! ```rust,no_run
 //! use unified_sql_lsp_lsp::LspBackend;
-//! use tower_lsp::Server;
+//! use tower_lsp::{LspService, Server};
 //!
 //! #[tokio::main]
 //! async fn main() {
@@ -70,17 +70,10 @@
 //!     let stdout = tokio::io::stdout();
 //!
 //!     // Create the LSP service
-//!     let (service, socket) = Server::new(stdin, stdout);
-//!
-//!     // Create and run the backend
-//!     let backend = LspBackend::new(service.client());
-//!     let serve = service.serve(backend);
+//!     let (service, socket) = LspService::new(LspBackend::new);
 //!
 //!     // Run the server
-//!     tokio::select! {
-//!         _ = serve => {},
-//!         _ = socket => {},
-//!     }
+//!     Server::new(stdin, stdout, socket).serve(service).await;
 //! }
 //! ```
 //!
@@ -168,7 +161,6 @@ pub mod backend;
 pub mod catalog_manager;
 pub mod completion;
 pub mod config;
-pub mod cst_utils;
 pub mod definition;
 pub mod diagnostic;
 pub mod document;

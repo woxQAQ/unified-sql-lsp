@@ -1845,6 +1845,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "unified-sql-lsp-context"
+version = "0.1.0"
+dependencies = [
+ "lsp-types 0.95.1",
+ "serde",
+ "thiserror",
+ "tree-sitter",
+ "unified-sql-grammar",
+ "unified-sql-lsp-ir",
+]
+
+[[package]]
 name = "unified-sql-lsp-function-registry"
 version = "0.1.0"
 dependencies = [
@@ -1891,6 +1903,7 @@ dependencies = [
  "tree-sitter",
  "unified-sql-grammar",
  "unified-sql-lsp-catalog",
+ "unified-sql-lsp-context",
  "unified-sql-lsp-ir",
  "unified-sql-lsp-lowering",
  "unified-sql-lsp-semantic",

@@ -103,4 +103,3 @@ pub trait Catalog: Send + Sync {
     /// ```
     async fn list_functions(&self) -> CatalogResult<Vec<FunctionMetadata>>;
 }
-

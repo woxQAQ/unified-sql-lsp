@@ -163,11 +163,13 @@ impl LoweringContext {
     pub fn enter_recursive_context(&mut self) -> Result<(), LoweringError> {
         self.recursion_depth += 1;
         if self.recursion_depth > self.max_recursion_depth {
-            Err(LoweringError::RecursionLimitExceeded {
+            let error = LoweringError::RecursionLimitExceeded {
                 context: "query lowering".to_string(),
                 depth: self.recursion_depth,
                 limit: self.max_recursion_depth,
-            })
+            };
+            self.add_error(error.clone());
+            Err(error)
         } else {
             Ok(())
         }
@@ -198,14 +200,17 @@ impl LoweringContext {
 /// # Returns
 ///
 /// A SourceLocation with 1-based line and column numbers
-pub fn source_location_from_position(byte_offset: usize, row: usize, column: usize) -> SourceLocation {
+pub fn source_location_from_position(
+    byte_offset: usize,
+    row: usize,
+    column: usize,
+) -> SourceLocation {
     SourceLocation {
         byte_offset,
-        line: row + 1,  // Convert to 1-based
-        column: column + 1,  // Convert to 1-based
+        line: row + 1,      // Convert to 1-based
+        column: column + 1, // Convert to 1-based
     }
 }
-
 
 #[cfg(test)]
 mod tests {

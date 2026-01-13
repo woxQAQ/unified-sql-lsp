@@ -10,6 +10,6 @@
 
 // Re-export all metadata types from the ir crate
 pub use unified_sql_lsp_ir::{
-    ColumnMetadata, DataType, FunctionMetadata, FunctionParameter, FunctionType,
-    TableMetadata, TableReference, TableType,
+    ColumnMetadata, DataType, FunctionMetadata, FunctionParameter, FunctionType, TableMetadata,
+    TableReference, TableType,
 };

@@ -11,7 +11,8 @@ description = "Multi-dialect SQL grammar for tree-sitter supporting MySQL, Postg
 cc = "1.0"
 
 [dependencies]
-tree-sitter = "0.26"
+# tree-sitter = "0.26"
+tree-sitter = { workspace = true }
 unified-sql-lsp-ir = { path = "../ir" }
 
 # The grammar files are at src/grammar/

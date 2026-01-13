@@ -14,11 +14,10 @@ use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 use unified_sql_lsp_catalog::{Catalog, FunctionMetadata, FunctionType};
-use unified_sql_lsp_ir::{CommonTableExpr, Dialect};
 use unified_sql_lsp_ir::{
-    ColumnRef, Expr, Literal, OrderBy, Query, SelectItem, SelectStatement, SetOp,
-    TableRef,
+    ColumnRef, Expr, Literal, OrderBy, Query, SelectItem, SelectStatement, SetOp, TableRef,
 };
+use unified_sql_lsp_ir::{CommonTableExpr, Dialect};
 
 use crate::error::{SemanticError, SemanticResult};
 use crate::resolution::ColumnResolver;
@@ -145,13 +144,16 @@ impl SemanticAnalyzer {
         let root_scope = match &query.body {
             SetOp::Select(select) => {
                 // Build scope with CTE scope as parent
-                let scope_id = self.scope_manager.create_scope(ScopeType::Query, cte_scope_id);
+                let scope_id = self
+                    .scope_manager
+                    .create_scope(ScopeType::Query, cte_scope_id);
                 self.populate_query_scope(select, scope_id)?;
                 scope_id
             }
             _ => {
                 // Handle UNION, INTERSECT, EXCEPT
-                let (scope_id, _columns) = self.analyze_set_operation_recursive(&query.body, cte_scope_id)?;
+                let (scope_id, _columns) =
+                    self.analyze_set_operation_recursive(&query.body, cte_scope_id)?;
                 scope_id
             }
         };
@@ -305,9 +307,8 @@ impl SemanticAnalyzer {
         let mut table_names = Vec::new();
 
         // Collect CTE names to filter them out later
-        let cte_names: std::collections::HashSet<String> = query.ctes.iter()
-            .map(|cte| cte.name.clone())
-            .collect();
+        let cte_names: std::collections::HashSet<String> =
+            query.ctes.iter().map(|cte| cte.name.clone()).collect();
 
         match &query.body {
             SetOp::Select(select) => {
@@ -407,7 +408,11 @@ impl SemanticAnalyzer {
     }
 
     /// Populate a query scope with tables and validate clauses
-    fn populate_query_scope(&mut self, select: &SelectStatement, scope_id: usize) -> SemanticResult<()> {
+    fn populate_query_scope(
+        &mut self,
+        select: &SelectStatement,
+        scope_id: usize,
+    ) -> SemanticResult<()> {
         // Process FROM clause tables
         for table_ref in &select.from {
             self.process_table_ref(table_ref, scope_id)?;
@@ -503,7 +508,13 @@ impl SemanticAnalyzer {
                 self.validate_expr(expr, scope_id)?;
                 Ok(())
             }
-            Expr::Function { name, args, filter, over, .. } => {
+            Expr::Function {
+                name,
+                args,
+                filter,
+                over,
+                ..
+            } => {
                 // Validate function exists in catalog
                 self.validate_function_call(name, args, filter, over, scope_id)?;
                 Ok(())
@@ -599,9 +610,7 @@ impl SemanticAnalyzer {
         let actual_args = args.len();
 
         // Some functions like COUNT(*) accept variable arguments
-        let is_variadic = func_metadata
-            .name
-            .eq_ignore_ascii_case("COUNT")
+        let is_variadic = func_metadata.name.eq_ignore_ascii_case("COUNT")
             || func_metadata.name.eq_ignore_ascii_case("GROUP_CONCAT")
             || func_metadata.name.eq_ignore_ascii_case("STRING_AGG")
             || func_metadata.name.eq_ignore_ascii_case("ARRAY_AGG");
@@ -983,7 +992,9 @@ impl SemanticAnalyzer {
         let mut cte_map = HashMap::new();
 
         // Create CTE scope (will be parent of main query scope)
-        let cte_scope_id = self.scope_manager.create_scope(ScopeType::CTE, parent_scope_id);
+        let cte_scope_id = self
+            .scope_manager
+            .create_scope(ScopeType::CTE, parent_scope_id);
 
         // Process CTEs in declaration order
         for cte in ctes {
@@ -1082,23 +1093,19 @@ impl SemanticAnalyzer {
                         let data_type = self.infer_expr_type(expr, cte_scope_id)?;
 
                         columns.push(ColumnSymbol::new(
-                            col_name,
-                            data_type,
-                            &cte.name, // Table name is the CTE name
+                            col_name, data_type, &cte.name, // Table name is the CTE name
                         ));
                     }
                     SelectItem::UnnamedExpr(expr) => {
                         // No alias, generate column name
-                        let col_name = self.extract_column_name(expr).unwrap_or(format!("col_{}", i + 1));
+                        let col_name = self
+                            .extract_column_name(expr)
+                            .unwrap_or(format!("col_{}", i + 1));
 
                         // Infer data type from expression
                         let data_type = self.infer_expr_type(expr, cte_scope_id)?;
 
-                        columns.push(ColumnSymbol::new(
-                            col_name,
-                            data_type,
-                            &cte.name,
-                        ));
+                        columns.push(ColumnSymbol::new(col_name, data_type, &cte.name));
                     }
                     SelectItem::Wildcard | SelectItem::QualifiedWildcard(_) => {
                         // Expand wildcards
@@ -1111,7 +1118,9 @@ impl SemanticAnalyzer {
                                     columns.push(ColumnSymbol::new(col_name, data_type, &cte.name));
                                 }
                                 SelectItem::UnnamedExpr(expr) => {
-                                    let col_name = self.extract_column_name(&expr).unwrap_or("col".to_string());
+                                    let col_name = self
+                                        .extract_column_name(&expr)
+                                        .unwrap_or("col".to_string());
                                     let data_type = self.infer_expr_type(&expr, cte_scope_id)?;
                                     columns.push(ColumnSymbol::new(col_name, data_type, &cte.name));
                                 }
@@ -1150,7 +1159,12 @@ impl SemanticAnalyzer {
         let referenced_ctes: Vec<String> = ctes
             .iter()
             .filter(|cte| cte.name != current_cte)
-            .filter(|cte| self.query_references_cte(&ctes.iter().find(|c| c.name == current_cte).unwrap().query, &cte.name))
+            .filter(|cte| {
+                self.query_references_cte(
+                    &ctes.iter().find(|c| c.name == current_cte).unwrap().query,
+                    &cte.name,
+                )
+            })
             .map(|cte| cte.name.clone())
             .collect();
 
@@ -1161,7 +1175,10 @@ impl SemanticAnalyzer {
                 // Cycle detected
                 let cycle_path: Vec<String> = rec_stack.iter().cloned().collect();
                 let cycle_str = cycle_path.join(" → ");
-                return Err(SemanticError::CircularCteDependency(format!("{} → {}", cycle_str, ref_cte)));
+                return Err(SemanticError::CircularCteDependency(format!(
+                    "{} → {}",
+                    cycle_str, ref_cte
+                )));
             }
         }
 
@@ -1193,7 +1210,8 @@ impl SemanticAnalyzer {
             SetOp::Union { left, right, .. }
             | SetOp::Intersect { left, right, .. }
             | SetOp::Except { left, right, .. } => {
-                self.query_references_cte(left, cte_name) || self.query_references_cte(right, cte_name)
+                self.query_references_cte(left, cte_name)
+                    || self.query_references_cte(right, cte_name)
             }
         }
     }
@@ -1225,8 +1243,10 @@ impl SemanticAnalyzer {
             }
             SetOp::Union { left, right, .. } => {
                 // Recursive case: analyze both sides
-                let (_left_id, left_cols) = self.analyze_set_operation_recursive(&left.body, parent_id)?;
-                let (_right_id, right_cols) = self.analyze_set_operation_recursive(&right.body, parent_id)?;
+                let (_left_id, left_cols) =
+                    self.analyze_set_operation_recursive(&left.body, parent_id)?;
+                let (_right_id, right_cols) =
+                    self.analyze_set_operation_recursive(&right.body, parent_id)?;
 
                 // Validate column count matches
                 if left_cols.len() != right_cols.len() {
@@ -1242,8 +1262,10 @@ impl SemanticAnalyzer {
             }
             SetOp::Intersect { left, right, .. } => {
                 // Same logic as UNION
-                let (_left_id, left_cols) = self.analyze_set_operation_recursive(&left.body, parent_id)?;
-                let (_right_id, right_cols) = self.analyze_set_operation_recursive(&right.body, parent_id)?;
+                let (_left_id, left_cols) =
+                    self.analyze_set_operation_recursive(&left.body, parent_id)?;
+                let (_right_id, right_cols) =
+                    self.analyze_set_operation_recursive(&right.body, parent_id)?;
 
                 if left_cols.len() != right_cols.len() {
                     return Err(SemanticError::SetOperationColumnCountMismatch {
@@ -1257,8 +1279,10 @@ impl SemanticAnalyzer {
             }
             SetOp::Except { left, right, .. } => {
                 // Same logic as UNION and INTERSECT
-                let (_left_id, left_cols) = self.analyze_set_operation_recursive(&left.body, parent_id)?;
-                let (_right_id, right_cols) = self.analyze_set_operation_recursive(&right.body, parent_id)?;
+                let (_left_id, left_cols) =
+                    self.analyze_set_operation_recursive(&left.body, parent_id)?;
+                let (_right_id, right_cols) =
+                    self.analyze_set_operation_recursive(&right.body, parent_id)?;
 
                 if left_cols.len() != right_cols.len() {
                     return Err(SemanticError::SetOperationColumnCountMismatch {
@@ -1307,7 +1331,9 @@ impl SemanticAnalyzer {
                     columns.push(ColumnSymbol::new(col_name, data_type, ""));
                 }
                 SelectItem::UnnamedExpr(expr) => {
-                    let col_name = self.extract_column_name(expr).unwrap_or(format!("col_{}", i + 1));
+                    let col_name = self
+                        .extract_column_name(expr)
+                        .unwrap_or(format!("col_{}", i + 1));
                     let data_type = self.infer_expr_type(expr, scope_id)?;
                     columns.push(ColumnSymbol::new(col_name, data_type, ""));
                 }
@@ -1322,7 +1348,8 @@ impl SemanticAnalyzer {
                                 columns.push(ColumnSymbol::new(col_name, data_type, ""));
                             }
                             SelectItem::UnnamedExpr(expr) => {
-                                let col_name = self.extract_column_name(&expr).unwrap_or("col".to_string());
+                                let col_name =
+                                    self.extract_column_name(&expr).unwrap_or("col".to_string());
                                 let data_type = self.infer_expr_type(&expr, scope_id)?;
                                 columns.push(ColumnSymbol::new(col_name, data_type, ""));
                             }
@@ -1357,7 +1384,11 @@ impl SemanticAnalyzer {
     /// - Functions return type from metadata
     /// - CAST expressions return the target type
     /// - CASE expressions return the most common type of all branches
-    fn infer_expr_type(&self, expr: &Expr, scope_id: usize) -> SemanticResult<unified_sql_lsp_catalog::DataType> {
+    fn infer_expr_type(
+        &self,
+        expr: &Expr,
+        scope_id: usize,
+    ) -> SemanticResult<unified_sql_lsp_catalog::DataType> {
         use unified_sql_lsp_catalog::DataType;
         use unified_sql_lsp_ir::Literal;
 
@@ -1370,12 +1401,10 @@ impl SemanticAnalyzer {
             Expr::Literal(Literal::Null) => Ok(DataType::Other("NULL".to_string())),
 
             // Column reference - resolve from symbol table
-            Expr::Column(col_ref) => {
-                match self.resolve_column(col_ref, scope_id) {
-                    Ok((_table, column)) => Ok(column.data_type.clone()),
-                    Err(_) => Ok(DataType::Other("UNKNOWN".to_string())),
-                }
-            }
+            Expr::Column(col_ref) => match self.resolve_column(col_ref, scope_id) {
+                Ok((_table, column)) => Ok(column.data_type.clone()),
+                Err(_) => Ok(DataType::Other("UNKNOWN".to_string())),
+            },
 
             // Binary operations
             Expr::BinaryOp { left, op, right } => {
@@ -1396,17 +1425,17 @@ impl SemanticAnalyzer {
             }
 
             // Function calls
-            Expr::Function { name, args, .. } => {
-                self.infer_function_type(name, args, scope_id)
-            }
+            Expr::Function { name, args, .. } => self.infer_function_type(name, args, scope_id),
 
             // CAST expression
-            Expr::Cast { type_name, .. } => {
-                self.parse_data_type_from_string(type_name)
-            }
+            Expr::Cast { type_name, .. } => self.parse_data_type_from_string(type_name),
 
             // CASE expression - return most common type
-            Expr::Case { results, else_result, .. } => {
+            Expr::Case {
+                results,
+                else_result,
+                ..
+            } => {
                 let mut types: Vec<DataType> = results
                     .iter()
                     .filter_map(|r| self.infer_expr_type(r, scope_id).ok())
@@ -1460,9 +1489,12 @@ impl SemanticAnalyzer {
             }
 
             // Comparison operations - always return Boolean
-            BinaryOp::Eq | BinaryOp::NotEq | BinaryOp::Lt | BinaryOp::LtEq | BinaryOp::Gt | BinaryOp::GtEq => {
-                Ok(DataType::Boolean)
-            }
+            BinaryOp::Eq
+            | BinaryOp::NotEq
+            | BinaryOp::Lt
+            | BinaryOp::LtEq
+            | BinaryOp::Gt
+            | BinaryOp::GtEq => Ok(DataType::Boolean),
 
             // Logical operations - always return Boolean
             BinaryOp::And | BinaryOp::Or => Ok(DataType::Boolean),
@@ -1493,7 +1525,11 @@ impl SemanticAnalyzer {
         let name_lower = name.to_lowercase();
 
         // Try to find function metadata in cache
-        if let Some(func) = self.function_cache.iter().find(|f| f.name.eq_ignore_ascii_case(name)) {
+        if let Some(func) = self
+            .function_cache
+            .iter()
+            .find(|f| f.name.eq_ignore_ascii_case(name))
+        {
             return Ok(func.return_type.clone());
         }
 
@@ -1525,7 +1561,10 @@ impl SemanticAnalyzer {
     }
 
     /// Parse data type from CAST string
-    fn parse_data_type_from_string(&self, type_name: &str) -> SemanticResult<unified_sql_lsp_catalog::DataType> {
+    fn parse_data_type_from_string(
+        &self,
+        type_name: &str,
+    ) -> SemanticResult<unified_sql_lsp_catalog::DataType> {
         use unified_sql_lsp_catalog::DataType;
 
         let type_lower = type_name.to_lowercase();
@@ -1548,7 +1587,10 @@ impl SemanticAnalyzer {
     }
 
     /// Find the most common type from a list of types
-    fn find_most_common_type(&self, types: &[unified_sql_lsp_catalog::DataType]) -> unified_sql_lsp_catalog::DataType {
+    fn find_most_common_type(
+        &self,
+        types: &[unified_sql_lsp_catalog::DataType],
+    ) -> unified_sql_lsp_catalog::DataType {
         use unified_sql_lsp_catalog::DataType;
 
         if types.is_empty() {
@@ -2339,10 +2381,12 @@ mod tests {
             alias: None,
             joins: Vec::new(),
         });
-        cte_select.projection.push(SelectItem::UnnamedExpr(Expr::Column(ColumnRef {
-            table: None,
-            column: "user_id".to_string(),
-        })));
+        cte_select
+            .projection
+            .push(SelectItem::UnnamedExpr(Expr::Column(ColumnRef {
+                table: None,
+                column: "user_id".to_string(),
+            })));
 
         cte_query.body = SetOp::Select(Box::new(cte_select));
 
@@ -2366,7 +2410,11 @@ mod tests {
 
         // Should analyze successfully
         let result = analyzer.analyze_query(&query).await;
-        assert!(result.is_ok(), "CTE analysis should succeed: {:?}", result.err());
+        assert!(
+            result.is_ok(),
+            "CTE analysis should succeed: {:?}",
+            result.err()
+        );
     }
 
     #[tokio::test]
@@ -2384,14 +2432,18 @@ mod tests {
             alias: None,
             joins: Vec::new(),
         });
-        cte_select.projection.push(SelectItem::UnnamedExpr(Expr::Column(ColumnRef {
-            table: None,
-            column: "id".to_string(),
-        })));
-        cte_select.projection.push(SelectItem::UnnamedExpr(Expr::Column(ColumnRef {
-            table: None,
-            column: "name".to_string(),
-        })));
+        cte_select
+            .projection
+            .push(SelectItem::UnnamedExpr(Expr::Column(ColumnRef {
+                table: None,
+                column: "id".to_string(),
+            })));
+        cte_select
+            .projection
+            .push(SelectItem::UnnamedExpr(Expr::Column(ColumnRef {
+                table: None,
+                column: "name".to_string(),
+            })));
 
         cte_query.body = SetOp::Select(Box::new(cte_select));
 
@@ -2432,10 +2484,12 @@ mod tests {
             alias: None,
             joins: Vec::new(),
         });
-        cte1_select.projection.push(SelectItem::UnnamedExpr(Expr::Column(ColumnRef {
-            table: None,
-            column: "id".to_string(),
-        })));
+        cte1_select
+            .projection
+            .push(SelectItem::UnnamedExpr(Expr::Column(ColumnRef {
+                table: None,
+                column: "id".to_string(),
+            })));
         cte1_query.body = SetOp::Select(Box::new(cte1_select));
 
         query.ctes.push(CommonTableExpr {
@@ -2453,10 +2507,12 @@ mod tests {
             alias: None,
             joins: Vec::new(),
         });
-        cte2_select.projection.push(SelectItem::UnnamedExpr(Expr::Column(ColumnRef {
-            table: None,
-            column: "id".to_string(),
-        })));
+        cte2_select
+            .projection
+            .push(SelectItem::UnnamedExpr(Expr::Column(ColumnRef {
+                table: None,
+                column: "id".to_string(),
+            })));
         cte2_query.body = SetOp::Select(Box::new(cte2_select));
 
         query.ctes.push(CommonTableExpr {
@@ -2505,10 +2561,12 @@ mod tests {
             alias: None,
             joins: Vec::new(),
         });
-        cte_select.projection.push(SelectItem::UnnamedExpr(Expr::Column(ColumnRef {
-            table: None,
-            column: "id".to_string(),
-        })));
+        cte_select
+            .projection
+            .push(SelectItem::UnnamedExpr(Expr::Column(ColumnRef {
+                table: None,
+                column: "id".to_string(),
+            })));
 
         cte_query.body = SetOp::Select(Box::new(cte_select));
 
@@ -2532,7 +2590,10 @@ mod tests {
         let result = analyzer.analyze_query(&query).await;
         assert!(result.is_err(), "CTE column count mismatch should error");
 
-        if let Err(SemanticError::CteColumnCountMismatch { defined, returned, .. }) = result {
+        if let Err(SemanticError::CteColumnCountMismatch {
+            defined, returned, ..
+        }) = result
+        {
             assert_eq!(defined, 2);
             assert_eq!(returned, 1);
         } else {
@@ -2558,10 +2619,12 @@ mod tests {
             alias: None,
             joins: Vec::new(),
         });
-        left_select.projection.push(SelectItem::UnnamedExpr(Expr::Column(ColumnRef {
-            table: None,
-            column: "id".to_string(),
-        })));
+        left_select
+            .projection
+            .push(SelectItem::UnnamedExpr(Expr::Column(ColumnRef {
+                table: None,
+                column: "id".to_string(),
+            })));
 
         let mut right_select = SelectStatement::default();
         right_select.from.push(TableRef {
@@ -2569,10 +2632,12 @@ mod tests {
             alias: None,
             joins: Vec::new(),
         });
-        right_select.projection.push(SelectItem::UnnamedExpr(Expr::Column(ColumnRef {
-            table: None,
-            column: "id".to_string(),
-        })));
+        right_select
+            .projection
+            .push(SelectItem::UnnamedExpr(Expr::Column(ColumnRef {
+                table: None,
+                column: "id".to_string(),
+            })));
 
         query.body = SetOp::Union {
             left: Box::new(Query {
@@ -2612,14 +2677,18 @@ mod tests {
             alias: None,
             joins: Vec::new(),
         });
-        left_select.projection.push(SelectItem::UnnamedExpr(Expr::Column(ColumnRef {
-            table: None,
-            column: "id".to_string(),
-        })));
-        left_select.projection.push(SelectItem::UnnamedExpr(Expr::Column(ColumnRef {
-            table: None,
-            column: "name".to_string(),
-        })));
+        left_select
+            .projection
+            .push(SelectItem::UnnamedExpr(Expr::Column(ColumnRef {
+                table: None,
+                column: "id".to_string(),
+            })));
+        left_select
+            .projection
+            .push(SelectItem::UnnamedExpr(Expr::Column(ColumnRef {
+                table: None,
+                column: "name".to_string(),
+            })));
 
         let mut right_select = SelectStatement::default();
         right_select.from.push(TableRef {
@@ -2627,10 +2696,12 @@ mod tests {
             alias: None,
             joins: Vec::new(),
         });
-        right_select.projection.push(SelectItem::UnnamedExpr(Expr::Column(ColumnRef {
-            table: None,
-            column: "id".to_string(),
-        })));
+        right_select
+            .projection
+            .push(SelectItem::UnnamedExpr(Expr::Column(ColumnRef {
+                table: None,
+                column: "id".to_string(),
+            })));
 
         query.body = SetOp::Union {
             left: Box::new(Query {
@@ -2653,7 +2724,10 @@ mod tests {
         };
 
         let result = analyzer.analyze_query(&query).await;
-        assert!(result.is_err(), "UNION with column count mismatch should error");
+        assert!(
+            result.is_err(),
+            "UNION with column count mismatch should error"
+        );
 
         if let Err(SemanticError::SetOperationColumnCountMismatch { left, right }) = result {
             assert_eq!(left, 2);

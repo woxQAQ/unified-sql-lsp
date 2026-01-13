@@ -94,17 +94,16 @@ module.exports = {
 
   // Extend table_reference to support LATERAL
   table_reference: $ => choice(
+    seq($.table_name, /[Aa][Ss]/, $.alias),
     $.table_name,
-    seq($.table_name, optional($.alias)),
-    seq($.table_name, 'AS', $.alias),
     $.join_clause,
     // NEW: LATERAL derived tables
     seq(
-      'LATERAL',
+      /[Ll][Aa][Tt][Ee][Rr][Aa][Ll]/,
       '(',
       $.select_statement,
       ')',
-      optional('AS'),
+      optional(/[Aa][Ss]/),
       optional($.alias)
     )
   ),

@@ -122,11 +122,13 @@ pub fn extract_table_names(query: &str) -> Vec<String> {
     // Simple FROM clause extraction (not exhaustive)
     if let Some(from_idx) = upper.find("FROM") {
         let after_from = &query[from_idx + 4..];
-        let rest: String = after_from
+        // Trim leading whitespace first
+        let trimmed = after_from.trim_start();
+        // Then take only alphanumeric/underscore/dot characters for the table name
+        let table_name: String = trimmed
             .chars()
-            .take_while(|c| c.is_whitespace() || c.is_alphanumeric() || *c == '_' || *c == '.')
+            .take_while(|c| c.is_alphanumeric() || *c == '_' || *c == '.')
             .collect();
-        let table_name = rest.trim().to_string();
         if !table_name.is_empty() {
             tables.push(table_name);
         }

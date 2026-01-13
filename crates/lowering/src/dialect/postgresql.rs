@@ -24,11 +24,11 @@
 use crate::dialect::DialectLoweringBase;
 use crate::{CstNode, Lowering, LoweringContext, LoweringError, LoweringResult};
 use unified_sql_lsp_ir::expr::{BinaryOp, ColumnRef, Literal, UnaryOp};
+use unified_sql_lsp_ir::query::{OrderBy, SelectItem, SelectStatement, SortDirection, TableRef};
 use unified_sql_lsp_ir::{
     Assignment, DeleteStatement, InsertSource, InsertStatement, Join, JoinCondition, JoinType,
     UpdateStatement, WindowFrame, WindowFrameBound, WindowFrameUnits, WindowSpec,
 };
-use unified_sql_lsp_ir::query::{OrderBy, SelectItem, SelectStatement, SortDirection, TableRef};
 use unified_sql_lsp_ir::{Dialect, Expr, Query};
 
 /// PostgreSQL CST → IR lowering implementation
@@ -358,7 +358,11 @@ impl PostgreSQLLowering {
     /// Handle DISTINCT ON clause (PostgreSQL-specific)
     ///
     /// Parses the DISTINCT ON clause and returns a list of expressions.
-    fn handle_distinct_on<N>(&self, ctx: &mut LoweringContext, node: &N) -> LoweringResult<Vec<unified_sql_lsp_ir::Expr>>
+    fn handle_distinct_on<N>(
+        &self,
+        ctx: &mut LoweringContext,
+        node: &N,
+    ) -> LoweringResult<Vec<unified_sql_lsp_ir::Expr>>
     where
         N: CstNode,
     {
@@ -386,7 +390,11 @@ impl PostgreSQLLowering {
     /// Handle RETURNING clause (PostgreSQL-specific)
     ///
     /// Parses the RETURNING clause and returns a list of SelectItems.
-    fn handle_returning_clause<N>(&self, ctx: &mut LoweringContext, node: &N) -> LoweringResult<Vec<SelectItem>>
+    fn handle_returning_clause<N>(
+        &self,
+        ctx: &mut LoweringContext,
+        node: &N,
+    ) -> LoweringResult<Vec<SelectItem>>
     where
         N: CstNode,
     {
@@ -486,10 +494,10 @@ impl PostgreSQLLowering {
             if matches!(
                 child.kind(),
                 "table_reference" | "table_name" | "joined_table"
-            )
-                && let Some(table) = self.lower_table_reference(ctx, child)? {
-                    tables.push(table);
-                }
+            ) && let Some(table) = self.lower_table_reference(ctx, child)?
+            {
+                tables.push(table);
+            }
         }
 
         if tables.is_empty() {
@@ -579,11 +587,11 @@ impl PostgreSQLLowering {
                 "RIGHT" => JoinType::Right,
                 "INNER" => JoinType::Inner,
                 "CROSS" => JoinType::Cross,
-                "FULL" => JoinType::Full,  // PostgreSQL supports FULL OUTER JOIN
-                _ => JoinType::Inner,  // Default to INNER
+                "FULL" => JoinType::Full, // PostgreSQL supports FULL OUTER JOIN
+                _ => JoinType::Inner,     // Default to INNER
             }
         } else {
-            JoinType::Inner  // Default to INNER JOIN
+            JoinType::Inner // Default to INNER JOIN
         };
 
         // Get the joined table
@@ -621,9 +629,10 @@ impl PostgreSQLLowering {
             let mut columns = Vec::new();
             for child in using_node.all_children() {
                 if child.kind() == "identifier"
-                    && let Some(name) = child.text() {
-                        columns.push(self.normalize_identifier(name));
-                    }
+                    && let Some(name) = child.text()
+                {
+                    columns.push(self.normalize_identifier(name));
+                }
             }
             JoinCondition::Using(columns)
         } else {
@@ -640,7 +649,7 @@ impl PostgreSQLLowering {
 
         // Wrap in a TableRef with the join
         Ok(Some(TableRef {
-            name: String::new(),  // Empty for joins
+            name: String::new(), // Empty for joins
             alias: None,
             joins: vec![join],
         }))
@@ -1032,14 +1041,16 @@ impl PostgreSQLLowering {
         let mut columns = Vec::new();
 
         if let Some(columns_node) = self.optional_child(node, "column_list")
-            && let Some(identifiers_node) = self.optional_child(columns_node, "identifier_list") {
-                for ident in identifiers_node.all_children() {
-                    if ident.kind() == "identifier"
-                        && let Some(name) = ident.text() {
-                            columns.push(self.normalize_identifier(name));
-                        }
+            && let Some(identifiers_node) = self.optional_child(columns_node, "identifier_list")
+        {
+            for ident in identifiers_node.all_children() {
+                if ident.kind() == "identifier"
+                    && let Some(name) = ident.text()
+                {
+                    columns.push(self.normalize_identifier(name));
                 }
             }
+        }
 
         columns
     }
@@ -1146,7 +1157,8 @@ impl PostgreSQLLowering {
                     if child.kind() == "order_by_item" {
                         let item_children = child.all_children();
                         let expr = if let Some(expr_node) = item_children.first() {
-                            self.lower_expr(ctx, *expr_node).unwrap_or_else(|_| ctx.create_placeholder())
+                            self.lower_expr(ctx, *expr_node)
+                                .unwrap_or_else(|_| ctx.create_placeholder())
                         } else {
                             ctx.create_placeholder()
                         };
@@ -1171,7 +1183,8 @@ impl PostgreSQLLowering {
 
             // Parse window frame (ROWS BETWEEN ...)
             if let Some(frame_node) = self.optional_child(over_node, "window_frame") {
-                let units = if let Some(units_node) = self.optional_child(frame_node, "frame_units") {
+                let units = if let Some(units_node) = self.optional_child(frame_node, "frame_units")
+                {
                     match units_node.text().unwrap_or("").to_uppercase().as_str() {
                         "ROWS" => WindowFrameUnits::Rows,
                         "RANGE" => WindowFrameUnits::Range,
@@ -1182,13 +1195,15 @@ impl PostgreSQLLowering {
                     WindowFrameUnits::Rows
                 };
 
-                let start_bound = if let Some(start_node) = self.optional_child(frame_node, "frame_start") {
-                    self.parse_window_bound(ctx, start_node)?
-                } else {
-                    WindowFrameBound::Unbounded
-                };
+                let start_bound =
+                    if let Some(start_node) = self.optional_child(frame_node, "frame_start") {
+                        self.parse_window_bound(ctx, start_node)?
+                    } else {
+                        WindowFrameBound::Unbounded
+                    };
 
-                let end_bound = if let Some(end_node) = self.optional_child(frame_node, "frame_end") {
+                let end_bound = if let Some(end_node) = self.optional_child(frame_node, "frame_end")
+                {
                     Some(self.parse_window_bound(ctx, end_node)?)
                 } else {
                     None
@@ -1220,7 +1235,11 @@ impl PostgreSQLLowering {
     }
 
     /// Parse a window frame bound (UNBOUNDED PRECEDING, CURRENT ROW, n PRECEDING/FOLLOWING)
-    fn parse_window_bound<N>(&self, _ctx: &mut LoweringContext, node: &N) -> LoweringResult<WindowFrameBound>
+    fn parse_window_bound<N>(
+        &self,
+        _ctx: &mut LoweringContext,
+        node: &N,
+    ) -> LoweringResult<WindowFrameBound>
     where
         N: CstNode,
     {
@@ -1235,9 +1254,10 @@ impl PostgreSQLLowering {
             let children = node.all_children();
             if let Some(offset_node) = children.first()
                 && let Some(offset_text) = offset_node.text()
-                    && let Ok(offset) = offset_text.trim().parse::<i64>() {
-                        return Ok(WindowFrameBound::Offset(offset));
-                    }
+                && let Ok(offset) = offset_text.trim().parse::<i64>()
+            {
+                return Ok(WindowFrameBound::Offset(offset));
+            }
             // Fallback to unbounded if parsing fails
             Ok(WindowFrameBound::Unbounded)
         }

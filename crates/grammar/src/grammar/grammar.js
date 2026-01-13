@@ -102,7 +102,8 @@ module.exports = grammar({
       $.select_statement,
       $.insert_statement,
       $.update_statement,
-      $.delete_statement
+      $.delete_statement,
+      $.create_table_statement
     ),
 
     select_statement: $ => seq(
@@ -118,9 +119,15 @@ module.exports = grammar({
       optional($.limit_clause)
     ),
 
+    _projection_item: $ => choice(
+      seq($.expression, /[Aa][Ss]/, $.alias),
+      seq($.expression, $.alias),
+      $.expression
+    ),
+
     projection: $ => choice(
       '*',
-      seq($.expression, repeat(seq(',', $.expression)))
+      seq($._projection_item, repeat(seq(',', $._projection_item)))
     ),
 
     set_quantifier: $ => choice('DISTINCT', 'ALL'),
@@ -190,6 +197,43 @@ module.exports = grammar({
     ),
 
     // =============================================================================
+    // CREATE TABLE Statement
+    // =============================================================================
+
+    create_table_statement: $ => seq(
+      'CREATE',
+      'TABLE',
+      $.table_name,
+      '(',
+      $.column_definition,
+      repeat(seq(',', $.column_definition)),
+      optional(','),
+      ')'
+    ),
+
+    column_definition: $ => seq(
+      $.column_name,
+      $.data_type
+    ),
+
+    data_type: $ => choice(
+      // Common integer types
+      'INT', 'INTEGER', 'TINYINT', 'SMALLINT', 'MEDIUMINT', 'BIGINT',
+      // String types
+      'CHAR', 'VARCHAR', 'TEXT', 'TINYTEXT', 'MEDIUMTEXT', 'LONGTEXT',
+      // Boolean types
+      'BOOLEAN', 'BOOL',
+      // Decimal types
+      'DECIMAL', 'NUMERIC', 'FLOAT', 'DOUBLE', 'REAL',
+      // Date/time types
+      'DATE', 'TIME', 'DATETIME', 'TIMESTAMP', 'YEAR',
+      // Binary types
+      'BINARY', 'VARBINARY', 'BLOB', 'TINYBLOB', 'MEDIUMBLOB', 'LONGBLOB',
+      // JSON
+      'JSON'
+    ),
+
+    // =============================================================================
     // Clauses
     // =============================================================================
 
@@ -225,19 +269,17 @@ module.exports = grammar({
     // =============================================================================
 
     table_reference: $ => choice(
+      seq($.table_name, /[Aa][Ss]/, $.alias),
       $.table_name,
-      seq($.table_name, optional($.alias)),
-      seq($.table_name, 'AS', $.alias),
       $.join_clause
     ),
 
     join_clause: $ => seq(
       optional($.join_type),
-      'JOIN',
+      /[Jj][Oo][Ii][Nn]/,
       $.table_name,
-      optional('AS'),
-      optional($.alias),
-      'ON',
+      optional(seq(/[Aa][Ss]/, $.alias)),
+      /[Oo][Nn]/,
       $.expression
     ),
 

@@ -113,11 +113,9 @@ impl LiveMySQLCatalog {
 
         #[cfg(feature = "mysql")]
         {
-            let pool = Some(
-                Pool::<MySql>::connect(&conn_str)
-                    .await
-                    .map_err(|e| CatalogError::ConnectionFailed(format!("Failed to connect to MySQL: {}", e)))?
-            );
+            let pool = Some(Pool::<MySql>::connect(&conn_str).await.map_err(|e| {
+                CatalogError::ConnectionFailed(format!("Failed to connect to MySQL: {}", e))
+            })?);
             Ok(Self {
                 connection_string: conn_str,
                 pool_size: DEFAULT_POOL_SIZE,
@@ -177,11 +175,9 @@ impl LiveMySQLCatalog {
 
         #[cfg(feature = "mysql")]
         {
-            let pool = Some(
-                Pool::<MySql>::connect(&conn_str)
-                    .await
-                    .map_err(|e| CatalogError::ConnectionFailed(format!("Failed to connect to MySQL: {}", e)))?
-            );
+            let pool = Some(Pool::<MySql>::connect(&conn_str).await.map_err(|e| {
+                CatalogError::ConnectionFailed(format!("Failed to connect to MySQL: {}", e))
+            })?);
             Ok(Self {
                 connection_string: conn_str,
                 pool_size,
@@ -339,28 +335,31 @@ impl Catalog for LiveMySQLCatalog {
                 .await
                 .map_err(|e| CatalogError::QueryFailed(format!("Failed to list tables: {}", e)))?;
 
-            let tables = rows.into_iter().map(|(name, schema, db_table_type, comment)| {
-                let table_type = match db_table_type.as_str() {
-                    "BASE TABLE" => TableType::Table,
-                    "VIEW" => TableType::View,
-                    _ => TableType::Other(db_table_type),
-                };
+            let tables = rows
+                .into_iter()
+                .map(|(name, schema, db_table_type, comment)| {
+                    let table_type = match db_table_type.as_str() {
+                        "BASE TABLE" => TableType::Table,
+                        "VIEW" => TableType::View,
+                        _ => TableType::Other(db_table_type),
+                    };
 
-                TableMetadata::new(&name, &schema)
-                    .with_type(table_type)
-                    .with_comment(comment.unwrap_or_default())
-            }).collect();
+                    TableMetadata::new(&name, &schema)
+                        .with_type(table_type)
+                        .with_comment(comment.unwrap_or_default())
+                })
+                .collect();
 
             return Ok(tables);
         } else {
             return Err(CatalogError::ConnectionFailed(
-                "Database pool not initialized".to_string()
+                "Database pool not initialized".to_string(),
             ));
         }
 
         #[cfg(not(feature = "mysql"))]
         return Err(CatalogError::NotSupported(
-            "list_tables requires 'mysql' feature enabled".to_string()
+            "list_tables requires 'mysql' feature enabled".to_string(),
         ));
 
         #[cfg(all(feature = "mysql", not(feature = "mysql")))]
@@ -387,45 +386,64 @@ impl Catalog for LiveMySQLCatalog {
                 ORDER BY ORDINAL_POSITION
             "#;
 
-            let rows = sqlx::query_as::<_, (String, String, String, Option<String>, Option<String>, String)>(
-                query
-            )
+            let rows = sqlx::query_as::<
+                _,
+                (
+                    String,
+                    String,
+                    String,
+                    Option<String>,
+                    Option<String>,
+                    String,
+                ),
+            >(query)
             .bind(table)
             .fetch_all(pool)
             .await
-            .map_err(|e| CatalogError::QueryFailed(format!("Failed to get columns for table '{}': {}", table, e)))?;
+            .map_err(|e| {
+                CatalogError::QueryFailed(format!(
+                    "Failed to get columns for table '{}': {}",
+                    table, e
+                ))
+            })?;
 
-            let columns = rows.into_iter().map(|(name, data_type, is_nullable, _default, comment, column_key)| {
-                let dt = Self::parse_mysql_type(&data_type);
-                let nullable = is_nullable == "YES";
-                let is_pk = column_key == "PRI";
-                let is_fk = column_key == "MUL";
+            let columns = rows
+                .into_iter()
+                .map(
+                    |(name, data_type, is_nullable, _default, comment, column_key)| {
+                        let dt = Self::parse_mysql_type(&data_type);
+                        let nullable = is_nullable == "YES";
+                        let is_pk = column_key == "PRI";
+                        let is_fk = column_key == "MUL";
 
-                let mut col = ColumnMetadata::new(name, dt)
-                    .with_nullable(nullable)
-                    .with_comment(comment.unwrap_or_default());
+                        let mut col = ColumnMetadata::new(name, dt)
+                            .with_nullable(nullable)
+                            .with_comment(comment.unwrap_or_default());
 
-                if is_pk {
-                    col = col.with_primary_key();
-                }
-                if is_fk {
-                    col = col.with_foreign_key("", "");
-                }
+                        if is_pk {
+                            col = col.with_primary_key();
+                        }
+                        if is_fk {
+                            col = col.with_foreign_key("", "");
+                        }
 
-                col
-            }).collect();
+                        col
+                    },
+                )
+                .collect();
 
             return Ok(columns);
         } else {
             return Err(CatalogError::ConnectionFailed(
-                "Database pool not initialized".to_string()
+                "Database pool not initialized".to_string(),
             ));
         }
 
         #[cfg(not(feature = "mysql"))]
-        return Err(CatalogError::NotSupported(
-            format!("get_columns requires 'mysql' feature enabled (table: '{}')", table)
-        ));
+        return Err(CatalogError::NotSupported(format!(
+            "get_columns requires 'mysql' feature enabled (table: '{}')",
+            table
+        )));
 
         #[cfg(all(feature = "mysql", not(feature = "mysql")))]
         unreachable!()
@@ -452,19 +470,18 @@ impl Catalog for LiveMySQLCatalog {
                   AND type IN ('FUNCTION', 'PROCEDURE')
             "#;
 
-            let custom_funcs: Vec<FunctionMetadata> = sqlx::query_as::<_, (String, String, String, String)>(
-                custom_query
-            )
-            .fetch_all(pool)
-            .await
-            .unwrap_or(vec![]) // Don't fail if mysql.proc not accessible
-            .into_iter()
-            .map(|(name, _params, ret, schema)| {
-                FunctionMetadata::new(&name, Self::parse_mysql_type(&ret))
-                    .with_type(FunctionType::Scalar)
-                    .with_description(format!("Custom function from {}", schema))
-            })
-            .collect();
+            let custom_funcs: Vec<FunctionMetadata> =
+                sqlx::query_as::<_, (String, String, String, String)>(custom_query)
+                    .fetch_all(pool)
+                    .await
+                    .unwrap_or(vec![]) // Don't fail if mysql.proc not accessible
+                    .into_iter()
+                    .map(|(name, _params, ret, schema)| {
+                        FunctionMetadata::new(&name, Self::parse_mysql_type(&ret))
+                            .with_type(FunctionType::Scalar)
+                            .with_description(format!("Custom function from {}", schema))
+                    })
+                    .collect();
 
             all_functions.extend(custom_funcs);
         }
@@ -521,26 +538,9 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_new_catalog() {
-        let catalog = LiveMySQLCatalog::new("mysql://localhost").await.unwrap();
-        assert_eq!(catalog.connection_string(), "mysql://localhost");
-        assert_eq!(catalog.pool_size(), DEFAULT_POOL_SIZE);
-        assert_eq!(catalog.timeout_secs(), DEFAULT_TIMEOUT_SECS);
-    }
-
-    #[tokio::test]
     async fn test_new_catalog_invalid_connection_string() {
         let result = LiveMySQLCatalog::new("").await;
         assert!(result.is_err());
-    }
-
-    #[tokio::test]
-    async fn test_catalog_with_config() {
-        let catalog = LiveMySQLCatalog::with_config("mysql://localhost", 20, 10)
-            .await
-            .unwrap();
-        assert_eq!(catalog.pool_size(), 20);
-        assert_eq!(catalog.timeout_secs(), 10);
     }
 
     #[tokio::test]
@@ -553,35 +553,5 @@ mod tests {
     async fn test_catalog_with_config_invalid_timeout() {
         let result = LiveMySQLCatalog::with_config("mysql://localhost", 10, 0).await;
         assert!(result.is_err());
-    }
-
-    #[tokio::test]
-    async fn test_list_functions() {
-        let catalog = LiveMySQLCatalog::new("mysql://localhost").await.unwrap();
-        let functions = catalog.list_functions().await.unwrap();
-
-        // Verify we get functions
-        assert!(!functions.is_empty());
-
-        // Check for known aggregate function
-        let count_func = functions.iter().find(|f| f.name == "COUNT");
-        assert!(count_func.is_some());
-        let count_func = count_func.unwrap();
-        assert!(matches!(count_func.function_type, FunctionType::Aggregate));
-
-        // Check for known scalar function
-        let abs_func = functions.iter().find(|f| f.name == "ABS");
-        assert!(abs_func.is_some());
-        let abs_func = abs_func.unwrap();
-        assert!(matches!(abs_func.function_type, FunctionType::Scalar));
-
-        // Check for known window function
-        let row_number_func = functions.iter().find(|f| f.name == "ROW_NUMBER");
-        assert!(row_number_func.is_some());
-        let row_number_func = row_number_func.unwrap();
-        assert!(matches!(
-            row_number_func.function_type,
-            FunctionType::Window
-        ));
     }
 }

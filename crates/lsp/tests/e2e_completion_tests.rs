@@ -215,8 +215,6 @@ async fn test_e2e_completion_where_clause_qualified() {
         items.len()
     );
     let column_names: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
-    assert!(column_names.contains(&"id"));
-    assert!(column_names.contains(&"name"));
 
     // Verify that items are properly qualified
     for item in &items {
@@ -226,6 +224,10 @@ async fn test_e2e_completion_where_clause_qualified() {
             item.label
         );
     }
+
+    // Check for qualified column names
+    assert!(column_names.contains(&"users.id"));
+    assert!(column_names.contains(&"users.name"));
 }
 
 #[tokio::test]

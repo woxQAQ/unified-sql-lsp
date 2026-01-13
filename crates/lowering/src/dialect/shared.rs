@@ -244,9 +244,8 @@ impl SharedLowering {
     where
         N: CstNode,
     {
-        let lower_expr = |ctx: &mut LoweringContext, n: &N| {
-            Self::lower_expr_generic(ctx, n, dialect_name)
-        };
+        let lower_expr =
+            |ctx: &mut LoweringContext, n: &N| Self::lower_expr_generic(ctx, n, dialect_name);
         Self::lower_where_clause_with(ctx, node, dialect_name, lower_expr)
     }
 
@@ -282,9 +281,8 @@ impl SharedLowering {
     where
         N: CstNode,
     {
-        let lower_expr = |ctx: &mut LoweringContext, n: &N| {
-            Self::lower_expr_generic(ctx, n, dialect_name)
-        };
+        let lower_expr =
+            |ctx: &mut LoweringContext, n: &N| Self::lower_expr_generic(ctx, n, dialect_name);
         Self::lower_group_by_clause_with(ctx, node, dialect_name, lower_expr)
     }
 
@@ -319,9 +317,8 @@ impl SharedLowering {
     where
         N: CstNode,
     {
-        let lower_expr = |ctx: &mut LoweringContext, n: &N| {
-            Self::lower_expr_generic(ctx, n, dialect_name)
-        };
+        let lower_expr =
+            |ctx: &mut LoweringContext, n: &N| Self::lower_expr_generic(ctx, n, dialect_name);
         Self::lower_having_clause_with(ctx, node, dialect_name, lower_expr)
     }
 
@@ -357,9 +354,8 @@ impl SharedLowering {
     where
         N: CstNode,
     {
-        let lower_expr = |ctx: &mut LoweringContext, n: &N| {
-            Self::lower_expr_generic(ctx, n, dialect_name)
-        };
+        let lower_expr =
+            |ctx: &mut LoweringContext, n: &N| Self::lower_expr_generic(ctx, n, dialect_name);
         Self::lower_order_by_clause_with(ctx, node, dialect_name, lower_expr)
     }
 
@@ -495,12 +491,9 @@ impl SharedLowering {
                 child.kind(),
                 "table_reference" | "table_name" | "joined_table"
             ) {
-                if let Some(table) = Self::lower_table_reference(
-                    ctx,
-                    child,
-                    dialect_name,
-                    normalize_fn,
-                )? {
+                if let Some(table) =
+                    Self::lower_table_reference(ctx, child, dialect_name, normalize_fn)?
+                {
                     tables.push(table);
                 }
             }
@@ -528,13 +521,11 @@ impl SharedLowering {
         F: Fn(&str) -> String + Copy,
     {
         match node.kind() {
-            "table_name" | "identifier" => {
-                Ok(Some(TableRef {
-                    name: normalize_fn(node.text().unwrap_or("")),
-                    alias: None,
-                    joins: Vec::new(),
-                }))
-            }
+            "table_name" | "identifier" => Ok(Some(TableRef {
+                name: normalize_fn(node.text().unwrap_or("")),
+                alias: None,
+                joins: Vec::new(),
+            })),
             "aliased_table" => {
                 let children = node.all_children();
                 if children.len() >= 2 {
@@ -551,9 +542,7 @@ impl SharedLowering {
                     }))
                 }
             }
-            "joined_table" => {
-                Self::lower_joined_table(ctx, node, dialect_name, normalize_fn)
-            }
+            "joined_table" => Self::lower_joined_table(ctx, node, dialect_name, normalize_fn),
             _ => {
                 ctx.add_error(LoweringError::UnsupportedSyntax {
                     dialect: dialect_name.to_string(),
@@ -634,9 +623,8 @@ impl SharedLowering {
     where
         N: CstNode,
     {
-        let lower_expr = |ctx: &mut LoweringContext, n: &N| {
-            Self::lower_expr_generic(ctx, n, dialect_name)
-        };
+        let lower_expr =
+            |ctx: &mut LoweringContext, n: &N| Self::lower_expr_generic(ctx, n, dialect_name);
         Self::extract_values_clause_with(ctx, node, lower_expr)
     }
 
@@ -718,7 +706,8 @@ impl SharedLowering {
                     results.push(result);
                 }
                 "else_clause" => {
-                    else_result = Some(Box::new(Self::lower_else_clause(ctx, child, dialect_name)?));
+                    else_result =
+                        Some(Box::new(Self::lower_else_clause(ctx, child, dialect_name)?));
                 }
                 _ => continue,
             }
@@ -813,9 +802,7 @@ impl SharedLowering {
                     Self::lower_expr_generic(ctx, n, dialect_name)
                 })
             }
-            "unary_expression" => {
-                Self::lower_unary_expr(ctx, node, dialect_name)
-            }
+            "unary_expression" => Self::lower_unary_expr(ctx, node, dialect_name),
             "column_reference" | "column_ref" => {
                 Self::lower_column_ref(ctx, node, |s| s.to_string())
             }
@@ -832,6 +819,7 @@ impl SharedLowering {
                     Ok(ctx.create_placeholder())
                 }
             }
+            "case_expression" => Self::lower_case_expr(ctx, node, dialect_name),
             _ => {
                 ctx.add_error(LoweringError::UnsupportedSyntax {
                     dialect: dialect_name.to_string(),

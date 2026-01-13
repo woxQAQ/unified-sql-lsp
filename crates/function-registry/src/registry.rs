@@ -3,7 +3,7 @@
 // Licensed under the MIT License or Apache License 2.0
 // See LICENSE files for details
 
-use crate::{builtin, Dialect, FunctionMetadata};
+use crate::{Dialect, FunctionMetadata, builtin};
 use std::collections::HashMap;
 
 /// Function registry for builtin SQL functions
@@ -62,10 +62,7 @@ impl FunctionRegistry {
     /// assert!(!mysql_funcs.is_empty());
     /// ```
     pub fn get_functions(&self, dialect: Dialect) -> Vec<FunctionMetadata> {
-        self.functions
-            .get(&dialect)
-            .cloned()
-            .unwrap_or_default()
+        self.functions.get(&dialect).cloned().unwrap_or_default()
     }
 
     /// Lookup a single function by name and dialect
@@ -88,9 +85,10 @@ impl FunctionRegistry {
     /// assert_eq!(count_func.unwrap().name, "COUNT");
     /// ```
     pub fn get_function(&self, dialect: Dialect, name: &str) -> Option<&FunctionMetadata> {
-        self.functions.get(&dialect)?.iter().find(|f| {
-            f.name.eq_ignore_ascii_case(name)
-        })
+        self.functions
+            .get(&dialect)?
+            .iter()
+            .find(|f| f.name.eq_ignore_ascii_case(name))
     }
 
     /// Check if a function exists for a specific dialect

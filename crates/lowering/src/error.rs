@@ -106,4 +106,3 @@ pub enum ErrorSeverity {
     /// Error (e.g., critical structural issue)
     Error,
 }
-

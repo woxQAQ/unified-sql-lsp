@@ -125,10 +125,22 @@ impl KeywordProvider {
         // Add dialect-specific keywords
         if self.dialect == Dialect::PostgreSQL {
             keywords.push(SqlKeyword::new("FETCH", Some("Fetch specific rows"), 24));
-            keywords.push(SqlKeyword::new("FOR UPDATE", Some("Lock selected rows"), 25));
+            keywords.push(SqlKeyword::new(
+                "FOR UPDATE",
+                Some("Lock selected rows"),
+                25,
+            ));
         } else if self.dialect == Dialect::MySQL || self.dialect == Dialect::TiDB {
-            keywords.push(SqlKeyword::new("FOR UPDATE", Some("Lock selected rows"), 24));
-            keywords.push(SqlKeyword::new("LOCK IN SHARE MODE", Some("Lock rows in share mode"), 25));
+            keywords.push(SqlKeyword::new(
+                "FOR UPDATE",
+                Some("Lock selected rows"),
+                24,
+            ));
+            keywords.push(SqlKeyword::new(
+                "LOCK IN SHARE MODE",
+                Some("Lock rows in share mode"),
+                25,
+            ));
         }
 
         KeywordSet::new(keywords)
@@ -372,9 +384,7 @@ impl KeywordProvider {
 
     /// Get HAVING keyword (for after GROUP BY)
     pub fn having_keywords(&self) -> KeywordSet {
-        let keywords = vec![
-            SqlKeyword::new("HAVING", Some("Filter groups"), 1),
-        ];
+        let keywords = vec![SqlKeyword::new("HAVING", Some("Filter groups"), 1)];
 
         KeywordSet::new(keywords)
     }

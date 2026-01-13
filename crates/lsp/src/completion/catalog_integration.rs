@@ -45,11 +45,15 @@ impl CatalogCompletionFetcher {
     /// ```
     pub async fn list_tables(&self) -> Result<Vec<TableMetadata>, CompletionError> {
         eprintln!("!!! LSP: CatalogCompletionFetcher::list_tables() called");
-        let result = self.catalog
+        let result = self
+            .catalog
             .list_tables()
             .await
             .map_err(CompletionError::Catalog);
-        eprintln!("!!! LSP: CatalogCompletionFetcher::list_tables() returned: {:?}", result.as_ref().map(|t| t.len()));
+        eprintln!(
+            "!!! LSP: CatalogCompletionFetcher::list_tables() returned: {:?}",
+            result.as_ref().map(|t| t.len())
+        );
         result
     }
 

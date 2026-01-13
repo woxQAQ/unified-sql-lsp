@@ -15,13 +15,13 @@
 //! ## Version Hierarchy
 //!
 //! **MySQL Family**:
-//! ```
+//! ```text
 //! mysql-5.7 (base)
 //!   └── mysql-8.0 (extends 5.7 with window functions, CTE, LATERAL)
 //! ```
 //!
 //! **PostgreSQL Family**:
-//! ```
+//! ```text
 //! postgresql-12 (base)
 //!   └── postgresql-14 (extends 12 with JSON subscripting, SEARCH/CYCLE)
 //! ```
@@ -308,32 +308,34 @@ mod tests {
     #[test]
     fn test_language_for_dialect_with_version() {
         // Test MySQL 5.7
-        assert!(language_for_dialect_with_version(
-            Dialect::MySQL,
-            Some(DialectVersion::MySQL57)
-        )
-        .is_some());
+        assert!(
+            language_for_dialect_with_version(Dialect::MySQL, Some(DialectVersion::MySQL57))
+                .is_some()
+        );
 
         // Test MySQL 8.0
-        assert!(language_for_dialect_with_version(
-            Dialect::MySQL,
-            Some(DialectVersion::MySQL80)
-        )
-        .is_some());
+        assert!(
+            language_for_dialect_with_version(Dialect::MySQL, Some(DialectVersion::MySQL80))
+                .is_some()
+        );
 
         // Test PostgreSQL 12
-        assert!(language_for_dialect_with_version(
-            Dialect::PostgreSQL,
-            Some(DialectVersion::PostgreSQL12)
-        )
-        .is_some());
+        assert!(
+            language_for_dialect_with_version(
+                Dialect::PostgreSQL,
+                Some(DialectVersion::PostgreSQL12)
+            )
+            .is_some()
+        );
 
         // Test PostgreSQL 14
-        assert!(language_for_dialect_with_version(
-            Dialect::PostgreSQL,
-            Some(DialectVersion::PostgreSQL14)
-        )
-        .is_some());
+        assert!(
+            language_for_dialect_with_version(
+                Dialect::PostgreSQL,
+                Some(DialectVersion::PostgreSQL14)
+            )
+            .is_some()
+        );
     }
 
     #[test]
@@ -342,10 +344,22 @@ mod tests {
         assert_eq!(DialectVersion::parse("5.7"), Some(DialectVersion::MySQL57));
         assert_eq!(DialectVersion::parse("8.0"), Some(DialectVersion::MySQL80));
         assert_eq!(DialectVersion::parse("8"), Some(DialectVersion::MySQL80));
-        assert_eq!(DialectVersion::parse("12"), Some(DialectVersion::PostgreSQL12));
-        assert_eq!(DialectVersion::parse("14"), Some(DialectVersion::PostgreSQL14));
-        assert_eq!(DialectVersion::parse("15"), Some(DialectVersion::PostgreSQL14));
-        assert_eq!(DialectVersion::parse("16"), Some(DialectVersion::PostgreSQL14));
+        assert_eq!(
+            DialectVersion::parse("12"),
+            Some(DialectVersion::PostgreSQL12)
+        );
+        assert_eq!(
+            DialectVersion::parse("14"),
+            Some(DialectVersion::PostgreSQL14)
+        );
+        assert_eq!(
+            DialectVersion::parse("15"),
+            Some(DialectVersion::PostgreSQL14)
+        );
+        assert_eq!(
+            DialectVersion::parse("16"),
+            Some(DialectVersion::PostgreSQL14)
+        );
         assert_eq!(DialectVersion::parse("unknown"), None);
     }
 
@@ -437,10 +451,7 @@ mod tests {
             let mut parser = Parser::new();
             parser.set_language(lang).unwrap();
             let tree = parser.parse(window_function_sql, None);
-            assert!(
-                tree.is_some(),
-                "MySQL 8.0 should parse window functions"
-            );
+            assert!(tree.is_some(), "MySQL 8.0 should parse window functions");
             if let Some(tree) = tree {
                 // Should parse without errors for basic OVER clause
                 assert!(

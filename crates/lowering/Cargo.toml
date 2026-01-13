@@ -14,7 +14,8 @@ thiserror = { workspace = true }
 unified-sql-lsp-ir = { path = "../ir" }
 
 # Tree-sitter (optional - for future integration)
-tree-sitter = { version = "0.26", optional = true }
+# tree-sitter = { version = "0.26", optional = true }
+tree-sitter = { workspace = true }
 
 [dev-dependencies]
 serde_json = { workspace = true }

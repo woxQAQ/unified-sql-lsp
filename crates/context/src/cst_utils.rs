@@ -8,8 +8,45 @@
 //! This module provides shared utility functions for working with tree-sitter CST nodes.
 //! These functions are used across multiple LSP modules (completion, definition, etc.)
 
-use tower_lsp::lsp_types::{Position, Range};
 use tree_sitter::Node;
+
+/// Position in a document (line, character)
+///
+/// This mirrors tower_lsp::lsp_types::Position but is defined here
+/// to avoid the dependency on tower_lsp in the context crate.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct Position {
+    /// Line position in a document (zero-based)
+    pub line: u32,
+    /// Character offset on a line in a document (zero-based)
+    pub character: u32,
+}
+
+impl Position {
+    /// Create a new position
+    pub fn new(line: u32, character: u32) -> Self {
+        Self { line, character }
+    }
+}
+
+/// Range in a document
+///
+/// This mirrors tower_lsp::lsp_types::Range but is defined here
+/// to avoid the dependency on tower_lsp in the context crate.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct Range {
+    /// The range's start position
+    pub start: Position,
+    /// The range's end position
+    pub end: Position,
+}
+
+impl Range {
+    /// Create a new range
+    pub fn new(start: Position, end: Position) -> Self {
+        Self { start, end }
+    }
+}
 
 /// Find the node at the given position
 ///
@@ -55,12 +92,11 @@ pub fn find_node_at_position<'a>(
 /// # Examples
 ///
 /// ```
-/// use unified_sql_lsp_lsp::cst_utils::position_to_byte_offset;
-/// use tower_lsp::lsp_types::Position;
+/// use unified_sql_lsp_context::cst_utils::{position_to_byte_offset, Position};
 ///
 /// let source = "SELECT *\nFROM users";
 /// let offset = position_to_byte_offset(source, Position::new(1, 0));
-/// assert_eq!(offset, 10); // After "SELECT *\n"
+/// assert_eq!(offset, 9); // After "SELECT *\n" (8 + 1 for newline)
 /// ```
 pub fn position_to_byte_offset(source: &str, position: Position) -> usize {
     let lines: Vec<&str> = source.lines().collect();
@@ -91,7 +127,7 @@ pub fn position_to_byte_offset(source: &str, position: Position) -> usize {
 /// # Examples
 ///
 /// ```
-/// use unified_sql_lsp_lsp::cst_utils::byte_to_position;
+/// use unified_sql_lsp_context::cst_utils::byte_to_position;
 ///
 /// let source = "SELECT id\nFROM users";
 /// let pos = byte_to_position(10, source);

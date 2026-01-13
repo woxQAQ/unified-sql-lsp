@@ -302,4 +302,3 @@ pub enum WindowFrameBound {
     /// n PRECEDING/FOLLOWING
     Offset(i64),
 }
-

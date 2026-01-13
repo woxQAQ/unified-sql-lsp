@@ -323,16 +323,23 @@ impl LspBackend {
         };
 
         // Parse version with default
-        let version_str = lsp_settings.get("version")
+        let version_str = lsp_settings
+            .get("version")
             .and_then(|v| v.as_str())
             .unwrap_or("8.0");
 
         let version = match (dialect, version_str) {
             (unified_sql_lsp_ir::Dialect::MySQL, "5.7") => crate::config::DialectVersion::MySQL57,
             (unified_sql_lsp_ir::Dialect::MySQL, _) => crate::config::DialectVersion::MySQL80,
-            (unified_sql_lsp_ir::Dialect::PostgreSQL, "12") => crate::config::DialectVersion::PostgreSQL12,
-            (unified_sql_lsp_ir::Dialect::PostgreSQL, "14") => crate::config::DialectVersion::PostgreSQL14,
-            (unified_sql_lsp_ir::Dialect::PostgreSQL, _) => crate::config::DialectVersion::PostgreSQL16,
+            (unified_sql_lsp_ir::Dialect::PostgreSQL, "12") => {
+                crate::config::DialectVersion::PostgreSQL12
+            }
+            (unified_sql_lsp_ir::Dialect::PostgreSQL, "14") => {
+                crate::config::DialectVersion::PostgreSQL14
+            }
+            (unified_sql_lsp_ir::Dialect::PostgreSQL, _) => {
+                crate::config::DialectVersion::PostgreSQL16
+            }
             _ => return None,
         };
 
@@ -341,7 +348,10 @@ impl LspBackend {
         info!("Parsed connection string: {}", connection_string);
 
         let config = EngineConfig::new(dialect, version, connection_string);
-        info!("Successfully parsed engine config: dialect={:?}, version={:?}", dialect, version);
+        info!(
+            "Successfully parsed engine config: dialect={:?}, version={:?}",
+            dialect, version
+        );
         Some(config)
     }
 
@@ -424,7 +434,10 @@ impl LspBackend {
 
         // Check for logs table specifically (bigint id)
         if word == "id" && source_upper.contains("FROM LOGS") {
-            return Some(format!("```sql\n{}\n```\n\nColumn type: {}", word, "BIGINT"));
+            return Some(format!(
+                "```sql\n{}\n```\n\nColumn type: {}",
+                word, "BIGINT"
+            ));
         }
 
         // Map of column names to their types (simplified for testing)
@@ -454,11 +467,24 @@ impl LspBackend {
 
         // Check if the word is a known column
         if let Some(type_str) = column_types.get(word) {
-            Some(format!("```sql\n{}\n```\n\nColumn type: {}", word, type_str))
+            Some(format!(
+                "```sql\n{}\n```\n\nColumn type: {}",
+                word, type_str
+            ))
         } else {
             // Try to check if it's a table name or view
             // Simple table name detection
-            let known_tables = ["users", "orders", "products", "order_items", "posts", "tags", "logs", "employees", "categories"];
+            let known_tables = [
+                "users",
+                "orders",
+                "products",
+                "order_items",
+                "posts",
+                "tags",
+                "logs",
+                "employees",
+                "categories",
+            ];
             let known_views = ["v_active_users"];
             if known_tables.contains(&word.to_lowercase().as_str()) {
                 Some(format!("```sql\n{}\n```\n\nTable", word))
@@ -595,7 +621,10 @@ impl LanguageServer for LspBackend {
         let version = doc.version;
         let content = doc.text;
 
-        eprintln!("!!! LSP: did_open() called: uri={}, language={}", uri, language_id);
+        eprintln!(
+            "!!! LSP: did_open() called: uri={}, language={}",
+            uri, language_id
+        );
 
         info!(
             "Document opened: uri={}, language={}, version={}",
@@ -712,8 +741,10 @@ impl LanguageServer for LspBackend {
         let uri = params.text_document_position.text_document.uri;
         let position = params.text_document_position.position;
 
-        eprintln!("!!! LSP: Completion requested: uri={}, line={}, col={}",
-            uri, position.line, position.character);
+        eprintln!(
+            "!!! LSP: Completion requested: uri={}, line={}, col={}",
+            uri, position.line, position.character
+        );
 
         info!(
             "Completion requested: uri={}, line={}, col={}",
@@ -738,8 +769,10 @@ impl LanguageServer for LspBackend {
             None => {
                 // Use default configuration for testing
                 eprintln!("!!! LSP: No config found, using default MySQL config");
-                let default_connection = std::env::var("E2E_MYSQL_CONNECTION")
-                    .unwrap_or_else(|_| "mysql://test_user:test_password@127.0.0.1:3307/test_db".to_string());
+                let default_connection =
+                    std::env::var("E2E_MYSQL_CONNECTION").unwrap_or_else(|_| {
+                        "mysql://test_user:test_password@127.0.0.1:3307/test_db".to_string()
+                    });
 
                 crate::config::EngineConfig::new(
                     unified_sql_lsp_ir::Dialect::MySQL,
@@ -781,7 +814,10 @@ impl LanguageServer for LspBackend {
             Ok(Some(items)) => {
                 eprintln!("!!! LSP: Completion returned {} items", items.len());
                 for (i, item) in items.iter().take(5).enumerate() {
-                    eprintln!("!!! LSP:   Item {}: label={}, kind={:?}", i, item.label, item.kind);
+                    eprintln!(
+                        "!!! LSP:   Item {}: label={}, kind={:?}",
+                        i, item.label, item.kind
+                    );
                 }
                 info!("Completion returned {} items", items.len());
                 Ok(Some(CompletionResponse::Array(items)))
@@ -813,8 +849,10 @@ impl LanguageServer for LspBackend {
         let uri = params.text_document_position_params.text_document.uri;
         let position = params.text_document_position_params.position;
 
-        eprintln!("!!! LSP: Hover requested: uri={}, line={}, col={}",
-            uri, position.line, position.character);
+        eprintln!(
+            "!!! LSP: Hover requested: uri={}, line={}, col={}",
+            uri, position.line, position.character
+        );
 
         info!(
             "Hover requested: uri={}, line={}, col={}",
@@ -836,8 +874,10 @@ impl LanguageServer for LspBackend {
             None => {
                 // Use default configuration for testing
                 eprintln!("!!! LSP: No config found, using default MySQL config for hover");
-                let default_connection = std::env::var("E2E_MYSQL_CONNECTION")
-                    .unwrap_or_else(|_| "mysql://test_user:test_password@127.0.0.1:3307/test_db".to_string());
+                let default_connection =
+                    std::env::var("E2E_MYSQL_CONNECTION").unwrap_or_else(|_| {
+                        "mysql://test_user:test_password@127.0.0.1:3307/test_db".to_string()
+                    });
 
                 crate::config::EngineConfig::new(
                     unified_sql_lsp_ir::Dialect::MySQL,
@@ -1099,13 +1139,19 @@ impl LanguageServer for LspBackend {
     /// Called when the client's configuration changes.
     async fn did_change_configuration(&self, params: DidChangeConfigurationParams) {
         eprintln!("!!! LSP: did_change_configuration called");
-        eprintln!("!!! LSP: Settings type: {:?}", std::any::type_name::<serde_json::Value>());
+        eprintln!(
+            "!!! LSP: Settings type: {:?}",
+            std::any::type_name::<serde_json::Value>()
+        );
         eprintln!("!!! LSP: Settings value: {:?}", params.settings);
 
         // Parse configuration from client settings
         match self.parse_config_from_settings(&params.settings) {
             Some(config) => {
-                eprintln!("!!! LSP: Successfully parsed config: dialect={:?}", config.dialect);
+                eprintln!(
+                    "!!! LSP: Successfully parsed config: dialect={:?}",
+                    config.dialect
+                );
                 self.set_config(config).await;
                 eprintln!("!!! LSP: Engine configuration updated from client settings");
             }

@@ -183,7 +183,9 @@ impl Document {
             return None;
         }
 
-        Some(self.content.line(line).to_string())
+        // ropey's line() includes the line ending, so we need to strip it
+        let line_with_ending = self.content.line(line).to_string();
+        Some(line_with_ending.trim_end_matches(['\r', '\n']).to_string())
     }
 
     /// Get text in a range

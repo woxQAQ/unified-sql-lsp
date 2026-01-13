@@ -52,4 +52,3 @@ pub enum CatalogError {
     #[error("Feature not supported: {0}")]
     NotSupported(String),
 }
-

@@ -8,7 +8,7 @@
 //! This module provides validation logic for checking LSP completion results
 //! against expected test case outcomes.
 
-use crate::test_case_parser::{TestCase, ExpectedItem, TestOptions, ParseError};
+use crate::test_case_parser::{ExpectedItem, ParseError, TestCase, TestOptions};
 use thiserror::Error;
 
 /// Validation errors
@@ -21,7 +21,11 @@ pub enum ValidationError {
     MissingItem(String),
 
     #[error("Item not found: {label} [{kind}] {detail}")]
-    ItemNotFound { label: String, kind: String, detail: String },
+    ItemNotFound {
+        label: String,
+        kind: String,
+        detail: String,
+    },
 
     #[error("Item not found: {0}")]
     ItemNotFoundSimple(String),
@@ -91,7 +95,11 @@ fn validate_exact_match(
 ) -> Result<(), ValidationError> {
     for exp in &expected_case.expected {
         match exp {
-            ExpectedItem::Full { label, kind, detail } => {
+            ExpectedItem::Full {
+                label,
+                kind,
+                detail,
+            } => {
                 let found = actual.iter().any(|item| {
                     item.label == *label
                         && kind_matches(item, kind)
@@ -305,8 +313,14 @@ mod tests {
 
     #[test]
     fn test_remove_cursor_marker() {
-        assert_eq!(remove_cursor_marker("SELECT | FROM users"), "SELECT  FROM users");
-        assert_eq!(remove_cursor_marker("SELECT * FROM users"), "SELECT * FROM users");
+        assert_eq!(
+            remove_cursor_marker("SELECT | FROM users"),
+            "SELECT  FROM users"
+        );
+        assert_eq!(
+            remove_cursor_marker("SELECT * FROM users"),
+            "SELECT * FROM users"
+        );
     }
 
     #[test]

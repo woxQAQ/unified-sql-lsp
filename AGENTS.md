@@ -35,58 +35,52 @@ Dialects use compile-time merging approach:
 - Partial success mode allows degraded completion when some parts fail to parse
 - Coarse-grained cache invalidation (any edit invalidates entire document cache)
 
-## 2. Build, Test and Development Commands
+## 2. Common Development Commands
+
+The Makefile provides simplified commands for all development tasks. Run `make help` to see all available commands.
 
 ### Building
 
-- `cargo build --workspace` - Build entire workspace
-- `cargo build -p unified-sql-grammar` - Build grammar crate
-- `cargo build -p unified-sql-lsp-lsp` - Build LSP server
-- `cargo build -p unified-sql-lsp-ir` - Build IR crate
-- `cargo build -p unified-sql-lsp-lowering` - Build lowering crate
-- `cargo build -p unified-sql-lsp-semantic` - Build semantic crate
-- `cargo build -p unified-sql-lsp-catalog` - Build catalog crate
-- `cd crates/grammar && ./build.sh` - Build grammar for all dialects (also runs automatically via cargo build)
-- `cd crates/grammar/src/grammar && DIALECT=mysql tree-sitter generate` - Build specific dialect grammar
-
-### Running
-
-- `cargo run -p unified-sql-lsp-lsp` - Run the LSP server
-
-### Playground
-
-Web-based testing environment with real database connections (MySQL, PostgreSQL, backend, frontend).
-
-Quick start
-
-- `cargo build --release` - Build LSP server binary
-- `cd playground && ./start.sh` - Start all services
-- Access at http://localhost:3000
-- `cd playground && ./stop.sh` - Stop all services
-
-Local development (without Docker)
-
-- Start databases: `cd playground && docker-compose up -d mysql postgres`
-- Start backend: `cd playground/backend && npm install && MYSQL_PORT=3307 PG_PORT=5433 npm start`
-- Start frontend: `cd playground/frontend && npm install && npm run dev`
-
-Testing features
-
-- Table completion: `SELECT * FROM` (Ctrl+Space)
-- Column completion: `SELECT customer_id,` (Ctrl+Space)
-- JOIN completion: `SELECT * FROM orders o JOIN customers c ON o.` (Ctrl+Space)
-- Function completion: `SELECT C` (Ctrl+Space)
+- `make build` - Build entire workspace
+- `make build-release` - Build in release mode
+- `make build-grammar` - Build grammar crate
+- `make build-lsp` - Build LSP server
+- `make grammar` - Build grammar for all dialects
+- `make grammar-mysql` - Build MySQL dialect grammar
+- `make grammar-postgresql` - Build PostgreSQL dialect grammar
 
 ### Testing
 
-- `cargo test --workspace` - Run all tests
-- `cargo test -p unified-sql-grammar` - Run grammar crate tests
-- `cargo test -p unified-sql-lsp-lsp` - Run LSP server tests
-- `cargo test -p unified-sql-lsp-lsp test_completion_flow` - Run specific test
-- `cargo test -- --nocapture` - Run tests with output
-- `cd crates/grammar && npm test` - Run tree-sitter corpus tests
-- `cd crates/grammar && npm run test:mysql` - Test MySQL dialect
-- `cd crates/grammar && npm run test:postgresql` - Test PostgreSQL dialect
+- `make test` - Run all tests
+- `make test-verbose` - Run tests with output
+- `make test-grammar` - Run grammar tests
+- `make test-grammar-mysql` - Test MySQL dialect
+- `make test-grammar-postgresql` - Test PostgreSQL dialect
+- `make test-lsp` - Run LSP server tests
+- `make test-specific TEST=test_name` - Run specific test
+
+### Running
+
+- `make run` - Run the LSP server
+- `make run-release` - Run the LSP server in release mode
+
+### Code Quality
+
+- `make check` - Run all checks (fmt + clippy)
+- `make fmt` - Format code
+- `make clippy` - Run clippy linter
+
+### E2E Testing
+
+- `make test-e2e` - Run all E2E tests
+- `make test-e2e-completion` - Run completion E2E tests
+- `make test-e2e-diagnostics` - Run diagnostics E2E tests
+- `make test-e2e-hover` - Run hover E2E tests
+- `make test-e2e-verbose` - Run E2E tests with output
+
+### Cleanup
+
+- `make clean` - Clean build artifacts
 
 ### Prerequisites
 
@@ -107,24 +101,55 @@ Testing features
 - `tracing` framework with `tracing-subscriber` for logging
 - `unified-sql-lsp-test-utils` for shared test fixtures
 
-## 4. Testing Guide
+## 4. E2E Testing
 
-### Test Organization
+The project includes end-to-end testing framework at `tests/e2e-rs/` that provides:
 
-- Unit tests in each crate's `src/` directory
-- Integration tests in `crates/*/tests/` directories
-- Tree-sitter corpus tests in `crates/grammar/test/corpus/`
+- Full LSP protocol testing through actual client-server communication
+- Live database connections via Docker (MySQL/PostgreSQL)
+- Declarative test definitions in YAML format
+- Comprehensive assertion helpers for LSP responses
 
-### Running Tests
+E2E Test Structure
 
-- `cargo test --workspace` - Run all workspace tests
-- `cargo test -p unified-sql-lsp-lsp` - Run specific crate tests
-- `cargo test -p unified-sql-lsp-lsp test_completion_flow` - Run specific test
-- `cargo test -- --nocapture` - Run tests with output
+- `tests/e2e-rs/src/lib.rs` - E2E test library with LSP client and test framework
+- `tests/e2e-rs/src/client.rs` - LSP client implementation for protocol testing
+- `tests/e2e-rs/src/runner.rs` - LSP server spawn and lifecycle management
+- `tests/e2e-rs/src/yaml_parser.rs` - YAML test case parser
+- `tests/e2e-rs/tests/completion.rs` - Completion E2E tests
+- `tests/e2e-rs/tests/diagnostics.rs` - Diagnostics E2E tests
+- `tests/e2e-rs/tests/hover.rs` - Hover E2E tests
 
-### Test Utilities
+Requirements
 
-The `test-utils` crate provides shared fixtures and helpers for testing LSP functionality, catalog integration, and lowering behavior.
+- Docker and Docker Compose for database containers
+- MySQL and PostgreSQL Docker images
+- Sufficient system resources for running databases
+
+Test Workflow
+
+1. Initialize test database using init_database()
+2. Spawn LSP server process using LspRunner
+3. Create LSP client connection
+4. Load test cases from YAML files
+5. Execute test scenarios and assert results
+6. Clean up database connections
+
+Writing E2E Tests
+
+Tests are defined in YAML files with declarative syntax. Example:
+
+name: Test case name
+description: Detailed description
+database: mysql
+setup:
+  - CREATE TABLE test (id INT)
+input: SELECT * FROM t
+position: line: 0, character: 14
+expect:
+  completions:
+    - label: test
+      kind: Table
 
 ## 5. Security Tips
 
@@ -134,13 +159,6 @@ The `test-utils` crate provides shared fixtures and helpers for testing LSP func
 - Three-tier caching (Tree, IR, Semantic) prevents repeated expensive operations
 - Cache invalidation is currently coarse-grained (any edit invalidates entire document cache)
 - Check `FEATURE_LIST.yaml` for dialect support status and version-specific features
-
-### Performance Targets
-
-- 10k line parsing: < 100ms
-- Completion latency: < 50ms (p95)
-- Memory usage: < 50MB
-- Cache hit rate: > 80%
 
 ### Important Implementation Notes
 

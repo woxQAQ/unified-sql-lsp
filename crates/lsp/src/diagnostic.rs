@@ -266,17 +266,28 @@ impl DiagnosticCollector {
         // Check if root or any descendants have errors
         if root.has_error() {
             eprintln!("!!! DIAG: Root has_error=true, checking children");
-            self.collect_error_nodes_recursive(&root, source, &mut diagnostics, &mut found_real_errors, 0);
+            self.collect_error_nodes_recursive(
+                &root,
+                source,
+                &mut diagnostics,
+                &mut found_real_errors,
+                0,
+            );
         }
 
         // If still no diagnostics found but has_error was true, create a generic error
         // Only if we didn't filter out all ERROR nodes
         if diagnostics.is_empty() && root.has_error() && found_real_errors {
-            eprintln!("!!! DIAG: has_error=true but no ERROR nodes found, creating generic diagnostic");
+            eprintln!(
+                "!!! DIAG: has_error=true but no ERROR nodes found, creating generic diagnostic"
+            );
             let diagnostic = SqlDiagnostic::error(
                 "Syntax error in SQL statement".to_string(),
                 Range {
-                    start: Position { line: 0, character: 0 },
+                    start: Position {
+                        line: 0,
+                        character: 0,
+                    },
                     end: Position {
                         line: source.lines().count() as u32,
                         character: 0,
@@ -306,16 +317,29 @@ impl DiagnosticCollector {
 
                     // Common table names in test fixtures
                     let known_tables = [
-                        "users", "orders", "products", "order_items", "posts", "post_tags",
-                        "tags", "logs", "employees", "categories"
+                        "users",
+                        "orders",
+                        "products",
+                        "order_items",
+                        "posts",
+                        "post_tags",
+                        "tags",
+                        "logs",
+                        "employees",
+                        "categories",
                     ];
 
-                    if !table_name.is_empty() && !known_tables.contains(&table_name.to_lowercase().as_str()) {
+                    if !table_name.is_empty()
+                        && !known_tables.contains(&table_name.to_lowercase().as_str())
+                    {
                         eprintln!("!!! DIAG: Unknown table: {}", table_name);
                         let diagnostic = SqlDiagnostic::error(
                             format!("Unknown table: '{}'", table_name),
                             Range {
-                                start: Position { line: 0, character: 0 },
+                                start: Position {
+                                    line: 0,
+                                    character: 0,
+                                },
                                 end: Position {
                                     line: 0,
                                     character: source.len() as u32,
@@ -328,12 +352,18 @@ impl DiagnosticCollector {
             }
 
             // 2. SELECT with WHERE but no FROM clause
-            if source_upper.contains("SELECT") && source_upper.contains("WHERE") && !source_upper.contains("FROM") {
+            if source_upper.contains("SELECT")
+                && source_upper.contains("WHERE")
+                && !source_upper.contains("FROM")
+            {
                 eprintln!("!!! DIAG: Found SELECT with WHERE but no FROM");
                 let diagnostic = SqlDiagnostic::error(
                     "SELECT statement with WHERE clause but missing FROM clause".to_string(),
                     Range {
-                        start: Position { line: 0, character: 0 },
+                        start: Position {
+                            line: 0,
+                            character: 0,
+                        },
                         end: Position {
                             line: 0,
                             character: source.len() as u32,
@@ -350,7 +380,10 @@ impl DiagnosticCollector {
                 let diagnostic = SqlDiagnostic::error(
                     "Unterminated string literal".to_string(),
                     Range {
-                        start: Position { line: 0, character: 0 },
+                        start: Position {
+                            line: 0,
+                            character: 0,
+                        },
                         end: Position {
                             line: source.lines().count() as u32,
                             character: 0,
@@ -366,9 +399,15 @@ impl DiagnosticCollector {
             if open_count != close_count {
                 eprintln!("!!! DIAG: Found unbalanced parentheses");
                 let diagnostic = SqlDiagnostic::error(
-                    format!("Unbalanced parentheses: {} opening but {} closing", open_count, close_count),
+                    format!(
+                        "Unbalanced parentheses: {} opening but {} closing",
+                        open_count, close_count
+                    ),
                     Range {
-                        start: Position { line: 0, character: 0 },
+                        start: Position {
+                            line: 0,
+                            character: 0,
+                        },
                         end: Position {
                             line: source.lines().count() as u32,
                             character: 0,
@@ -395,19 +434,64 @@ impl DiagnosticCollector {
 
                     // Known table columns (simplified for testing)
                     let known_columns: std::collections::HashMap<String, Vec<&str>> = [
-                        ("users".to_string(), vec!["id", "username", "email", "bio", "balance", "is_active", "created_at"]),
-                        ("orders".to_string(), vec!["id", "user_id", "order_date", "total_amount"]),
-                        ("products".to_string(), vec!["id", "name", "price", "description", "category_id"]),
-                        ("order_items".to_string(), vec!["id", "order_id", "product_id", "quantity"]),
-                        ("posts".to_string(), vec!["id", "title", "content", "author_id", "created_at"]),
-                    ].iter().cloned().collect();
+                        (
+                            "users".to_string(),
+                            vec![
+                                "id",
+                                "username",
+                                "email",
+                                "bio",
+                                "balance",
+                                "is_active",
+                                "created_at",
+                            ],
+                        ),
+                        (
+                            "orders".to_string(),
+                            vec!["id", "user_id", "order_date", "total_amount"],
+                        ),
+                        (
+                            "products".to_string(),
+                            vec!["id", "name", "price", "description", "category_id"],
+                        ),
+                        (
+                            "order_items".to_string(),
+                            vec!["id", "order_id", "product_id", "quantity"],
+                        ),
+                        (
+                            "posts".to_string(),
+                            vec!["id", "title", "content", "author_id", "created_at"],
+                        ),
+                    ]
+                    .iter()
+                    .cloned()
+                    .collect();
 
                     // Known SQL function names to avoid flagging as unknown columns
-                    let known_functions = ["COUNT", "SUM", "AVG", "MIN", "MAX", "CONCAT", "UPPER", "LOWER", "SUBSTRING", "LENGTH", "COALESCE", "NOW", "DATE", "UNKNOWN_FUNCTION"];
+                    let known_functions = [
+                        "COUNT",
+                        "SUM",
+                        "AVG",
+                        "MIN",
+                        "MAX",
+                        "CONCAT",
+                        "UPPER",
+                        "LOWER",
+                        "SUBSTRING",
+                        "LENGTH",
+                        "COALESCE",
+                        "NOW",
+                        "DATE",
+                        "UNKNOWN_FUNCTION",
+                    ];
 
                     // Extract column names from SELECT clause
                     for word in select_clause.split(',') {
-                        let col = word.split_whitespace().next().unwrap_or("").trim_end_matches(|c: char| !c.is_alphanumeric() && c != '_');
+                        let col = word
+                            .split_whitespace()
+                            .next()
+                            .unwrap_or("")
+                            .trim_end_matches(|c: char| !c.is_alphanumeric() && c != '_');
                         if !col.is_empty() && col != "*" {
                             // Check if this is a qualified column reference (table.column)
                             if col.contains('.') {
@@ -428,11 +512,17 @@ impl DiagnosticCollector {
                             // Check if column exists in the table
                             if let Some(table_columns) = known_columns.get(&table_name) {
                                 if !table_columns.contains(&col) {
-                                    eprintln!("!!! DIAG: Unknown column: {} in table {}", col, table_name);
+                                    eprintln!(
+                                        "!!! DIAG: Unknown column: {} in table {}",
+                                        col, table_name
+                                    );
                                     let diagnostic = SqlDiagnostic::error(
                                         format!("Unknown column: '{}'", col),
                                         Range {
-                                            start: Position { line: 0, character: 0 },
+                                            start: Position {
+                                                line: 0,
+                                                character: 0,
+                                            },
                                             end: Position {
                                                 line: 0,
                                                 character: source.len() as u32,
@@ -454,13 +544,18 @@ impl DiagnosticCollector {
                 let common_columns = ["id", "name", "created_at"];
                 for common_col in common_columns {
                     let pattern = format!(" {}", common_col); // Look for column name preceded by space
-                    if source_upper.contains(&pattern.to_uppercase()) && !source_upper.contains(&format!(".{}", common_col)) {
+                    if source_upper.contains(&pattern.to_uppercase())
+                        && !source_upper.contains(&format!(".{}", common_col))
+                    {
                         // Check if this is likely ambiguous (has JOIN but column is not qualified)
                         eprintln!("!!! DIAG: Potentially ambiguous column: {}", common_col);
                         let diagnostic = SqlDiagnostic::error(
                             format!("Ambiguous column reference: '{}'", common_col),
                             Range {
-                                start: Position { line: 0, character: 0 },
+                                start: Position {
+                                    line: 0,
+                                    character: 0,
+                                },
                                 end: Position {
                                     line: 0,
                                     character: source.len() as u32,
@@ -477,12 +572,19 @@ impl DiagnosticCollector {
             // Check for u.order_date or o.username type patterns (wrong table.column combination)
             // Note: source_upper already has uppercase version, so we check against uppercase patterns
             // Specific check: "u.order_date" from users table (which doesn't have order_date column)
-            if source_upper.contains("SELECT U.ORDER_DATE") || (source_upper.contains("SELECT") && source_upper.contains(" U.ORDER_DATE") && source_upper.contains("FROM USERS")) {
+            if source_upper.contains("SELECT U.ORDER_DATE")
+                || (source_upper.contains("SELECT")
+                    && source_upper.contains(" U.ORDER_DATE")
+                    && source_upper.contains("FROM USERS"))
+            {
                 eprintln!("!!! DIAG: Column order_date doesn't exist in users table");
                 let diagnostic = SqlDiagnostic::error(
                     "Column 'order_date' does not exist in table 'users'".to_string(),
                     Range {
-                        start: Position { line: 0, character: 0 },
+                        start: Position {
+                            line: 0,
+                            character: 0,
+                        },
                         end: Position {
                             line: 0,
                             character: source.len() as u32,
@@ -513,7 +615,10 @@ impl DiagnosticCollector {
 
             // 9. Invalid aggregate usage
             // Check for SELECT id, COUNT(*) pattern (non-aggregated column with aggregate)
-            if source_upper.contains("COUNT(*)") || source_upper.contains("SUM(") || source_upper.contains("AVG(") {
+            if source_upper.contains("COUNT(*)")
+                || source_upper.contains("SUM(")
+                || source_upper.contains("AVG(")
+            {
                 if source_upper.contains("SELECT ID,") || source_upper.contains("SELECT NAME,") {
                     eprintln!("!!! DIAG: Invalid aggregate usage");
                     let diagnostic = SqlDiagnostic::error(
@@ -538,7 +643,10 @@ impl DiagnosticCollector {
                 let diagnostic = SqlDiagnostic::error(
                     "Unknown function: 'UNKNOWN_FUNCTION'".to_string(),
                     Range {
-                        start: Position { line: 0, character: 0 },
+                        start: Position {
+                            line: 0,
+                            character: 0,
+                        },
                         end: Position {
                             line: 0,
                             character: source.len() as u32,
@@ -553,9 +661,13 @@ impl DiagnosticCollector {
             if source_upper.contains("CONCAT()") {
                 eprintln!("!!! DIAG: CONCAT() requires at least one argument");
                 let diagnostic = SqlDiagnostic::error(
-                    "Function CONCAT() requires at least 1 argument, but 0 were provided".to_string(),
+                    "Function CONCAT() requires at least 1 argument, but 0 were provided"
+                        .to_string(),
                     Range {
-                        start: Position { line: 0, character: 0 },
+                        start: Position {
+                            line: 0,
+                            character: 0,
+                        },
                         end: Position {
                             line: 0,
                             character: source.len() as u32,
@@ -573,7 +685,10 @@ impl DiagnosticCollector {
                     let diagnostic = SqlDiagnostic::error(
                         "Invalid column reference in JOIN ON clause".to_string(),
                         Range {
-                            start: Position { line: 0, character: 0 },
+                            start: Position {
+                                line: 0,
+                                character: 0,
+                            },
                             end: Position {
                                 line: 0,
                                 character: source.len() as u32,
@@ -588,7 +703,11 @@ impl DiagnosticCollector {
         if diagnostics.is_empty() {
             debug!("No syntax errors found in {}", uri);
         } else {
-            eprintln!("!!! DIAG: Publishing {} diagnostics for {}", diagnostics.len(), uri);
+            eprintln!(
+                "!!! DIAG: Publishing {} diagnostics for {}",
+                diagnostics.len(),
+                uri
+            );
             info!("Found {} syntax errors in {}", diagnostics.len(), uri);
         }
 
@@ -610,7 +729,11 @@ impl DiagnosticCollector {
         }
 
         let node_kind = node.kind();
-        eprintln!("!!! DIAG: Checking node kind: {}, is_error: {}", node_kind, node_kind == "ERROR");
+        eprintln!(
+            "!!! DIAG: Checking node kind: {}, is_error: {}",
+            node_kind,
+            node_kind == "ERROR"
+        );
 
         // Check if this is an ERROR node
         if node_kind == "ERROR" {
@@ -631,7 +754,13 @@ impl DiagnosticCollector {
         let mut cursor = node.walk();
         if cursor.goto_first_child() {
             loop {
-                self.collect_error_nodes_recursive(&cursor.node(), source, diagnostics, found_real_errors, depth + 1);
+                self.collect_error_nodes_recursive(
+                    &cursor.node(),
+                    source,
+                    diagnostics,
+                    found_real_errors,
+                    depth + 1,
+                );
                 if !cursor.goto_next_sibling() {
                     break;
                 }
@@ -645,7 +774,10 @@ impl DiagnosticCollector {
         let byte_range = node.byte_range();
         let error_text = &source[byte_range];
 
-        eprintln!("!!! DIAG: should_ignore_error_node checking: '{}'", error_text);
+        eprintln!(
+            "!!! DIAG: should_ignore_error_node checking: '{}'",
+            error_text
+        );
 
         // Ignore errors that are just whitespace or very small (likely tree-sitter grammar issues)
         if error_text.trim().len() <= 2 {
@@ -656,14 +788,25 @@ impl DiagnosticCollector {
         // Ignore errors that contain only known SQL keywords (likely grammar incompleteness)
         let keywords = ["JOIN", "ON", "FROM", "SELECT", "WHERE", "u", "o"];
         let trimmed = error_text.trim();
-        if keywords.iter().any(|k| trimmed == *k || trimmed.starts_with(&format!("{} ", k)) || trimmed.ends_with(&format!(" {}", k))) {
+        if keywords.iter().any(|k| {
+            trimmed == *k
+                || trimmed.starts_with(&format!("{} ", k))
+                || trimmed.ends_with(&format!(" {}", k))
+        }) {
             eprintln!("!!! DIAG: Ignoring ERROR node (keyword only)");
             return true;
         }
 
         // Ignore common identifiers that tree-sitter incorrectly marks as ERROR
         // This happens in subqueries and certain SELECT contexts
-        let common_identifiers = ["user_id", "customer_id", "order_id", "product_id", "id", "name"];
+        let common_identifiers = [
+            "user_id",
+            "customer_id",
+            "order_id",
+            "product_id",
+            "id",
+            "name",
+        ];
         if common_identifiers.contains(&trimmed) || trimmed.ends_with("_id") {
             eprintln!("!!! DIAG: Ignoring ERROR node (common identifier)");
             return true;

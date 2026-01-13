@@ -60,7 +60,9 @@ pub enum SemanticError {
     CteNameConflict { name: String },
 
     /// Set operation column count mismatch
-    #[error("Set operation column count mismatch: LEFT has {left} columns, RIGHT has {right} columns")]
+    #[error(
+        "Set operation column count mismatch: LEFT has {left} columns, RIGHT has {right} columns"
+    )]
     SetOperationColumnCountMismatch { left: usize, right: usize },
 
     /// Recursive CTE depth limit exceeded
@@ -87,4 +89,3 @@ pub enum SemanticError {
     #[error("Invalid window frame: {reason}")]
     InvalidWindowFrame { reason: String },
 }
-

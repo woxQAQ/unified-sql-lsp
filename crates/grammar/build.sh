@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 set -e
 
 # Build script for tree-sitter grammars
@@ -7,7 +7,7 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 GRAMMAR_DIR="$SCRIPT_DIR/src/grammar"
 
-DIALECTS=("base" "mysql" "postgresql")
+DIALECTS=("base" "mysql-5.7" "mysql-8.0" "postgresql-12" "postgresql-14")
 
 echo "Building tree-sitter grammars..."
 echo "======================================"

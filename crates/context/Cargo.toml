@@ -1,0 +1,24 @@
+[package]
+name = "unified-sql-lsp-context"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Context detection for SQL completion and analysis"
+
+[dependencies]
+# Workspace dependencies
+serde = { workspace = true }
+thiserror = { workspace = true }
+
+# Tree-sitter parsing
+# tree-sitter = "0.26"
+tree-sitter = { workspace = true }
+
+# Internal crates
+unified-sql-grammar = { path = "../grammar" }
+unified-sql-lsp-ir = { path = "../ir" }
+
+[dev-dependencies]
+lsp-types = { workspace = true }

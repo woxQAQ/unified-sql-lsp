@@ -413,10 +413,7 @@ async fn test_keyword_completion_join_keywords() {
     if let Some(items) = items {
         let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
         // Should have JOIN types
-        assert!(
-            labels.iter().any(|l| *l == "JOIN"),
-            "Missing JOIN keyword"
-        );
+        assert!(labels.iter().any(|l| *l == "JOIN"), "Missing JOIN keyword");
         assert!(
             labels.iter().any(|l| *l == "INNER JOIN"),
             "Missing INNER JOIN keyword"
@@ -603,7 +600,9 @@ async fn test_keyword_completion_item_kind() {
     if let Some(items) = items {
         // Check that keyword items have KEYWORD kind
         assert!(
-            items.iter().all(|i| i.kind == Some(tower_lsp::lsp_types::CompletionItemKind::KEYWORD)),
+            items
+                .iter()
+                .all(|i| i.kind == Some(tower_lsp::lsp_types::CompletionItemKind::KEYWORD)),
             "All keyword completion items should have KEYWORD kind"
         );
     }

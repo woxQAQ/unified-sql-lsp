@@ -241,21 +241,17 @@ impl TestCaseBuilder {
     }
 
     fn build(self, line_num: usize) -> Result<TestCase, ParseError> {
-        let description = self
-            .description
-            .ok_or(ParseError::InvalidSyntax {
-                line: line_num,
-                message: "missing description field".to_string(),
-            })?;
+        let description = self.description.ok_or(ParseError::InvalidSyntax {
+            line: line_num,
+            message: "missing description field".to_string(),
+        })?;
 
         let dialect = self.dialect.unwrap_or(Dialect::All);
 
-        let input = self
-            .input
-            .ok_or(ParseError::InvalidSyntax {
-                line: line_num,
-                message: "missing input field".to_string(),
-            })?;
+        let input = self.input.ok_or(ParseError::InvalidSyntax {
+            line: line_num,
+            message: "missing input field".to_string(),
+        })?;
 
         let expected = self
             .expected
@@ -322,7 +318,11 @@ fn parse_expected_item(s: &str) -> Result<ExpectedItem, ParseError> {
             let detail = s[kind_end + 1..].trim().to_string();
 
             if !label.is_empty() {
-                return Ok(ExpectedItem::Full { label, kind, detail });
+                return Ok(ExpectedItem::Full {
+                    label,
+                    kind,
+                    detail,
+                });
             }
         }
     }
@@ -441,7 +441,10 @@ expected: |
     fn test_parse_dialect() {
         assert_eq!(Dialect::from_str("mysql").unwrap(), Dialect::MySQL);
         assert_eq!(Dialect::from_str("MySQL").unwrap(), Dialect::MySQL);
-        assert_eq!(Dialect::from_str("postgresql").unwrap(), Dialect::PostgreSQL);
+        assert_eq!(
+            Dialect::from_str("postgresql").unwrap(),
+            Dialect::PostgreSQL
+        );
         assert_eq!(Dialect::from_str("postgres").unwrap(), Dialect::PostgreSQL);
         assert_eq!(Dialect::from_str("all").unwrap(), Dialect::All);
         assert!(Dialect::from_str("invalid").is_err());
@@ -451,7 +454,11 @@ expected: |
     fn test_parse_expected_item() {
         let full = parse_expected_item("id [Field] users.id").unwrap();
         match full {
-            ExpectedItem::Full { label, kind, detail } => {
+            ExpectedItem::Full {
+                label,
+                kind,
+                detail,
+            } => {
                 assert_eq!(label, "id");
                 assert_eq!(kind, "Field");
                 assert_eq!(detail, "users.id");
@@ -487,7 +494,10 @@ expected: |
         ];
         let result = parse_options(&opts).unwrap();
         assert_eq!(result.min_items, Some(2));
-        assert_eq!(result.contains, Some(vec!["id".to_string(), "name".to_string()]));
+        assert_eq!(
+            result.contains,
+            Some(vec!["id".to_string(), "name".to_string()])
+        );
         assert_eq!(result.exact_match, Some(true));
     }
 

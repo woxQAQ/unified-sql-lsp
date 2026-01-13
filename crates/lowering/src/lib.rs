@@ -190,4 +190,3 @@ where
     /// Get the dialect this lowering implementation targets
     fn dialect(&self) -> Dialect;
 }
-

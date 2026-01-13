@@ -14,9 +14,9 @@
 
 use crate::dialect::{DialectLoweringBase, SharedLowering};
 use crate::{CstNode, Lowering, LoweringContext, LoweringError, LoweringResult};
-use unified_sql_lsp_ir::{InsertSource, InsertStatement, OnConflict};
 use unified_sql_lsp_ir::query::{SelectStatement, TableRef};
 use unified_sql_lsp_ir::{Dialect, Expr, Query};
+use unified_sql_lsp_ir::{InsertSource, InsertStatement, OnConflict};
 
 /// MySQL CST → IR lowering implementation
 pub struct MySQLLowering;
@@ -121,8 +121,12 @@ impl MySQLLowering {
 
         // Lower FROM clause
         if let Some(from_node) = self.optional_child(node, "from_clause") {
-            select.from =
-                SharedLowering::lower_from_clause(ctx, from_node, "MySQL", Self::normalize_identifier)?;
+            select.from = SharedLowering::lower_from_clause(
+                ctx,
+                from_node,
+                "MySQL",
+                Self::normalize_identifier,
+            )?;
         }
 
         // Lower WHERE clause
@@ -144,7 +148,10 @@ impl MySQLLowering {
         if let Some(having_node) = self.optional_child(node, "having_clause") {
             let lower_expr = |ctx: &mut LoweringContext, n: &N| self.lower_expr(ctx, n);
             select.having = Some(SharedLowering::lower_having_clause_with(
-                ctx, having_node, "MySQL", lower_expr,
+                ctx,
+                having_node,
+                "MySQL",
+                lower_expr,
             )?);
         }
 
@@ -332,7 +339,10 @@ mod tests {
     #[test]
     fn test_normalize_identifier_with_backticks() {
         assert_eq!(MySQLLowering::normalize_identifier("`id`"), "id");
-        assert_eq!(MySQLLowering::normalize_identifier("`table_name`"), "table_name");
+        assert_eq!(
+            MySQLLowering::normalize_identifier("`table_name`"),
+            "table_name"
+        );
         let result = MySQLLowering::normalize_identifier("`db`.`table`");
         assert!(result.contains("db"));
         assert!(result.contains("table"));
@@ -341,6 +351,9 @@ mod tests {
     #[test]
     fn test_normalize_identifier_without_backticks() {
         assert_eq!(MySQLLowering::normalize_identifier("id"), "id");
-        assert_eq!(MySQLLowering::normalize_identifier("table_name"), "table_name");
+        assert_eq!(
+            MySQLLowering::normalize_identifier("table_name"),
+            "table_name"
+        );
     }
 }

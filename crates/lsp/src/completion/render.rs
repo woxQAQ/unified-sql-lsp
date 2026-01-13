@@ -12,8 +12,8 @@ use tower_lsp::lsp_types::{CompletionItem, CompletionItemKind, Documentation};
 use unified_sql_lsp_catalog::{DataType, FunctionMetadata, FunctionType, TableMetadata, TableType};
 use unified_sql_lsp_semantic::{ColumnSymbol, TableSymbol};
 
-// Import keyword types
-use crate::completion::keywords::SqlKeyword;
+// Import keyword types from context crate
+use unified_sql_lsp_context::SqlKeyword;
 
 /// Completion renderer
 ///
@@ -164,6 +164,9 @@ impl CompletionRenderer {
         for table in tables {
             items.push(Self::table_item(table, show_schema));
         }
+
+        // Sort alphabetically by label
+        items.sort_by(|a, b| a.label.cmp(&b.label));
 
         items
     }

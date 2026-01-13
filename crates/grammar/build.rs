@@ -1,8 +1,8 @@
+use std::collections::HashMap;
 use std::env;
 use std::fs;
 use std::path::Path;
 use std::process::Command;
-use std::collections::HashMap;
 
 fn main() {
     println!("cargo:rerun-if-changed=src/grammar/");
@@ -11,7 +11,7 @@ fn main() {
     let out_dir = env::var("OUT_DIR").unwrap();
 
     // Check which dialects need regeneration (only if grammar files changed)
-    let needs_regeneration = check_grammar_changes(&grammar_dir);
+    let needs_regeneration = check_grammar_changes(grammar_dir);
 
     // Dialects to compile
     let dialects = vec![
@@ -45,21 +45,40 @@ fn main() {
                 Ok(s) if s.success() => {
                     let parser_c = grammar_dir.join("gen/parser.c");
                     if parser_c.exists() {
-                        fs::rename(&parser_c, &dialect_parser_c).expect("Failed to rename parser.c");
-                        parser_files.insert(dialect.to_string(), dialect_parser_c.to_string_lossy().to_string());
+                        fs::rename(&parser_c, &dialect_parser_c)
+                            .expect("Failed to rename parser.c");
+                        parser_files.insert(
+                            dialect.to_string(),
+                            dialect_parser_c.to_string_lossy().to_string(),
+                        );
                     }
                 }
                 Ok(s) => {
-                    println!("cargo:warning=Failed to generate {} grammar: exit code {:?}", dialect, s.code());
+                    println!(
+                        "cargo:warning=Failed to generate {} grammar: exit code {:?}",
+                        dialect,
+                        s.code()
+                    );
                 }
                 Err(e) => {
-                    println!("cargo:warning=Failed to run tree-sitter for {}: {}", dialect, e);
-                    println!("cargo:warning=Install tree-sitter-cli: npm install -g tree-sitter-cli");
+                    println!(
+                        "cargo:warning=Failed to run tree-sitter for {}: {}",
+                        dialect, e
+                    );
+                    println!(
+                        "cargo:warning=Install tree-sitter-cli: npm install -g tree-sitter-cli"
+                    );
                 }
             }
         } else {
-            println!("cargo:warning=Skipping generation for {} (already cached)", dialect);
-            parser_files.insert(dialect.to_string(), dialect_parser_c.to_string_lossy().to_string());
+            println!(
+                "cargo:warning=Skipping generation for {} (already cached)",
+                dialect
+            );
+            parser_files.insert(
+                dialect.to_string(),
+                dialect_parser_c.to_string_lossy().to_string(),
+            );
         }
     }
 
@@ -105,26 +124,27 @@ fn check_grammar_changes(grammar_dir: &Path) -> bool {
     }
 
     // Get newest grammar file time
-    let grammar_time = grammar_files.iter()
+    let grammar_time = grammar_files
+        .iter()
         .filter(|p| p.exists())
         .filter_map(|p| fs::metadata(p).ok().and_then(|m| m.modified().ok()))
         .max();
 
     // Get oldest parser file time - we want to know if ANY parser is older than grammar
-    let parser_time = fs::read_dir(&gen_dir).ok()
-        .and_then(|entries| {
-            entries.filter_map(|e| e.ok())
-                .filter(|e| {
-                    let path = e.path();
-                    let name = path.to_string_lossy();
-                    path.extension().map(|e| e == "c").unwrap_or(false) &&
+    let parser_time = fs::read_dir(&gen_dir).ok().and_then(|entries| {
+        entries
+            .filter_map(|e| e.ok())
+            .filter(|e| {
+                let path = e.path();
+                let name = path.to_string_lossy();
+                path.extension().map(|e| e == "c").unwrap_or(false) &&
                     name.contains("parser-") &&
                     !name.contains("parser-mysql.c") &&  // Skip old files
                     !name.contains("parser-postgresql.c")
-                })
-                .filter_map(|e| fs::metadata(e.path()).ok().and_then(|m| m.modified().ok()))
-                .min()
-        });
+            })
+            .filter_map(|e| fs::metadata(e.path()).ok().and_then(|m| m.modified().ok()))
+            .min()
+    });
 
     match (grammar_time, parser_time) {
         (Some(g), Some(p)) => g > p,

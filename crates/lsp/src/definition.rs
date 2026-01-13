@@ -31,11 +31,41 @@
 //! - `DefinitionFinder`: Finds symbol definitions from CST
 //! - Helper functions for CST traversal and text extraction
 
-use crate::cst_utils::{
-    extract_identifier_name, extract_node_text, find_node_at_position, node_to_range,
-};
+// Use context crate for CST utilities
 use tower_lsp::lsp_types::{Location, Position, Url};
 use tree_sitter::{Node, TreeCursor};
+use unified_sql_lsp_context::{
+    Position as ContextPosition, Range as ContextRange, extract_identifier_name, extract_node_text,
+    find_node_at_position, node_to_range as context_node_to_range,
+};
+
+/// Convert context Position to tower_lsp Position
+fn from_context_position(pos: ContextPosition) -> Position {
+    Position::new(pos.line, pos.character)
+}
+
+/// Convert context Range to tower_lsp Range
+fn from_context_range(range: ContextRange) -> tower_lsp::lsp_types::Range {
+    tower_lsp::lsp_types::Range {
+        start: from_context_position(range.start),
+        end: from_context_position(range.end),
+    }
+}
+
+/// Convert tree-sitter node to tower_lsp Range
+fn node_to_range(node: &tree_sitter::Node, source: &str) -> tower_lsp::lsp_types::Range {
+    from_context_range(context_node_to_range(node, source))
+}
+
+/// Find node at tower_lsp Position (wrapper that converts position type)
+fn find_node_at_position_lsp<'a>(
+    root: &'a tree_sitter::Node<'a>,
+    position: Position,
+    source: &str,
+) -> Option<tree_sitter::Node<'a>> {
+    let context_pos = ContextPosition::new(position.line, position.character);
+    find_node_at_position(root, context_pos, source)
+}
 
 /// Iterator over a node's children
 ///
@@ -168,7 +198,7 @@ impl DefinitionFinder {
         uri: &Url,
     ) -> Result<Option<Definition>, DefinitionError> {
         // 1. Find the node at cursor position
-        let cursor_node = find_node_at_position(root_node, position, source)
+        let cursor_node = find_node_at_position_lsp(root_node, position, source)
             .ok_or(DefinitionError::NoNodeAtPosition)?;
 
         // 2. Walk up the parent chain to find significant nodes
@@ -357,9 +387,19 @@ fn extract_alias(node: &Node, source: &str) -> Option<String> {
 // Test helper functions
 #[cfg(test)]
 fn find_table_name_node<'a>(root_node: &Node<'a>) -> Option<Node<'a>> {
+    // Navigate through statement wrapper if present
     let select = root_node
         .children(&mut root_node.walk())
-        .find(|n| n.kind() == "select_statement")?;
+        .find(|n| n.kind() == "select_statement")
+        .or_else(|| {
+            root_node
+                .children(&mut root_node.walk())
+                .find(|n| n.kind() == "statement")
+                .and_then(|stmt| {
+                    stmt.children(&mut stmt.walk())
+                        .find(|n| n.kind() == "select_statement")
+                })
+        })?;
     let from_clause = select
         .children(&mut select.walk())
         .find(|n| n.kind() == "from_clause")?;
@@ -373,9 +413,19 @@ fn find_table_name_node<'a>(root_node: &Node<'a>) -> Option<Node<'a>> {
 
 #[cfg(test)]
 fn find_table_reference_node<'a>(root_node: &Node<'a>) -> Option<Node<'a>> {
+    // Navigate through statement wrapper if present
     let select = root_node
         .children(&mut root_node.walk())
-        .find(|n| n.kind() == "select_statement")?;
+        .find(|n| n.kind() == "select_statement")
+        .or_else(|| {
+            root_node
+                .children(&mut root_node.walk())
+                .find(|n| n.kind() == "statement")
+                .and_then(|stmt| {
+                    stmt.children(&mut stmt.walk())
+                        .find(|n| n.kind() == "select_statement")
+                })
+        })?;
     let from_clause = select
         .children(&mut select.walk())
         .find(|n| n.kind() == "from_clause")?;
@@ -387,8 +437,8 @@ fn find_table_reference_node<'a>(root_node: &Node<'a>) -> Option<Node<'a>> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::cst_utils::{byte_to_position, position_to_byte_offset};
     use crate::parsing::{ParseResult, ParserManager};
+    use unified_sql_lsp_context::{byte_to_position, position_to_byte_offset};
     use unified_sql_lsp_ir::Dialect;
 
     /// Helper function to parse SQL and get root node
@@ -607,18 +657,29 @@ mod tests {
         let tree = parse_sql(sql);
         let root_node = tree.root_node();
 
-        // Find SELECT statement
-        if let Some(child) = root_node.find_child(|_| true) {
-            if child.kind() == "select_statement" {
-                let result = find_from_clause(&child);
-                assert!(result.is_some(), "Should find FROM clause");
-                if let Some(from_clause) = result {
-                    assert_eq!(from_clause.kind(), "from_clause");
-                }
-                return;
+        // Find SELECT statement (may be wrapped in statement node)
+        let select_stmt = root_node
+            .children(&mut root_node.walk())
+            .find(|n| n.kind() == "select_statement")
+            .or_else(|| {
+                root_node
+                    .children(&mut root_node.walk())
+                    .find(|n| n.kind() == "statement")
+                    .and_then(|stmt| {
+                        stmt.children(&mut stmt.walk())
+                            .find(|n| n.kind() == "select_statement")
+                    })
+            });
+
+        if let Some(child) = select_stmt {
+            let result = find_from_clause(&child);
+            assert!(result.is_some(), "Should find FROM clause");
+            if let Some(from_clause) = result {
+                assert_eq!(from_clause.kind(), "from_clause");
             }
+        } else {
+            panic!("Could not find SELECT statement");
         }
-        panic!("Could not find SELECT statement");
     }
 
     #[test]
@@ -627,15 +688,25 @@ mod tests {
         let tree = parse_sql(sql);
         let root_node = tree.root_node();
 
-        // Find SELECT statement
-        if let Some(child) = root_node.find_child(|_| true) {
-            if child.kind() == "select_statement" {
-                let result = find_from_clause(&child);
-                // May or may not find FROM clause depending on grammar
-                // We just check it doesn't panic
-                let _ = result;
-                return;
-            }
+        // Find SELECT statement (may be wrapped in statement node)
+        let select_stmt = root_node
+            .children(&mut root_node.walk())
+            .find(|n| n.kind() == "select_statement")
+            .or_else(|| {
+                root_node
+                    .children(&mut root_node.walk())
+                    .find(|n| n.kind() == "statement")
+                    .and_then(|stmt| {
+                        stmt.children(&mut stmt.walk())
+                            .find(|n| n.kind() == "select_statement")
+                    })
+            });
+
+        if let Some(child) = select_stmt {
+            let result = find_from_clause(&child);
+            // May or may not find FROM clause depending on grammar
+            // We just check it doesn't panic
+            let _ = result;
         }
     }
 
@@ -645,39 +716,75 @@ mod tests {
         let tree = parse_sql(sql);
         let root_node = tree.root_node();
 
-        // Find SELECT statement
-        if let Some(child) = root_node.find_child(|_| true) {
-            if child.kind() == "select_statement" {
-                let result = find_select_clause(&child);
-                assert!(result.is_some(), "Should find SELECT clause");
-                if let Some(select_clause) = result {
-                    assert!(
-                        select_clause.kind() == "select" || select_clause.kind() == "projection",
-                        "Should find select or projection clause, got: {}",
-                        select_clause.kind()
-                    );
-                }
-                return;
+        // Find SELECT statement (may be wrapped in statement node)
+        let select_stmt = root_node
+            .children(&mut root_node.walk())
+            .find(|n| n.kind() == "select_statement")
+            .or_else(|| {
+                root_node
+                    .children(&mut root_node.walk())
+                    .find(|n| n.kind() == "statement")
+                    .and_then(|stmt| {
+                        stmt.children(&mut stmt.walk())
+                            .find(|n| n.kind() == "select_statement")
+                    })
+            });
+
+        if let Some(child) = select_stmt {
+            let result = find_select_clause(&child);
+            assert!(result.is_some(), "Should find SELECT clause");
+            if let Some(select_clause) = result {
+                assert!(
+                    select_clause.kind() == "select" || select_clause.kind() == "projection",
+                    "Should find select or projection clause, got: {}",
+                    select_clause.kind()
+                );
             }
+        } else {
+            panic!("Could not find SELECT statement");
         }
-        panic!("Could not find SELECT statement");
     }
 
     #[test]
     fn test_find_select_clause_missing() {
         // Create a minimal invalid query
         let sql = "FROM users"; // No SELECT clause
-        let tree = parse_sql(sql);
+
+        // Try to parse - may fail for invalid SQL
+        let manager = ParserManager::new();
+        let parse_result = manager.parse_text(Dialect::MySQL, sql);
+
+        let tree = match parse_result {
+            ParseResult::Success { tree, .. } => {
+                if let Some(tree) = tree {
+                    tree
+                } else {
+                    return; // No parse tree, test passes
+                }
+            }
+            _ => return, // Parse failed, test passes
+        };
+
         let root_node = tree.root_node();
 
-        // Try to find SELECT clause (may not exist)
-        if let Some(child) = root_node.find_child(|_| true) {
-            if child.kind() == "select_statement" {
-                let result = find_select_clause(&child);
-                // Just check it doesn't panic
-                let _ = result;
-                return;
-            }
+        // Try to find SELECT statement (may not exist)
+        let select_stmt = root_node
+            .children(&mut root_node.walk())
+            .find(|n| n.kind() == "select_statement")
+            .or_else(|| {
+                root_node
+                    .children(&mut root_node.walk())
+                    .find(|n| n.kind() == "statement")
+                    .and_then(|stmt| {
+                        stmt.children(&mut stmt.walk())
+                            .find(|n| n.kind() == "select_statement")
+                    })
+            });
+
+        if let Some(child) = select_stmt {
+            let result = find_select_clause(&child);
+            // Just check it doesn't panic
+            let _ = result;
         }
     }
 
@@ -757,12 +864,14 @@ mod tests {
 
         // Test position at start
         let pos = Position::new(0, 0);
-        let offset = position_to_byte_offset(sql, pos);
+        let context_pos = ContextPosition::new(pos.line, pos.character);
+        let offset = position_to_byte_offset(sql, context_pos);
         assert_eq!(offset, 0);
 
         // Test position at "SELECT"
         let pos = Position::new(0, 6);
-        let offset = position_to_byte_offset(sql, pos);
+        let context_pos = ContextPosition::new(pos.line, pos.character);
+        let offset = position_to_byte_offset(sql, context_pos);
         assert_eq!(offset, 6);
     }
 
@@ -774,12 +883,14 @@ mod tests {
 
         // Find node at start
         let pos = Position::new(0, 0);
-        let node = find_node_at_position(&root_node, pos, sql);
+        let context_pos = ContextPosition::new(pos.line, pos.character);
+        let node = find_node_at_position(&root_node, context_pos, sql);
         assert!(node.is_some());
 
         // Find node in middle of SELECT
         let pos = Position::new(0, 5);
-        let node = find_node_at_position(&root_node, pos, sql);
+        let context_pos = ContextPosition::new(pos.line, pos.character);
+        let node = find_node_at_position(&root_node, context_pos, sql);
         assert!(node.is_some());
     }
 

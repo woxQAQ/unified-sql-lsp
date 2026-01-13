@@ -19,14 +19,12 @@ pub mod query;
 
 // Re-export commonly used types
 pub use dialect::{Dialect, DialectExtensions};
-pub use metadata::{
-    ColumnMetadata, DataType, FunctionMetadata, FunctionParameter, FunctionType,
-    TableMetadata, TableReference, TableType,
-};
-pub use expr::{
-    BinaryOp, ColumnRef, Expr, Literal, UnaryOp,
-};
+pub use expr::{BinaryOp, ColumnRef, Expr, Literal, UnaryOp};
 pub use expr::{WindowFrame, WindowFrameBound, WindowFrameUnits, WindowSpec};
+pub use metadata::{
+    ColumnMetadata, DataType, FunctionMetadata, FunctionParameter, FunctionType, TableMetadata,
+    TableReference, TableType,
+};
 pub use query::{
     Assignment, CommonTableExpr, DeleteStatement, InsertSource, InsertStatement, Join,
     JoinCondition, JoinType, OnConflict, OrderBy, Query, SelectItem, SelectStatement, SetOp,

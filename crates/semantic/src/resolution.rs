@@ -125,7 +125,8 @@ impl ColumnCandidate {
                 let base_score = similarity_score(query, name);
 
                 // Minimal penalty for edit distance (very forgiving for typos)
-                let distance_penalty = (distance as f64 / (config.max_distance as f64 + 1.0)) * 0.15;
+                let distance_penalty =
+                    (distance as f64 / (config.max_distance as f64 + 1.0)) * 0.15;
 
                 // Bonus for shorter column names (less room for error)
                 let length_bonus = if name.len() <= 8 { 0.15 } else { 0.1 };
@@ -714,9 +715,7 @@ mod tests {
             if !suggestions.is_empty() {
                 // Verify suggestions are sorted by relevance
                 for i in 1..suggestions.len() {
-                    assert!(
-                        suggestions[i - 1].relevance_score >= suggestions[i].relevance_score
-                    );
+                    assert!(suggestions[i - 1].relevance_score >= suggestions[i].relevance_score);
                 }
             }
         }

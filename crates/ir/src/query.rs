@@ -426,8 +426,7 @@ pub enum SetOp {
 }
 
 /// SELECT statement
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[derive(Default)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub struct SelectStatement {
     /// SELECT DISTINCT or ALL
     pub distinct: bool,
@@ -453,7 +452,6 @@ pub struct SelectStatement {
     /// WINDOW clause
     pub window: Vec<WindowDef>,
 }
-
 
 /// INSERT statement
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -491,9 +489,7 @@ pub enum InsertSource {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum OnConflict {
     /// PostgreSQL: ON CONFLICT (columns) DO NOTHING
-    DoNothing {
-        columns: Vec<String>,
-    },
+    DoNothing { columns: Vec<String> },
 
     /// PostgreSQL: ON CONFLICT (columns) DO UPDATE SET ...
     DoUpdate {
@@ -663,4 +659,3 @@ pub enum WindowFrameBound {
     Preceding(Option<Expr>),
     Following(Option<Expr>),
 }
-
