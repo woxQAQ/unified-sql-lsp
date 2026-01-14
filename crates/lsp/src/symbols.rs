@@ -477,6 +477,7 @@ impl SymbolRenderer {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use unified_sql_lsp_catalog::DataType;
 
     #[test]
     fn test_format_column_detail() {

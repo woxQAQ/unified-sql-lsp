@@ -361,6 +361,9 @@ impl DiagnosticCollector {
     }
 
     /// Check if an ERROR node should be ignored (false positive from tree-sitter)
+    ///
+    /// This is a conservative filter - only ignore obvious false positives.
+    /// Most ERROR nodes indicate real syntax errors that should be reported.
     fn should_ignore_error_node(&self, node: &tree_sitter::Node, source: &str) -> bool {
         // Get the text around the ERROR
         let byte_range = node.byte_range();
@@ -371,45 +374,20 @@ impl DiagnosticCollector {
             error_text
         );
 
-        // Ignore errors that are just whitespace or very small (likely tree-sitter grammar issues)
-        if error_text.trim().len() <= 2 {
-            debug!("!!! DIAG: Ignoring ERROR node (too small)");
-            return true;
-        }
-
-        // Ignore errors that contain only known SQL keywords (likely grammar incompleteness)
-        let keywords = ["JOIN", "ON", "FROM", "SELECT", "WHERE", "u", "o"];
+        // Ignore errors that are empty or just whitespace
         let trimmed = error_text.trim();
-        if keywords.iter().any(|k| {
-            trimmed == *k
-                || trimmed.starts_with(&format!("{} ", k))
-                || trimmed.ends_with(&format!(" {}", k))
-        }) {
-            debug!("!!! DIAG: Ignoring ERROR node (keyword only)");
+        if trimmed.is_empty() {
+            debug!("!!! DIAG: Ignoring ERROR node (empty)");
             return true;
         }
 
-        // Ignore common identifiers that tree-sitter incorrectly marks as ERROR
-        // This happens in subqueries and certain SELECT contexts
-        let common_identifiers = [
-            "user_id",
-            "customer_id",
-            "order_id",
-            "product_id",
-            "id",
-            "name",
-        ];
-        if common_identifiers.contains(&trimmed) || trimmed.ends_with("_id") {
-            debug!("!!! DIAG: Ignoring ERROR node (common identifier)");
+        // Ignore single-character errors (likely parser artifacts)
+        if trimmed.len() == 1 {
+            debug!("!!! DIAG: Ignoring ERROR node (single char)");
             return true;
         }
 
-        // Ignore identifiers that look like table.column (qualified references)
-        if trimmed.contains('.') && trimmed.split_whitespace().count() == 1 {
-            debug!("!!! DIAG: Ignoring ERROR node (qualified reference)");
-            return true;
-        }
-
+        // Don't ignore anything else - let real errors through
         false
     }
 

@@ -133,13 +133,18 @@ pub async fn run_test(
     let _init_result = conn.initialize().await?;
     info!("LSP server initialized");
 
-    // 4.5. Set engine configuration through initialize result
-    // Some LSP servers require configuration through initialization_options instead of didChangeConfiguration
-    // For now, skip didChange_configuration and use a default config
-    info!("Skipping did_change_configuration (not working with tower-lsp)");
+    // 4.5. Set engine configuration through did_change_configuration
+    // Use connection string from YAML if provided, otherwise use default
+    let connection_string = suite.database.connection_string.clone().unwrap_or_default();
+    let dialect = suite.database.dialect.clone();
+    info!("Setting engine configuration: dialect={}, connection={}", dialect, connection_string);
 
-    // TODO: Find alternative way to set configuration
-    // The did_change_configuration notification might not be properly routed by tower-lsp
+    // Send the configuration notification
+    conn.did_change_configuration(&dialect, &connection_string).await?;
+    info!("Engine configuration set");
+
+    // Give server time to process the configuration
+    tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
 
     // 5. Get cursor position and strip marker
     let position = suite.extract_cursor(test)?;
