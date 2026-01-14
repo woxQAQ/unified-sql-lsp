@@ -16,6 +16,9 @@ thiserror = { workspace = true }
 # tree-sitter = "0.26"
 tree-sitter = { workspace = true }
 
+# Logging
+tracing = "0.1"
+
 # Internal crates
 unified-sql-grammar = { path = "../grammar" }
 unified-sql-lsp-ir = { path = "../ir" }

@@ -65,7 +65,7 @@ fn test_parse_simple_query_mysql() {
 
     let mut parser = Parser::new();
     parser
-        .set_language(&language)
+        .set_language(language)
         .expect("Failed to set language");
 
     let source = "SELECT * FROM users WHERE id = 1";
@@ -81,7 +81,7 @@ fn test_parse_mysql_specific_syntax() {
 
     let mut parser = Parser::new();
     parser
-        .set_language(&language)
+        .set_language(language)
         .expect("Failed to set language");
 
     // Test MySQL-specific LIMIT syntax
@@ -98,7 +98,7 @@ fn test_parse_postgresql_specific_syntax() {
 
     let mut parser = Parser::new();
     parser
-        .set_language(&language)
+        .set_language(language)
         .expect("Failed to set language");
 
     // Test PostgreSQL-specific DISTINCT ON syntax
@@ -114,7 +114,7 @@ fn test_parse_with_syntax_error() {
 
     let mut parser = Parser::new();
     parser
-        .set_language(&language)
+        .set_language(language)
         .expect("Failed to set language");
 
     // Intentionally invalid SQL
@@ -127,7 +127,7 @@ fn test_parse_with_syntax_error() {
     // Find the ERROR node
     let mut has_error = false;
     let mut node = tree.root_node();
-    find_error(&mut node, &mut has_error);
+    find_error(&node, &mut has_error);
     assert!(has_error, "Expected ERROR node in tree");
 }
 
@@ -160,7 +160,7 @@ fn test_parse_complex_query() {
 
     let mut parser = Parser::new();
     parser
-        .set_language(&language)
+        .set_language(language)
         .expect("Failed to set language");
 
     // Complex query with JOINs, aggregates, and subquery
@@ -189,7 +189,7 @@ fn test_parse_multiple_statements() {
 
     let mut parser = Parser::new();
     parser
-        .set_language(&language)
+        .set_language(language)
         .expect("Failed to set language");
 
     // Multiple statements separated by semicolons

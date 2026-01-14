@@ -98,7 +98,7 @@ impl SharedLowering {
                     feature: format!("binary operator: {}", op_str),
                     suggestion: "Use supported operators".to_string(),
                 });
-                return BinaryOp::Eq; // Default fallback
+                BinaryOp::Eq // Default fallback
             }
         }
     }

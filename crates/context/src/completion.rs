@@ -9,6 +9,8 @@
 //! It analyzes the tree-sitter CST to determine what kind of
 //! completion should be provided based on cursor position.
 
+use tracing::debug;
+
 use crate::cst_utils::{
     Position, extract_identifier_name, find_node_at_position, position_to_byte_offset,
 };
@@ -174,22 +176,22 @@ pub fn detect_completion_context(
     position: Position,
     source: &str,
 ) -> CompletionContext {
-    eprintln!(
+    debug!(
         "!!! LSP: detect_completion_context called with position {:?}",
         position
     );
-    eprintln!("!!! LSP: Source content: {:?}", source);
+    debug!("!!! LSP: Source content: {:?}", source);
 
     // Find the node at the cursor position
     let node = match find_node_at_position(root, position, source) {
         Some(n) => n,
         None => {
-            eprintln!("!!! LSP: No node found at position, falling back to text-based detection");
+            debug!("!!! LSP: No node found at position, falling back to text-based detection");
             return detect_context_from_text(source, position);
         }
     };
 
-    eprintln!(
+    debug!(
         "!!! LSP: Cursor at position {:?}, node kind: '{}'",
         position,
         node.kind()
@@ -218,7 +220,7 @@ pub fn detect_completion_context(
 
                     // If CST extraction failed (incomplete SQL), use text-based fallback
                     if tables.is_empty() {
-                        eprintln!(
+                        debug!(
                             "!!! LSP: CST extraction returned empty tables, using text-based extraction"
                         );
                         tables = extract_tables_from_source(source);
@@ -269,10 +271,10 @@ pub fn detect_completion_context(
 
             // JOIN clause
             "join_clause" => {
-                eprintln!("!!! LSP: Found join_clause node");
+                debug!("!!! LSP: Found join_clause node");
                 // Extract left and right table names from the join
                 let (left_table, right_table) = extract_join_tables(&n, source);
-                eprintln!(
+                debug!(
                     "!!! LSP: join_clause: left={:?}, right={:?}",
                     left_table, right_table
                 );
@@ -280,14 +282,14 @@ pub fn detect_completion_context(
                 // If we don't have the right table yet, user is typing table name after JOIN
                 // Return FromClause context to provide table completion
                 if right_table.is_none() {
-                    eprintln!("!!! LSP: No right table, returning FromClause");
+                    debug!("!!! LSP: No right table, returning FromClause");
                     // Extract tables from FROM clause for exclusion
                     let exclude_tables = extract_tables_from_join_parent(&n, source);
                     return CompletionContext::FromClause { exclude_tables };
                 }
 
                 // Otherwise, user is in the ON clause - return JoinCondition for column completion
-                eprintln!("!!! LSP: Both tables found, returning JoinCondition");
+                debug!("!!! LSP: Both tables found, returning JoinCondition");
                 return CompletionContext::JoinCondition {
                     left_table,
                     right_table,
@@ -305,7 +307,7 @@ pub fn detect_completion_context(
     // This might happen when CST parsing is incomplete (e.g., in subqueries)
     // In such cases, fall back to text-based detection
     if node.kind() == "source_file" {
-        eprintln!(
+        debug!(
             "!!! LSP: Only found source_file node, CST may be incomplete, falling back to text-based detection"
         );
         return detect_context_from_text(source, position);
@@ -322,11 +324,11 @@ pub fn detect_completion_context(
 /// the expected CST nodes. It analyzes the text before the cursor to determine
 /// what kind of completion would be appropriate.
 fn detect_context_from_text(source: &str, position: Position) -> CompletionContext {
-    eprintln!("!!! LSP: >>>>> detect_context_from_text called");
+    debug!("!!! LSP: >>>>> detect_context_from_text called");
 
     // Get the byte position of the cursor
     let byte_offset = position_to_byte_offset(source, position);
-    eprintln!("!!! LSP: byte_offset = {}", byte_offset);
+    debug!("!!! LSP: byte_offset = {}", byte_offset);
 
     // Get text before cursor (handle out of bounds)
     let text_before = if byte_offset <= source.len() {
@@ -335,26 +337,27 @@ fn detect_context_from_text(source: &str, position: Position) -> CompletionConte
         source
     };
 
-    eprintln!("!!! LSP: Text before cursor: {:?}", text_before);
-    eprintln!("!!! LSP: XXXXX About to call detect_from_or_join_context");
+    debug!("!!! LSP: Text before cursor: {:?}", text_before);
+    debug!("!!! LSP: XXXXX About to call detect_from_or_join_context");
 
     // Check for specific patterns
     // Note: We pass both full source and text_before because different
     // detection functions need different views
 
-    // Pattern 0.1: UPDATE/INSERT/DELETE table name completion
+    // Pattern 0.1: UPDATE/INSERT/DELETE keyword completion
     // Must check before FROM/JOIN patterns to avoid wrong detection
     let trimmed = text_before.trim_end();
     if trimmed.ends_with("UPDATE ") || trimmed == "UPDATE" {
-        eprintln!("!!! LSP: Detected UPDATE - expecting table names");
-        // For UPDATE, suggest table names, not keywords
-        return CompletionContext::FromClause {
-            exclude_tables: vec![],
+        debug!("!!! LSP: Detected UPDATE - expecting SET keyword");
+        // For UPDATE, suggest SET keyword, not table names
+        return CompletionContext::Keywords {
+            statement_type: Some("UPDATE".to_string()),
+            existing_clauses: vec![],
         };
     }
 
     if trimmed.ends_with("INSERT ") || trimmed == "INSERT" {
-        eprintln!("!!! LSP: Detected INSERT - expecting INTO keyword");
+        debug!("!!! LSP: Detected INSERT - expecting INTO keyword");
         return CompletionContext::Keywords {
             statement_type: Some("INSERT".to_string()),
             existing_clauses: vec![],
@@ -362,7 +365,7 @@ fn detect_context_from_text(source: &str, position: Position) -> CompletionConte
     }
 
     if trimmed.ends_with("DELETE ") || trimmed == "DELETE" {
-        eprintln!("!!! LSP: Detected DELETE - expecting FROM keyword");
+        debug!("!!! LSP: Detected DELETE - expecting FROM keyword");
         return CompletionContext::Keywords {
             statement_type: Some("DELETE".to_string()),
             existing_clauses: vec![],
@@ -371,12 +374,12 @@ fn detect_context_from_text(source: &str, position: Position) -> CompletionConte
 
     // Pattern 0.5: UNION set operations (check early before FROM/JOIN patterns)
     let trimmed = text_before.trim_end();
-    eprintln!(
+    debug!(
         "!!! LSP: Pattern 0.5: Checking for UNION, trimmed='{}'",
         trimmed
     );
     if trimmed.ends_with("UNION ") || trimmed == "UNION" || trimmed.ends_with("UNION") {
-        eprintln!("!!! LSP: Detected UNION - expecting ALL or SELECT");
+        debug!("!!! LSP: Detected UNION - expecting ALL or SELECT");
         return CompletionContext::Keywords {
             statement_type: Some("UNION".to_string()),
             existing_clauses: vec![],
@@ -386,11 +389,11 @@ fn detect_context_from_text(source: &str, position: Position) -> CompletionConte
     // Pattern 1: "SELECT ... FROM |" or "SELECT ... FROM ... JOIN |"
     // Suggest table names
     if let Some(ctx) = detect_from_or_join_context(source, text_before) {
-        eprintln!("!!! LSP: detect_from_or_join_context returned Some(ctx)");
+        debug!("!!! LSP: detect_from_or_join_context returned Some(ctx)");
         return ctx;
     }
 
-    eprintln!("!!! LSP: detect_from_or_join_context returned None");
+    debug!("!!! LSP: detect_from_or_join_context returned None");
 
     // Pattern 2: "SELECT |" or "SELECT id, |"
     // Suggest columns (projection)
@@ -438,26 +441,26 @@ fn detect_context_from_text(source: &str, position: Position) -> CompletionConte
     }
 
     // Pattern 9: DDL statements (CREATE, ALTER, DROP)
-    eprintln!("!!! LSP: About to check DDL context");
+    debug!("!!! LSP: About to check DDL context");
     if let Some(ctx) = detect_ddl_context(text_before) {
         return ctx;
     }
 
     // Default: if we couldn't detect a specific context and text is empty or very short,
     // assume keyword completion
-    eprintln!(
+    debug!(
         "!!! LSP: Checking if keyword context: text_before.len()={}",
         text_before.len()
     );
     if text_before.trim().is_empty() || text_before.len() < 3 {
         // At the beginning of a statement - suggest statement keywords
-        eprintln!("!!! LSP: Detected keyword context (beginning of statement)");
+        debug!("!!! LSP: Detected keyword context (beginning of statement)");
         CompletionContext::Keywords {
             statement_type: None,
             existing_clauses: vec![],
         }
     } else {
-        eprintln!("!!! LSP: No specific context detected, returning Unknown");
+        debug!("!!! LSP: No specific context detected, returning Unknown");
         CompletionContext::Unknown
     }
 }
@@ -487,7 +490,7 @@ fn extract_real_table_names_from_source(source: &str) -> Vec<String> {
         }
 
         let from_clause = &from_part[..end_pos];
-        eprintln!(
+        debug!(
             "!!! LSP: extract_real_table_names_from_source: from_clause='{}'",
             from_clause
         );
@@ -499,7 +502,7 @@ fn extract_real_table_names_from_source(source: &str) -> Vec<String> {
             .trim_end_matches(';')
             .trim();
 
-        eprintln!(
+        debug!(
             "!!! LSP: extract_real_table_names_from_source: from_clause after stripping='{}'",
             from_clause
         );
@@ -514,7 +517,7 @@ fn extract_real_table_names_from_source(source: &str) -> Vec<String> {
             .filter(|s| !s.is_empty())
             .collect();
 
-        eprintln!(
+        debug!(
             "!!! LSP: extract_real_table_names_from_source: words={:?}, has_commas={}",
             words, has_commas
         );
@@ -522,7 +525,7 @@ fn extract_real_table_names_from_source(source: &str) -> Vec<String> {
         let mut i = 0;
         while i < words.len() {
             let word = words[i].to_uppercase();
-            eprintln!(
+            debug!(
                 "!!! LSP: extract_real_table_names_from_source: i={}, word='{}'",
                 i, word
             );
@@ -580,7 +583,7 @@ fn extract_real_table_names_from_source(source: &str) -> Vec<String> {
                         | "OR"
                 ) {
                     // Next word is an alias, skip it
-                    eprintln!(
+                    debug!(
                         "!!! LSP: extract_real_table_names_from_source: skipping alias '{}'",
                         words[i]
                     );
@@ -589,7 +592,7 @@ fn extract_real_table_names_from_source(source: &str) -> Vec<String> {
             }
         }
 
-        eprintln!(
+        debug!(
             "!!! LSP: extract_real_table_names_from_source: extracted tables={:?}",
             tables
         );
@@ -602,19 +605,19 @@ fn extract_real_table_names_from_source(source: &str) -> Vec<String> {
 fn detect_from_or_join_context(source: &str, text_before: &str) -> Option<CompletionContext> {
     let text_before_upper = text_before.to_uppercase();
 
-    eprintln!("!!! LSP: detect_from_or_join_context called");
-    eprintln!("!!! LSP: text_before='{}'", text_before);
+    debug!("!!! LSP: detect_from_or_join_context called");
+    debug!("!!! LSP: text_before='{}'", text_before);
 
     // Check if cursor is inside a subquery (parentheses)
     // If we're in a subquery, let other context detectors handle the inner context
     let open_parens = text_before.matches('(').count();
     let close_parens = text_before.matches(')').count();
-    eprintln!(
+    debug!(
         "!!! LSP: *** PARENTHESIS CHECK *** open_parens={}, close_parens={}",
         open_parens, close_parens
     );
     if open_parens > close_parens {
-        eprintln!(
+        debug!(
             "!!! LSP: Cursor inside subquery (open_parens={} > close_parens={}), skipping FROM/JOIN detection",
             open_parens, close_parens
         );
@@ -628,7 +631,7 @@ fn detect_from_or_join_context(source: &str, text_before: &str) -> Option<Comple
         || text_before_upper.trim_end().ends_with("SELECT\t")
         || text_before_upper.trim_end() == "SELECT"
     {
-        eprintln!("!!! LSP: Just typed SELECT, skipping FROM/JOIN detection");
+        debug!("!!! LSP: Just typed SELECT, skipping FROM/JOIN detection");
         return None;
     }
 
@@ -638,7 +641,7 @@ fn detect_from_or_join_context(source: &str, text_before: &str) -> Option<Comple
         // Get text after the last JOIN
         let after_join = &text_before_upper[join_pos + 4..]; // +4 for "JOIN"
 
-        eprintln!(
+        debug!(
             "!!! LSP: Found JOIN at pos {}, after='{}' (len={})",
             join_pos,
             after_join,
@@ -649,18 +652,18 @@ fn detect_from_or_join_context(source: &str, text_before: &str) -> Option<Comple
         // Split by whitespace and check
         let words: Vec<&str> = after_join.split_whitespace().collect();
 
-        eprintln!(
+        debug!(
             "!!! LSP: words after JOIN: {:?}, count={}",
             words,
             words.len()
         );
-        eprintln!("!!! LSP: ends_with(' '): {}", after_join.ends_with(' '));
-        eprintln!(
+        debug!("!!! LSP: ends_with(' '): {}", after_join.ends_with(' '));
+        debug!(
             "!!! LSP: trim_end().ends_with(' '): {}",
             after_join.trim_end().ends_with(' ')
         );
 
-        eprintln!(
+        debug!(
             "!!! LSP: Checking condition: words.is_empty()={}, words.len()={}, trim_end().ends_with(' ')={}",
             words.is_empty(),
             words.len(),
@@ -668,14 +671,14 @@ fn detect_from_or_join_context(source: &str, text_before: &str) -> Option<Comple
         );
         if words.is_empty() || (words.len() <= 3 && after_join.trim_end().ends_with(' ')) {
             // We're likely right after JOIN, or after "JOIN <partial_word>"
-            eprintln!("!!! LSP: Detected FROM/JOIN context (after JOIN)");
+            debug!("!!! LSP: Detected FROM/JOIN context (after JOIN)");
             // Extract tables from source for exclusion (use real table names, not aliases)
             let exclude_tables = extract_real_table_names_from_source(source);
 
             // Check if we should allow self-join by examining aliases
             // Pattern: "employees e1 JOIN" - alias with number suffix suggests self-join
             // Pattern: "users u JOIN" - simple alias, likely joining to different table
-            eprintln!(
+            debug!(
                 "!!! LSP: Checking for self-join hint, exclude_tables={:?}",
                 exclude_tables
             );
@@ -685,39 +688,37 @@ fn detect_from_or_join_context(source: &str, text_before: &str) -> Option<Comple
                     let source_upper = source.to_uppercase();
                     // Look for pattern "<TABLE> <ALIAS>" where alias ends with digit
                     let pattern = format!("{} ", table).to_uppercase();
-                    eprintln!("!!! LSP: Looking for pattern '{}' in source", pattern);
+                    debug!("!!! LSP: Looking for pattern '{}' in source", pattern);
                     if let Some(pos) = source_upper.find(&pattern) {
                         let after_table = &source[pos + pattern.len()..];
                         // Get the next word (alias)
                         let alias = after_table.split_whitespace().next().unwrap_or("");
-                        eprintln!("!!! LSP: Found alias '{}' after table '{}'", alias, table);
+                        debug!("!!! LSP: Found alias '{}' after table '{}'", alias, table);
                         // Check if alias ends with a digit (e1, e2, t1, t2, etc.)
                         let ends_with_digit = alias.chars().last().is_some_and(|c| c.is_numeric());
-                        eprintln!(
+                        debug!(
                             "!!! LSP: Alias '{}' ends with digit: {}",
                             alias, ends_with_digit
                         );
                         ends_with_digit
                     } else {
-                        eprintln!("!!! LSP: Pattern '{}' not found in source", pattern);
+                        debug!("!!! LSP: Pattern '{}' not found in source", pattern);
                         false
                     }
                 } else {
-                    eprintln!("!!! LSP: No tables in exclude list");
+                    debug!("!!! LSP: No tables in exclude list");
                     false
                 }
             } else {
-                eprintln!("!!! LSP: More than 1 table, not checking for self-join");
+                debug!("!!! LSP: More than 1 table, not checking for self-join");
                 false
             };
 
             let final_exclude = if allow_self_join {
-                eprintln!(
-                    "!!! LSP: Detected numbered alias (likely self-join), not excluding table"
-                );
+                debug!("!!! LSP: Detected numbered alias (likely self-join), not excluding table");
                 vec![]
             } else {
-                eprintln!(
+                debug!(
                     "!!! LSP: Excluding {} already-used tables",
                     exclude_tables.len()
                 );
@@ -733,7 +734,7 @@ fn detect_from_or_join_context(source: &str, text_before: &str) -> Option<Comple
     // Check for comma-style join pattern: "FROM table1, table2, |"
     // This needs to be checked before the regular FROM pattern
     if text_before_upper.contains("FROM") && text_before.trim_end().ends_with(',') {
-        eprintln!("!!! LSP: Detected comma-style join pattern");
+        debug!("!!! LSP: Detected comma-style join pattern");
         // Extract tables from source for exclusion
         let exclude_tables = extract_real_table_names_from_source(source);
         return Some(CompletionContext::FromClause { exclude_tables });
@@ -742,7 +743,7 @@ fn detect_from_or_join_context(source: &str, text_before: &str) -> Option<Comple
     // Check for FROM pattern (e.g., "...FROM |")
     if is_after_keyword(&text_before_upper, "FROM") {
         let after_from = extract_after_keyword(&text_before_upper, "FROM");
-        eprintln!(
+        debug!(
             "!!! LSP: after_from='{}', trimmed.len()={}",
             after_from,
             after_from.trim().len()
@@ -753,7 +754,7 @@ fn detect_from_or_join_context(source: &str, text_before: &str) -> Option<Comple
             // EXCEPT: "FROM table, " should suggest tables (comma-style join)
             let trimmed = after_from.trim();
             let words: Vec<&str> = trimmed.split_whitespace().collect();
-            eprintln!("!!! LSP: words={:?}, words.len()={}", words, words.len());
+            debug!("!!! LSP: words={:?}, words.len()={}", words, words.len());
 
             if !words.is_empty() {
                 // We have at least one word after FROM
@@ -763,7 +764,7 @@ fn detect_from_or_join_context(source: &str, text_before: &str) -> Option<Comple
                 let ends_with_cursor =
                     trimmed.ends_with('|') || words.last().is_some_and(|w| *w == "|");
 
-                eprintln!(
+                debug!(
                     "!!! LSP: ends_with_space={}, ends_with_cursor={}",
                     ends_with_space, ends_with_cursor
                 );
@@ -772,13 +773,13 @@ fn detect_from_or_join_context(source: &str, text_before: &str) -> Option<Comple
                     // Check if this is a comma-style join: "FROM table1, table2, |"
                     // If the trimmed text ends with comma, it's a comma join
                     if trimmed.ends_with(',') {
-                        eprintln!("!!! LSP: Detected comma-style join, suggesting tables");
+                        debug!("!!! LSP: Detected comma-style join, suggesting tables");
                         // Extract tables from source for exclusion
                         let exclude_tables = extract_real_table_names_from_source(source);
                         return Some(CompletionContext::FromClause { exclude_tables });
                     }
 
-                    eprintln!("!!! LSP: Detected clause context after table name");
+                    debug!("!!! LSP: Detected clause context after table name");
                     // Return Keywords context with existing clauses
                     return Some(CompletionContext::Keywords {
                         statement_type: Some("SELECT".to_string()),
@@ -787,14 +788,14 @@ fn detect_from_or_join_context(source: &str, text_before: &str) -> Option<Comple
                 }
             }
 
-            eprintln!("!!! LSP: Detected FROM/JOIN context (after FROM)");
+            debug!("!!! LSP: Detected FROM/JOIN context (after FROM)");
             return Some(CompletionContext::FromClause {
                 exclude_tables: vec![],
             });
         }
     }
 
-    eprintln!("!!! LSP: detect_from_or_join_context returning None");
+    debug!("!!! LSP: detect_from_or_join_context returning None");
     None
 }
 
@@ -811,7 +812,7 @@ fn detect_projection_context(source: &str, text_before: &str) -> Option<Completi
     // If we have more opens than closes, we're inside parentheses
     let in_subquery = open_parens > close_parens;
 
-    eprintln!(
+    debug!(
         "!!! LSP: detect_projection_context: in_subquery={}, open_parens={}, close_parens={}",
         in_subquery, open_parens, close_parens
     );
@@ -830,46 +831,46 @@ fn detect_projection_context(source: &str, text_before: &str) -> Option<Completi
                 // For simplicity, if we're in parens and just typed SELECT, we're in projection
                 if text_before_upper.ends_with("SELECT ") || text_before_upper.ends_with("SELECT\t")
                 {
-                    eprintln!(
+                    debug!(
                         "!!! LSP: Detected SELECT projection context (in subquery, just typed SELECT)"
                     );
-                    eprintln!("!!! LSP: source='{}'", source);
+                    debug!("!!! LSP: source='{}'", source);
 
                     // Try to extract table from the subquery's FROM clause
                     // For "JOIN (SELECT | FROM orders)", we need "orders" table
                     // We need to find the FROM that's inside the subquery (after the last SELECT)
                     let tables = if let Some(last_select_pos) = source_upper.rfind("SELECT") {
-                        eprintln!("!!! LSP: last_select_pos={}", last_select_pos);
+                        debug!("!!! LSP: last_select_pos={}", last_select_pos);
                         // Look for FROM after this SELECT
                         let after_select = &source_upper[last_select_pos..];
-                        eprintln!("!!! LSP: after_select='{}'", after_select);
+                        debug!("!!! LSP: after_select='{}'", after_select);
                         if let Some(from_pos_relative) = after_select.find("FROM") {
                             let from_pos_absolute = last_select_pos + from_pos_relative;
-                            eprintln!("!!! LSP: from_pos_absolute={}", from_pos_absolute);
+                            debug!("!!! LSP: from_pos_absolute={}", from_pos_absolute);
                             // Get text after this FROM
                             let after_from = &source[from_pos_absolute + 4..];
-                            eprintln!("!!! LSP: after_from='{}'", after_from);
+                            debug!("!!! LSP: after_from='{}'", after_from);
                             // Trim leading whitespace first
                             let after_from_trimmed = after_from.trim_start();
-                            eprintln!("!!! LSP: after_from_trimmed='{}'", after_from_trimmed);
+                            debug!("!!! LSP: after_from_trimmed='{}'", after_from_trimmed);
                             // Extract first word as table name
                             if let Some(table_end) = after_from_trimmed.find([' ', ')', ';']) {
                                 let table_name = after_from_trimmed[..table_end].trim().to_string();
-                                eprintln!(
+                                debug!(
                                     "!!! LSP: Extracted table from subquery FROM: '{}'",
                                     table_name
                                 );
                                 vec![table_name]
                             } else {
-                                eprintln!("!!! LSP: No table end found in after_from");
+                                debug!("!!! LSP: No table end found in after_from");
                                 vec![]
                             }
                         } else {
-                            eprintln!("!!! LSP: No FROM found after last SELECT");
+                            debug!("!!! LSP: No FROM found after last SELECT");
                             vec![]
                         }
                     } else {
-                        eprintln!("!!! LSP: No SELECT found in source");
+                        debug!("!!! LSP: No SELECT found in source");
                         vec![]
                     };
 
@@ -879,16 +880,16 @@ fn detect_projection_context(source: &str, text_before: &str) -> Option<Completi
                     });
                 }
             } else if !text_before_upper.contains("FROM") {
-                eprintln!("!!! LSP: Detected SELECT projection context");
+                debug!("!!! LSP: Detected SELECT projection context");
 
                 // Extract table names from FROM clause
                 // Simple extraction: find FROM keyword, then get the next word(s)
                 let tables = extract_tables_from_source(source);
-                eprintln!("!!! LSP: Extracted tables from source: {:?}", tables);
+                debug!("!!! LSP: Extracted tables from source: {:?}", tables);
 
                 // Extract table qualifier (e.g., "users." from "SELECT users.|")
                 let qualifier = extract_table_qualifier(text_before);
-                eprintln!(
+                debug!(
                     "!!! LSP: Extracted qualifier from text_before: {:?}",
                     qualifier
                 );
@@ -897,11 +898,11 @@ fn detect_projection_context(source: &str, text_before: &str) -> Option<Completi
             }
         } else {
             // No FROM yet, definitely in projection
-            eprintln!("!!! LSP: Detected SELECT projection context (no FROM yet)");
+            debug!("!!! LSP: Detected SELECT projection context (no FROM yet)");
 
             // Extract table qualifier (e.g., "users." from "SELECT users.|")
             let qualifier = extract_table_qualifier(text_before);
-            eprintln!(
+            debug!(
                 "!!! LSP: Extracted qualifier from text_before: {:?}",
                 qualifier
             );
@@ -945,7 +946,7 @@ fn extract_tables_from_source(source: &str) -> Vec<String> {
         }
 
         let from_clause = &from_part[..end_pos];
-        eprintln!(
+        debug!(
             "!!! LSP: extract_tables_from_source: from_clause='{}'",
             from_clause
         );
@@ -957,7 +958,7 @@ fn extract_tables_from_source(source: &str) -> Vec<String> {
             .trim_end_matches(';')
             .trim();
 
-        eprintln!(
+        debug!(
             "!!! LSP: extract_tables_from_source: from_clause after stripping='{}'",
             from_clause
         );
@@ -1042,7 +1043,7 @@ fn extract_tables_from_source(source: &str) -> Vec<String> {
             }
         }
 
-        eprintln!(
+        debug!(
             "!!! LSP: extract_tables_from_source: extracted tables={:?}",
             tables
         );
@@ -1058,7 +1059,7 @@ fn detect_where_context(source: &str, text_before: &str) -> Option<CompletionCon
     // Check if we're after WHERE keyword
     // We should detect WHERE regardless of what comes after (even complex expressions)
     if text_upper.contains("WHERE") {
-        eprintln!("!!! LSP: Detected WHERE context");
+        debug!("!!! LSP: Detected WHERE context");
         // Extract tables from source
         let tables = extract_tables_from_source(source);
         // Check for table qualifier (e.g., "u.")
@@ -1073,15 +1074,15 @@ fn detect_where_context(source: &str, text_before: &str) -> Option<CompletionCon
 fn detect_join_using_context(source: &str, text_before: &str) -> Option<CompletionContext> {
     let text_upper = text_before.to_uppercase();
 
-    eprintln!(
+    debug!(
         "!!! LSP: detect_join_using_context: text_before='{}'",
         text_before
     );
-    eprintln!(
+    debug!(
         "!!! LSP: detect_join_using_context: contains USING={}",
         text_upper.contains("USING")
     );
-    eprintln!(
+    debug!(
         "!!! LSP: detect_join_using_context: ends_with '({}'",
         text_before.trim_end().ends_with('(')
     );
@@ -1094,7 +1095,7 @@ fn detect_join_using_context(source: &str, text_before: &str) -> Option<Completi
             return None;
         }
 
-        eprintln!("!!! LSP: Detected JOIN USING context");
+        debug!("!!! LSP: Detected JOIN USING context");
 
         // For USING, we need to extract table names manually
         // Pattern: "FROM table1 JOIN table2 USING ("
@@ -1123,14 +1124,14 @@ fn detect_join_using_context(source: &str, text_before: &str) -> Option<Completi
                 }
             }
 
-            eprintln!("!!! LSP: JOIN USING: extracted tables={:?}", tables);
+            debug!("!!! LSP: JOIN USING: extracted tables={:?}", tables);
 
             if tables.len() >= 2 {
                 // Get the last two tables (the ones being joined)
                 let left_table = Some(tables[tables.len() - 2].clone());
                 let right_table = Some(tables[tables.len() - 1].clone());
 
-                eprintln!(
+                debug!(
                     "!!! LSP: JOIN USING tables - left: {:?}, right: {:?}",
                     left_table, right_table
                 );
@@ -1161,7 +1162,7 @@ fn detect_join_on_context(source: &str, text_before: &str) -> Option<CompletionC
         }
         // Check for table qualifier (e.g., "u.")
         let qualifier = extract_table_qualifier(text_before);
-        eprintln!(
+        debug!(
             "!!! LSP: Detected JOIN ON context, qualifier: {:?}",
             qualifier
         );
@@ -1202,7 +1203,7 @@ fn detect_join_on_context(source: &str, text_before: &str) -> Option<CompletionC
             None => (left_table, right_table),
         };
 
-        eprintln!(
+        debug!(
             "!!! LSP: JOIN ON tables - left: {:?}, right: {:?}, qualifier: {:?}",
             left_table, right_table, qualifier
         );
@@ -1225,7 +1226,7 @@ fn detect_order_by_context(source: &str, text_before: &str) -> Option<Completion
 
     // Check if we're after ORDER BY keyword
     if is_after_keyword(&text_upper, "ORDER BY") {
-        eprintln!("!!! LSP: Detected ORDER BY context");
+        debug!("!!! LSP: Detected ORDER BY context");
         // Extract tables from source
         let tables = extract_tables_from_source(source);
         // Check for table qualifier
@@ -1242,7 +1243,7 @@ fn detect_group_by_context(source: &str, text_before: &str) -> Option<Completion
 
     // Check if we're after GROUP BY keyword
     if is_after_keyword(&text_upper, "GROUP BY") {
-        eprintln!("!!! LSP: Detected GROUP BY context");
+        debug!("!!! LSP: Detected GROUP BY context");
         // Extract tables from source
         let tables = extract_tables_from_source(source);
         // Check for table qualifier
@@ -1259,7 +1260,7 @@ fn detect_limit_context(text_before: &str) -> Option<CompletionContext> {
 
     // Check if we're after LIMIT keyword
     if is_after_keyword(&text_upper, "LIMIT") {
-        eprintln!("!!! LSP: Detected LIMIT context");
+        debug!("!!! LSP: Detected LIMIT context");
         return Some(CompletionContext::LimitClause);
     }
 
@@ -1272,7 +1273,7 @@ fn detect_having_context(source: &str, text_before: &str) -> Option<CompletionCo
 
     // Check if we're after HAVING keyword
     if is_after_keyword(&text_upper, "HAVING") {
-        eprintln!("!!! LSP: Detected HAVING context");
+        debug!("!!! LSP: Detected HAVING context");
         // Extract tables from source
         let tables = extract_tables_from_source(source);
         // Check for table qualifier
@@ -1289,7 +1290,7 @@ fn detect_ddl_context(text_before: &str) -> Option<CompletionContext> {
 
     // Check for CREATE pattern
     if trimmed.ends_with("CREATE ") || trimmed == "CREATE" {
-        eprintln!("!!! LSP: Detected CREATE context");
+        debug!("!!! LSP: Detected CREATE context");
         return Some(CompletionContext::Keywords {
             statement_type: Some("CREATE".to_string()),
             existing_clauses: vec![],
@@ -1298,7 +1299,7 @@ fn detect_ddl_context(text_before: &str) -> Option<CompletionContext> {
 
     // Check for ALTER pattern
     if trimmed.ends_with("ALTER ") || trimmed == "ALTER" {
-        eprintln!("!!! LSP: Detected ALTER context");
+        debug!("!!! LSP: Detected ALTER context");
         return Some(CompletionContext::Keywords {
             statement_type: Some("ALTER".to_string()),
             existing_clauses: vec![],
@@ -1307,7 +1308,7 @@ fn detect_ddl_context(text_before: &str) -> Option<CompletionContext> {
 
     // Check for DROP pattern
     if trimmed.ends_with("DROP ") || trimmed == "DROP" {
-        eprintln!("!!! LSP: Detected DROP context");
+        debug!("!!! LSP: Detected DROP context");
         return Some(CompletionContext::Keywords {
             statement_type: Some("DROP".to_string()),
             existing_clauses: vec![],

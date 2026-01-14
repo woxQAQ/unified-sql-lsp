@@ -1851,6 +1851,7 @@ dependencies = [
  "lsp-types 0.95.1",
  "serde",
  "thiserror",
+ "tracing",
  "tree-sitter",
  "unified-sql-grammar",
  "unified-sql-lsp-ir",

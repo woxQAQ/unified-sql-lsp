@@ -126,33 +126,27 @@ impl ScopeBuilder {
         tables: &mut Vec<TableSymbol>,
         table_counts: &mut HashMap<String, usize>,
     ) -> Result<(), CompletionError> {
-        match node.kind() {
-            "table_reference" => {
-                let table = Self::parse_table_reference(node, source)?;
+        if node.kind() == "table_reference" {
+            let table = Self::parse_table_reference(node, source)?;
+            let display_name = table.display_name().to_string();
+            *table_counts.entry(display_name.clone()).or_insert(0) += 1;
 
-                // Check for duplicate table names
-                let display_name = table.display_name().to_string();
-                *table_counts.entry(display_name.clone()).or_insert(0) += 1;
-
-                if table_counts[&display_name] == 1 {
-                    tables.push(table);
-                } else {
-                    return Err(CompletionError::ScopeBuild(format!(
-                        "Duplicate table reference: {}",
-                        display_name
-                    )));
-                }
-
-                Ok(())
+            if table_counts[&display_name] == 1 {
+                tables.push(table);
+            } else {
+                return Err(CompletionError::ScopeBuild(format!(
+                    "Duplicate table reference: {}",
+                    display_name
+                )));
             }
-            _ => {
-                // Recurse into children
-                for child in node.children(&mut node.walk()) {
-                    Self::extract_tables_recursive(&child, source, tables, table_counts)?;
-                }
-                Ok(())
-            }
+            return Ok(());
         }
+
+        // Recurse into children
+        for child in node.children(&mut node.walk()) {
+            Self::extract_tables_recursive(&child, source, tables, table_counts)?;
+        }
+        Ok(())
     }
 
     /// Parse a table_reference node

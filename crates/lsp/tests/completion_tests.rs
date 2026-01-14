@@ -250,26 +250,11 @@ async fn test_keyword_completion_statement_keywords() {
     // Should have statement keywords
     if let Some(items) = items {
         let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
-        assert!(
-            labels.iter().any(|l| *l == "SELECT"),
-            "Missing SELECT keyword"
-        );
-        assert!(
-            labels.iter().any(|l| *l == "INSERT"),
-            "Missing INSERT keyword"
-        );
-        assert!(
-            labels.iter().any(|l| *l == "UPDATE"),
-            "Missing UPDATE keyword"
-        );
-        assert!(
-            labels.iter().any(|l| *l == "DELETE"),
-            "Missing DELETE keyword"
-        );
-        assert!(
-            labels.iter().any(|l| *l == "CREATE"),
-            "Missing CREATE keyword"
-        );
+        assert!(labels.contains(&"SELECT"), "Missing SELECT keyword");
+        assert!(labels.contains(&"INSERT"), "Missing INSERT keyword");
+        assert!(labels.contains(&"UPDATE"), "Missing UPDATE keyword");
+        assert!(labels.contains(&"DELETE"), "Missing DELETE keyword");
+        assert!(labels.contains(&"CREATE"), "Missing CREATE keyword");
     }
 }
 
@@ -292,22 +277,10 @@ async fn test_keyword_completion_select_clause_keywords() {
     if let Some(items) = items {
         let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
         // Should have WHERE, GROUP BY, ORDER BY, etc.
-        assert!(
-            labels.iter().any(|l| *l == "WHERE"),
-            "Missing WHERE keyword"
-        );
-        assert!(
-            labels.iter().any(|l| *l == "GROUP BY"),
-            "Missing GROUP BY keyword"
-        );
-        assert!(
-            labels.iter().any(|l| *l == "ORDER BY"),
-            "Missing ORDER BY keyword"
-        );
-        assert!(
-            labels.iter().any(|l| *l == "LIMIT"),
-            "Missing LIMIT keyword"
-        );
+        assert!(labels.contains(&"WHERE"), "Missing WHERE keyword");
+        assert!(labels.contains(&"GROUP BY"), "Missing GROUP BY keyword");
+        assert!(labels.contains(&"ORDER BY"), "Missing ORDER BY keyword");
+        assert!(labels.contains(&"LIMIT"), "Missing LIMIT keyword");
     }
 }
 
@@ -331,14 +304,11 @@ async fn test_keyword_completion_existing_clause_filtered() {
         let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
         // FROM should not be suggested again
         assert!(
-            !labels.iter().any(|l| *l == "FROM"),
+            !labels.contains(&"FROM"),
             "FROM should not be suggested when it already exists"
         );
         // But WHERE should be suggested
-        assert!(
-            labels.iter().any(|l| *l == "WHERE"),
-            "WHERE should be suggested"
-        );
+        assert!(labels.contains(&"WHERE"), "WHERE should be suggested");
     }
 }
 
@@ -361,10 +331,7 @@ async fn test_keyword_completion_mysql_dialect() {
     if let Some(items) = items {
         let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
         // Should have LIMIT (MySQL style)
-        assert!(
-            labels.iter().any(|l| *l == "LIMIT"),
-            "Missing LIMIT keyword for MySQL"
-        );
+        assert!(labels.contains(&"LIMIT"), "Missing LIMIT keyword for MySQL");
     }
 }
 
@@ -388,7 +355,7 @@ async fn test_keyword_completion_postgresql_dialect() {
         let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
         // Should have FETCH (PostgreSQL style)
         assert!(
-            labels.iter().any(|l| *l == "FETCH"),
+            labels.contains(&"FETCH"),
             "Missing FETCH keyword for PostgreSQL"
         );
     }
@@ -413,19 +380,10 @@ async fn test_keyword_completion_join_keywords() {
     if let Some(items) = items {
         let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
         // Should have JOIN types
-        assert!(labels.iter().any(|l| *l == "JOIN"), "Missing JOIN keyword");
-        assert!(
-            labels.iter().any(|l| *l == "INNER JOIN"),
-            "Missing INNER JOIN keyword"
-        );
-        assert!(
-            labels.iter().any(|l| *l == "LEFT JOIN"),
-            "Missing LEFT JOIN keyword"
-        );
-        assert!(
-            labels.iter().any(|l| *l == "RIGHT JOIN"),
-            "Missing RIGHT JOIN keyword"
-        );
+        assert!(labels.contains(&"JOIN"), "Missing JOIN keyword");
+        assert!(labels.contains(&"INNER JOIN"), "Missing INNER JOIN keyword");
+        assert!(labels.contains(&"LEFT JOIN"), "Missing LEFT JOIN keyword");
+        assert!(labels.contains(&"RIGHT JOIN"), "Missing RIGHT JOIN keyword");
     }
 }
 
@@ -449,19 +407,16 @@ async fn test_keyword_completion_create_statement() {
         let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
         // Should have CREATE targets
         assert!(
-            labels.iter().any(|l| *l == "TABLE"),
+            labels.contains(&"TABLE"),
             "Missing TABLE keyword for CREATE"
         );
         assert!(
-            labels.iter().any(|l| *l == "INDEX"),
+            labels.contains(&"INDEX"),
             "Missing INDEX keyword for CREATE"
         );
+        assert!(labels.contains(&"VIEW"), "Missing VIEW keyword for CREATE");
         assert!(
-            labels.iter().any(|l| *l == "VIEW"),
-            "Missing VIEW keyword for CREATE"
-        );
-        assert!(
-            labels.iter().any(|l| *l == "DATABASE"),
+            labels.contains(&"DATABASE"),
             "Missing DATABASE keyword for CREATE"
         );
     }
@@ -486,12 +441,9 @@ async fn test_keyword_completion_insert_statement() {
     if let Some(items) = items {
         let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
         // Should have INSERT-specific keywords
+        assert!(labels.contains(&"INTO"), "Missing INTO keyword for INSERT");
         assert!(
-            labels.iter().any(|l| *l == "INTO"),
-            "Missing INTO keyword for INSERT"
-        );
-        assert!(
-            labels.iter().any(|l| *l == "VALUES"),
+            labels.contains(&"VALUES"),
             "Missing VALUES keyword for INSERT"
         );
     }
@@ -516,12 +468,9 @@ async fn test_keyword_completion_delete_statement() {
     if let Some(items) = items {
         let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
         // Should have DELETE-specific keywords
+        assert!(labels.contains(&"FROM"), "Missing FROM keyword for DELETE");
         assert!(
-            labels.iter().any(|l| *l == "FROM"),
-            "Missing FROM keyword for DELETE"
-        );
-        assert!(
-            labels.iter().any(|l| *l == "WHERE"),
+            labels.contains(&"WHERE"),
             "Missing WHERE keyword for DELETE"
         );
     }
@@ -546,12 +495,9 @@ async fn test_keyword_completion_update_statement() {
     if let Some(items) = items {
         let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
         // Should have UPDATE-specific keywords
+        assert!(labels.contains(&"SET"), "Missing SET keyword for UPDATE");
         assert!(
-            labels.iter().any(|l| *l == "SET"),
-            "Missing SET keyword for UPDATE"
-        );
-        assert!(
-            labels.iter().any(|l| *l == "WHERE"),
+            labels.contains(&"WHERE"),
             "Missing WHERE keyword for UPDATE"
         );
     }

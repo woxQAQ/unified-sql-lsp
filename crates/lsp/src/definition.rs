@@ -491,12 +491,11 @@ mod tests {
         let root_node = tree.root_node();
 
         // Try to extract from select_statement (should fail)
-        if let Some(child) = root_node.find_child(|_| true) {
-            if child.kind() == "select_statement" {
-                let result = extract_identifier_name(&child, sql);
-                assert_eq!(result, None, "Should return None for non-identifier node");
-                return;
-            }
+        if let Some(child) = root_node.find_child(|_| true)
+            && child.kind() == "select_statement"
+        {
+            let result = extract_identifier_name(&child, sql);
+            assert_eq!(result, None, "Should return None for non-identifier node");
         }
     }
 
@@ -520,15 +519,14 @@ mod tests {
         let root_node = tree.root_node();
 
         // Try to extract from select_statement (should fail)
-        if let Some(child) = root_node.find_child(|_| true) {
-            if child.kind() == "select_statement" {
-                let result = extract_table_name(&child, sql);
-                assert_eq!(
-                    result, None,
-                    "Should return None for non-table_reference node"
-                );
-                return;
-            }
+        if let Some(child) = root_node.find_child(|_| true)
+            && child.kind() == "select_statement"
+        {
+            let result = extract_table_name(&child, sql);
+            assert_eq!(
+                result, None,
+                "Should return None for non-table_reference node"
+            );
         }
     }
 
@@ -576,10 +574,10 @@ mod tests {
         ) -> Option<(String, Option<String>)> {
             if node.kind() == "column_reference" {
                 let result = extract_column_info(node, sql);
-                if let Some((_, table_name)) = &result {
-                    if table_name.is_some() {
-                        return result;
-                    }
+                if let Some((_, table_name)) = &result
+                    && table_name.is_some()
+                {
+                    return result;
                 }
             }
             for child in node.iter_children() {
@@ -606,12 +604,11 @@ mod tests {
         let root_node = tree.root_node();
 
         // Try to extract from select_statement (should fail)
-        if let Some(child) = root_node.find_child(|_| true) {
-            if child.kind() == "select_statement" {
-                let result = extract_column_info(&child, sql);
-                assert_eq!(result, None, "Should return None for non-column node");
-                return;
-            }
+        if let Some(child) = root_node.find_child(|_| true)
+            && child.kind() == "select_statement"
+        {
+            let result = extract_column_info(&child, sql);
+            assert_eq!(result, None, "Should return None for non-column node");
         }
     }
 
@@ -624,7 +621,7 @@ mod tests {
         // Find a column node using recursive walk
         fn find_column_node_recursive(node: tree_sitter::Node) -> Option<tree_sitter::Node> {
             if node.kind() == "column_name" || node.kind() == "identifier" {
-                return Some(node.clone());
+                return Some(node);
             }
             for child in node.children(&mut node.walk()) {
                 if let Some(found) = find_column_node_recursive(child) {
@@ -634,8 +631,8 @@ mod tests {
             None
         }
 
-        let column_node = find_column_node_recursive(root_node.clone())
-            .expect("Could not find column node for testing");
+        let column_node =
+            find_column_node_recursive(root_node).expect("Could not find column node for testing");
 
         let result = find_parent_select(&column_node);
         assert!(result.is_some(), "Should find parent SELECT statement");
@@ -803,10 +800,10 @@ mod tests {
             node: &tree_sitter::Node,
             sql: &str,
         ) -> Option<String> {
-            if node.kind() == "function_call" || node.kind() == "expression" {
-                if let Some(alias) = extract_alias(node, sql) {
-                    return Some(alias);
-                }
+            if (node.kind() == "function_call" || node.kind() == "expression")
+                && let Some(alias) = extract_alias(node, sql)
+            {
+                return Some(alias);
             }
             for child in node.iter_children() {
                 if let Some(alias) = find_function_with_alias_recursive(&child, sql) {
@@ -831,12 +828,11 @@ mod tests {
         let root_node = tree.root_node();
 
         // Find a node without alias
-        if let Some(child) = root_node.find_child(|_| true) {
-            if child.kind() == "select_statement" {
-                let result = extract_alias(&child, sql);
-                assert_eq!(result, None, "Should return None for node without alias");
-                return;
-            }
+        if let Some(child) = root_node.find_child(|_| true)
+            && child.kind() == "select_statement"
+        {
+            let result = extract_alias(&child, sql);
+            assert_eq!(result, None, "Should return None for node without alias");
         }
     }
 

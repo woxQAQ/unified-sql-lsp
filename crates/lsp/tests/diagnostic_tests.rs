@@ -78,7 +78,7 @@ async fn test_diagnostic_sql_diagnostic_conversion() {
         },
     };
 
-    let sql_diagnostic = SqlDiagnostic::error("Test error".to_string(), range.clone())
+    let sql_diagnostic = SqlDiagnostic::error("Test error".to_string(), range)
         .with_code(unified_sql_lsp_lsp::diagnostic::DiagnosticCode::SyntaxError);
 
     let lsp_diagnostic = sql_diagnostic.to_lsp();
@@ -176,9 +176,9 @@ async fn test_diagnostic_all_severity_levels() {
     };
 
     // Test all severity levels
-    let error = SqlDiagnostic::error("Error".to_string(), range.clone());
-    let warning = SqlDiagnostic::warning("Warning".to_string(), range.clone());
-    let info = SqlDiagnostic::information("Info".to_string(), range.clone());
+    let error = SqlDiagnostic::error("Error".to_string(), range);
+    let warning = SqlDiagnostic::warning("Warning".to_string(), range);
+    let info = SqlDiagnostic::information("Info".to_string(), range);
     let hint = SqlDiagnostic::hint("Hint".to_string(), range);
 
     let lsp_error = error.to_lsp();

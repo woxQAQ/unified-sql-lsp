@@ -38,6 +38,7 @@
 
 use std::sync::Arc;
 use tower_lsp::lsp_types::{DocumentSymbol, Position, Range, SymbolKind};
+use tracing::debug;
 use tree_sitter::Node;
 use unified_sql_lsp_catalog::{Catalog, CatalogError, DataType};
 use unified_sql_lsp_semantic::{ColumnSymbol, TableSymbol};
@@ -347,7 +348,7 @@ impl SymbolCatalogFetcher {
         if any_success {
             // At least one table succeeded - log warnings for partial failures but don't fail
             if !errors.is_empty() {
-                eprintln!(
+                debug!(
                     "Warning: Partial catalog failures occurred while fetching column metadata: {:?}",
                     errors
                 );

@@ -265,7 +265,7 @@ impl DiagnosticCollector {
 
         // Check if root or any descendants have errors
         if root.has_error() {
-            eprintln!("!!! DIAG: Root has_error=true, checking children");
+            debug!("!!! DIAG: Root has_error=true, checking children");
             self.collect_error_nodes_recursive(
                 &root,
                 source,
@@ -278,7 +278,7 @@ impl DiagnosticCollector {
         // If still no diagnostics found but has_error was true, create a generic error
         // Only if we didn't filter out all ERROR nodes
         if diagnostics.is_empty() && root.has_error() && found_real_errors {
-            eprintln!(
+            debug!(
                 "!!! DIAG: has_error=true but no ERROR nodes found, creating generic diagnostic"
             );
             let diagnostic = SqlDiagnostic::error(
@@ -332,7 +332,7 @@ impl DiagnosticCollector {
                     if !table_name.is_empty()
                         && !known_tables.contains(&table_name.to_lowercase().as_str())
                     {
-                        eprintln!("!!! DIAG: Unknown table: {}", table_name);
+                        debug!("!!! DIAG: Unknown table: {}", table_name);
                         let diagnostic = SqlDiagnostic::error(
                             format!("Unknown table: '{}'", table_name),
                             Range {
@@ -356,7 +356,7 @@ impl DiagnosticCollector {
                 && source_upper.contains("WHERE")
                 && !source_upper.contains("FROM")
             {
-                eprintln!("!!! DIAG: Found SELECT with WHERE but no FROM");
+                debug!("!!! DIAG: Found SELECT with WHERE but no FROM");
                 let diagnostic = SqlDiagnostic::error(
                     "SELECT statement with WHERE clause but missing FROM clause".to_string(),
                     Range {
@@ -376,7 +376,7 @@ impl DiagnosticCollector {
             // 3. Unterminated string literals
             let quote_count = source.matches('"').count() + source.matches('\'').count();
             if !quote_count.is_multiple_of(2) {
-                eprintln!("!!! DIAG: Found unterminated string");
+                debug!("!!! DIAG: Found unterminated string");
                 let diagnostic = SqlDiagnostic::error(
                     "Unterminated string literal".to_string(),
                     Range {
@@ -397,7 +397,7 @@ impl DiagnosticCollector {
             let open_count = source.matches('(').count();
             let close_count = source.matches(')').count();
             if open_count != close_count {
-                eprintln!("!!! DIAG: Found unbalanced parentheses");
+                debug!("!!! DIAG: Found unbalanced parentheses");
                 let diagnostic = SqlDiagnostic::error(
                     format!(
                         "Unbalanced parentheses: {} opening but {} closing",
@@ -514,7 +514,7 @@ impl DiagnosticCollector {
                         if let Some(table_columns) = known_columns.get(&table_name)
                             && !table_columns.contains(&col)
                         {
-                            eprintln!("!!! DIAG: Unknown column: {} in table {}", col, table_name);
+                            debug!("!!! DIAG: Unknown column: {} in table {}", col, table_name);
                             let diagnostic = SqlDiagnostic::error(
                                 format!("Unknown column: '{}'", col),
                                 Range {
@@ -545,7 +545,7 @@ impl DiagnosticCollector {
                         && !source_upper.contains(&format!(".{}", common_col))
                     {
                         // Check if this is likely ambiguous (has JOIN but column is not qualified)
-                        eprintln!("!!! DIAG: Potentially ambiguous column: {}", common_col);
+                        debug!("!!! DIAG: Potentially ambiguous column: {}", common_col);
                         let diagnostic = SqlDiagnostic::error(
                             format!("Ambiguous column reference: '{}'", common_col),
                             Range {
@@ -574,7 +574,7 @@ impl DiagnosticCollector {
                     && source_upper.contains(" U.ORDER_DATE")
                     && source_upper.contains("FROM USERS"))
             {
-                eprintln!("!!! DIAG: Column order_date doesn't exist in users table");
+                debug!("!!! DIAG: Column order_date doesn't exist in users table");
                 let diagnostic = SqlDiagnostic::error(
                     "Column 'order_date' does not exist in table 'users'".to_string(),
                     Range {
@@ -596,7 +596,7 @@ impl DiagnosticCollector {
             if source_upper.contains("WHERE")
                 && (source_upper.contains("USERNAME = 123") || source_upper.contains("EMAIL = 123"))
             {
-                eprintln!("!!! DIAG: Type mismatch in comparison");
+                debug!("!!! DIAG: Type mismatch in comparison");
                 let diagnostic = SqlDiagnostic::error(
                     "Type mismatch in comparison: cannot compare string column with integer value"
                         .to_string(),
@@ -621,7 +621,7 @@ impl DiagnosticCollector {
                 || source_upper.contains("AVG("))
                 && (source_upper.contains("SELECT ID,") || source_upper.contains("SELECT NAME,"))
             {
-                eprintln!("!!! DIAG: Invalid aggregate usage");
+                debug!("!!! DIAG: Invalid aggregate usage");
                 let diagnostic = SqlDiagnostic::error(
                         "Invalid use of aggregate function: non-aggregated column in SELECT with aggregate function".to_string(),
                         Range {
@@ -639,7 +639,7 @@ impl DiagnosticCollector {
             // Check for function calls that don't match known functions
             // Only check for UNKNOWN_FUNCTION specifically (to avoid false positives)
             if source_upper.contains("SELECT") && source_upper.contains("UNKNOWN_FUNCTION(") {
-                eprintln!("!!! DIAG: Unknown function: UNKNOWN_FUNCTION");
+                debug!("!!! DIAG: Unknown function: UNKNOWN_FUNCTION");
                 let diagnostic = SqlDiagnostic::error(
                     "Unknown function: 'UNKNOWN_FUNCTION'".to_string(),
                     Range {
@@ -659,7 +659,7 @@ impl DiagnosticCollector {
             // 11. Wrong function arguments detection
             // Check for CONCAT() with no arguments
             if source_upper.contains("CONCAT()") {
-                eprintln!("!!! DIAG: CONCAT() requires at least one argument");
+                debug!("!!! DIAG: CONCAT() requires at least one argument");
                 let diagnostic = SqlDiagnostic::error(
                     "Function CONCAT() requires at least 1 argument, but 0 were provided"
                         .to_string(),
@@ -683,7 +683,7 @@ impl DiagnosticCollector {
                 && source_upper.contains("ON")
                 && source_upper.contains("INVALID_COL")
             {
-                eprintln!("!!! DIAG: Invalid column in JOIN ON clause");
+                debug!("!!! DIAG: Invalid column in JOIN ON clause");
                 let diagnostic = SqlDiagnostic::error(
                     "Invalid column reference in JOIN ON clause".to_string(),
                     Range {
@@ -704,7 +704,7 @@ impl DiagnosticCollector {
         if diagnostics.is_empty() {
             debug!("No syntax errors found in {}", uri);
         } else {
-            eprintln!(
+            debug!(
                 "!!! DIAG: Publishing {} diagnostics for {}",
                 diagnostics.len(),
                 uri
@@ -730,7 +730,7 @@ impl DiagnosticCollector {
         }
 
         let node_kind = node.kind();
-        eprintln!(
+        debug!(
             "!!! DIAG: Checking node kind: {}, is_error: {}",
             node_kind,
             node_kind == "ERROR"
@@ -741,7 +741,7 @@ impl DiagnosticCollector {
             // Check if this ERROR node should be ignored
             // Some ERROR nodes are false positives from tree-sitter's incomplete SQL grammar
             if self.should_ignore_error_node(node, source) {
-                eprintln!("!!! DIAG: Ignoring ERROR node (false positive)");
+                debug!("!!! DIAG: Ignoring ERROR node (false positive)");
                 // Continue to check children even if we ignore this ERROR
             } else {
                 *found_real_errors = true;
@@ -775,14 +775,14 @@ impl DiagnosticCollector {
         let byte_range = node.byte_range();
         let error_text = &source[byte_range];
 
-        eprintln!(
+        debug!(
             "!!! DIAG: should_ignore_error_node checking: '{}'",
             error_text
         );
 
         // Ignore errors that are just whitespace or very small (likely tree-sitter grammar issues)
         if error_text.trim().len() <= 2 {
-            eprintln!("!!! DIAG: Ignoring ERROR node (too small)");
+            debug!("!!! DIAG: Ignoring ERROR node (too small)");
             return true;
         }
 
@@ -794,7 +794,7 @@ impl DiagnosticCollector {
                 || trimmed.starts_with(&format!("{} ", k))
                 || trimmed.ends_with(&format!(" {}", k))
         }) {
-            eprintln!("!!! DIAG: Ignoring ERROR node (keyword only)");
+            debug!("!!! DIAG: Ignoring ERROR node (keyword only)");
             return true;
         }
 
@@ -809,13 +809,13 @@ impl DiagnosticCollector {
             "name",
         ];
         if common_identifiers.contains(&trimmed) || trimmed.ends_with("_id") {
-            eprintln!("!!! DIAG: Ignoring ERROR node (common identifier)");
+            debug!("!!! DIAG: Ignoring ERROR node (common identifier)");
             return true;
         }
 
         // Ignore identifiers that look like table.column (qualified references)
         if trimmed.contains('.') && trimmed.split_whitespace().count() == 1 {
-            eprintln!("!!! DIAG: Ignoring ERROR node (qualified reference)");
+            debug!("!!! DIAG: Ignoring ERROR node (qualified reference)");
             return true;
         }
 
@@ -987,7 +987,7 @@ mod tests {
     #[test]
     fn test_sql_diagnostic_to_lsp() {
         let range = create_test_range(0, 0, 1, 5);
-        let sql_diagnostic = SqlDiagnostic::error("Error".to_string(), range.clone())
+        let sql_diagnostic = SqlDiagnostic::error("Error".to_string(), range)
             .with_code(DiagnosticCode::UndefinedTable);
 
         let lsp_diagnostic = sql_diagnostic.to_lsp();
@@ -1057,12 +1057,12 @@ mod tests {
             unified_sql_grammar::language_for_dialect(unified_sql_lsp_ir::Dialect::MySQL)
         {
             let mut parser = tree_sitter::Parser::new();
-            if parser.set_language(language).is_ok() {
-                if let Some(tree) = parser.parse("SELECT 1", None) {
-                    let diagnostics = collector.collect_diagnostics(&tree, "SELECT 1", &uri);
-                    // Currently returns empty (will be implemented in DIAG-002 to DIAG-005)
-                    assert!(diagnostics.is_empty());
-                }
+            if parser.set_language(language).is_ok()
+                && let Some(tree) = parser.parse("SELECT 1", None)
+            {
+                let diagnostics = collector.collect_diagnostics(&tree, "SELECT 1", &uri);
+                // Currently returns empty (will be implemented in DIAG-002 to DIAG-005)
+                assert!(diagnostics.is_empty());
             }
         }
     }

@@ -8,6 +8,8 @@
 //! This module provides functionality to fetch schema information
 //! from the catalog for completion purposes.
 
+use tracing::debug;
+
 use crate::completion::error::CompletionError;
 use std::sync::Arc;
 use unified_sql_lsp_catalog::{Catalog, ColumnMetadata, FunctionMetadata, TableMetadata};
@@ -44,17 +46,10 @@ impl CatalogCompletionFetcher {
     /// assert!(!tables.is_empty());
     /// ```
     pub async fn list_tables(&self) -> Result<Vec<TableMetadata>, CompletionError> {
-        eprintln!("!!! LSP: CatalogCompletionFetcher::list_tables() called");
-        let result = self
-            .catalog
+        self.catalog
             .list_tables()
             .await
-            .map_err(CompletionError::Catalog);
-        eprintln!(
-            "!!! LSP: CatalogCompletionFetcher::list_tables() returned: {:?}",
-            result.as_ref().map(|t| t.len())
-        );
-        result
+            .map_err(CompletionError::Catalog)
     }
 
     /// List all functions from the catalog
@@ -136,7 +131,7 @@ impl CatalogCompletionFetcher {
         for table in tables.iter_mut() {
             // Skip tables that fail to load - log warning but continue
             if let Err(e) = self.populate_table_columns(table).await {
-                eprintln!(
+                debug!(
                     "Warning: Failed to load columns for table '{}': {}",
                     table.table_name, e
                 );

@@ -228,7 +228,7 @@ impl ParserManager {
         let mut errors = Vec::new();
 
         // Recursively find ERROR nodes
-        let mut node = tree.root_node();
+        let node = tree.root_node();
         self.find_error_nodes(&node, &mut errors, text);
 
         errors

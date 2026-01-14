@@ -793,7 +793,7 @@ mod tests {
     fn test_render_tables_many_columns_hides_names() {
         // Create a table with more than 5 columns
         let columns: Vec<_> = (0..10)
-            .map(|i| ColumnMetadata::new(&format!("col{}", i), DataType::Text))
+            .map(|i| ColumnMetadata::new(format!("col{}", i), DataType::Text))
             .collect();
 
         let table = TableMetadata::new("wide_table", "public").with_columns(columns);

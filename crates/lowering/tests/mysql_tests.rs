@@ -199,7 +199,7 @@ fn test_mysql_literal_boolean() {
 
     assert!(result.is_ok());
     if let Ok(Expr::Literal(Literal::Boolean(val))) = result {
-        assert_eq!(val, true);
+        assert!(val);
     } else {
         panic!("Expected Boolean literal");
     }
@@ -209,7 +209,7 @@ fn test_mysql_literal_boolean() {
 
     assert!(result.is_ok());
     if let Ok(Expr::Literal(Literal::Boolean(val))) = result {
-        assert_eq!(val, false);
+        assert!(!val);
     } else {
         panic!("Expected Boolean literal");
     }

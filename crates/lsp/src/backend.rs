@@ -64,7 +64,7 @@ use tokio::sync::RwLock;
 use tower_lsp::jsonrpc::Result;
 use tower_lsp::lsp_types::*;
 use tower_lsp::{Client, LanguageServer};
-use tracing::{error, info, warn};
+use tracing::{debug, error, info, warn};
 
 /// LSP backend implementation
 ///
@@ -80,11 +80,11 @@ pub struct LspBackend {
 
 impl LspBackend {
     pub fn new(client: Client) -> Self {
-        eprintln!("!!! LSP: LspBackend::new() called");
+        debug!("!!! LSP: LspBackend::new() called");
         let config = Arc::new(RwLock::new(None));
         let doc_sync = Arc::new(DocumentSync::new(config.clone()));
 
-        eprintln!("!!! LSP: LspBackend created successfully");
+        debug!("!!! LSP: LspBackend created successfully");
         Self {
             client,
             documents: Arc::new(DocumentStore::new()),
@@ -123,6 +123,25 @@ impl LspBackend {
             .await;
     }
 
+    /// Publish diagnostics for a document
+    ///
+    /// Shared helper for publishing diagnostics after parsing.
+    async fn publish_document_diagnostics(&self, uri: &Url) {
+        let updated_document = self.documents.get_document(uri).await;
+        if let Some(doc) = updated_document {
+            let source = doc.get_content();
+            let tree_ref = doc.tree();
+            publish_diagnostics_for_document(
+                &self.diagnostic_collector,
+                &self.client,
+                uri.clone(),
+                &tree_ref,
+                &source,
+            )
+            .await;
+        }
+    }
+
     /// Parse document and update its tree in the store
     ///
     /// Shared helper for did_open and did_change handlers.
@@ -141,20 +160,7 @@ impl LspBackend {
                 {
                     error!("Failed to update document tree: {}", e);
                 }
-                // Publish diagnostics
-                let updated_document = self.documents.get_document(uri).await;
-                if let Some(doc) = updated_document {
-                    let source = doc.get_content();
-                    let tree_ref = doc.tree();
-                    let _count = publish_diagnostics_for_document(
-                        &self.diagnostic_collector,
-                        &self.client,
-                        uri.clone(),
-                        &tree_ref,
-                        &source,
-                    )
-                    .await;
-                }
+                self.publish_document_diagnostics(uri).await;
             }
             crate::parsing::ParseResult::Partial { tree, errors } => {
                 warn!("Document parsed with {} errors", errors.len());
@@ -167,20 +173,7 @@ impl LspBackend {
                 {
                     error!("Failed to update document tree: {}", e);
                 }
-                // Publish diagnostics
-                let updated_document = self.documents.get_document(uri).await;
-                if let Some(doc) = updated_document {
-                    let source = doc.get_content();
-                    let tree_ref = doc.tree();
-                    let _count = publish_diagnostics_for_document(
-                        &self.diagnostic_collector,
-                        &self.client,
-                        uri.clone(),
-                        &tree_ref,
-                        &source,
-                    )
-                    .await;
-                }
+                self.publish_document_diagnostics(uri).await;
             }
             crate::parsing::ParseResult::Failed { error } => {
                 error!("Failed to parse document: {}", error);
@@ -219,20 +212,7 @@ impl LspBackend {
                 {
                     error!("Failed to update document tree: {}", e);
                 }
-                // Publish diagnostics
-                let updated_document = self.documents.get_document(uri).await;
-                if let Some(doc) = updated_document {
-                    let source = doc.get_content();
-                    let tree_ref = doc.tree();
-                    let _count = publish_diagnostics_for_document(
-                        &self.diagnostic_collector,
-                        &self.client,
-                        uri.clone(),
-                        &tree_ref,
-                        &source,
-                    )
-                    .await;
-                }
+                self.publish_document_diagnostics(uri).await;
             }
             crate::parsing::ParseResult::Partial { tree, errors } => {
                 warn!("Document reparsed with {} errors", errors.len());
@@ -245,20 +225,7 @@ impl LspBackend {
                 {
                     error!("Failed to update document tree: {}", e);
                 }
-                // Publish diagnostics
-                let updated_document = self.documents.get_document(uri).await;
-                if let Some(doc) = updated_document {
-                    let source = doc.get_content();
-                    let tree_ref = doc.tree();
-                    let _count = publish_diagnostics_for_document(
-                        &self.diagnostic_collector,
-                        &self.client,
-                        uri.clone(),
-                        &tree_ref,
-                        &source,
-                    )
-                    .await;
-                }
+                self.publish_document_diagnostics(uri).await;
             }
             crate::parsing::ParseResult::Failed { error } => {
                 error!("Failed to reparse document: {}", error);
@@ -321,6 +288,26 @@ impl LspBackend {
             dialect, version
         );
         Some(config)
+    }
+
+    /// Get or create default engine configuration
+    ///
+    /// Returns the existing config or creates a default one for testing.
+    async fn get_config_or_default(&self) -> EngineConfig {
+        match self.get_config().await {
+            Some(cfg) => cfg,
+            None => {
+                // Use default configuration for testing
+                let default_connection = std::env::var("E2E_MYSQL_CONNECTION")
+                    .unwrap_or_else(|_| "mysql://test_user:test_password@127.0.0.1:3307/test_db".to_string());
+
+                EngineConfig::new(
+                    unified_sql_lsp_ir::Dialect::MySQL,
+                    crate::config::DialectVersion::MySQL57,
+                    default_connection,
+                )
+            }
+        }
     }
 
     /// Helper: Convert LSP position to byte offset in source text
@@ -472,7 +459,7 @@ impl LanguageServer for LspBackend {
     /// Called when the client starts the server.
     /// Returns server capabilities and configuration.
     async fn initialize(&self, params: InitializeParams) -> Result<InitializeResult> {
-        eprintln!("!!! LSP: initialize() called");
+        debug!("!!! LSP: initialize() called");
         info!("Initializing LSP server");
         info!("Client info: {:?}", params.client_info);
 
@@ -589,7 +576,7 @@ impl LanguageServer for LspBackend {
         let version = doc.version;
         let content = doc.text;
 
-        eprintln!(
+        debug!(
             "!!! LSP: did_open() called: uri={}, language={}",
             uri, language_id
         );
@@ -709,7 +696,7 @@ impl LanguageServer for LspBackend {
         let uri = params.text_document_position.text_document.uri;
         let position = params.text_document_position.position;
 
-        eprintln!(
+        debug!(
             "!!! LSP: Completion requested: uri={}, line={}, col={}",
             uri, position.line, position.character
         );
@@ -728,41 +715,20 @@ impl LanguageServer for LspBackend {
             }
         };
 
-        // Get engine configuration
-        let config = match self.get_config().await {
-            Some(cfg) => {
-                eprintln!("!!! LSP: Using existing config");
-                cfg
-            }
-            None => {
-                // Use default configuration for testing
-                eprintln!("!!! LSP: No config found, using default MySQL config");
-                let default_connection =
-                    std::env::var("E2E_MYSQL_CONNECTION").unwrap_or_else(|_| {
-                        "mysql://test_user:test_password@127.0.0.1:3307/test_db".to_string()
-                    });
-
-                crate::config::EngineConfig::new(
-                    unified_sql_lsp_ir::Dialect::MySQL,
-                    crate::config::DialectVersion::MySQL57,
-                    default_connection,
-                )
-            }
-        };
-
-        eprintln!("!!! LSP: Config dialect={:?}", config.dialect);
+        let config = self.get_config_or_default().await;
+        debug!("!!! LSP: Config dialect={:?}", config.dialect);
 
         // Get catalog
         let catalog = {
-            eprintln!("!!! LSP: Getting catalog for config");
+            debug!("!!! LSP: Getting catalog for config");
             let mut manager = self.catalog_manager.write().await;
             match manager.get_catalog(&config).await {
                 Ok(catalog) => {
-                    eprintln!("!!! LSP: Got catalog successfully");
+                    debug!("!!! LSP: Got catalog successfully");
                     catalog
                 }
                 Err(e) => {
-                    eprintln!("!!! LSP: Failed to get catalog: {}", e);
+                    debug!("!!! LSP: Failed to get catalog: {}", e);
                     error!("Failed to get catalog: {}", e);
                     self.log_message(
                         &format!("Failed to connect to database: {}", e),
@@ -775,14 +741,14 @@ impl LanguageServer for LspBackend {
         };
 
         // Create completion engine and perform completion
-        eprintln!("!!! LSP: Creating completion engine");
+        debug!("!!! LSP: Creating completion engine");
         let engine = CompletionEngine::new(catalog);
-        eprintln!("!!! LSP: Calling complete with position {:?}", position);
+        debug!("!!! LSP: Calling complete with position {:?}", position);
         match engine.complete(&document, position).await {
             Ok(Some(items)) => {
-                eprintln!("!!! LSP: Completion returned {} items", items.len());
+                debug!("!!! LSP: Completion returned {} items", items.len());
                 for (i, item) in items.iter().take(5).enumerate() {
-                    eprintln!(
+                    debug!(
                         "!!! LSP:   Item {}: label={}, kind={:?}",
                         i, item.label, item.kind
                     );
@@ -792,7 +758,7 @@ impl LanguageServer for LspBackend {
             }
             Ok(None) => {
                 // No completion available (wrong context)
-                eprintln!("!!! LSP: Completion returned None (wrong context)");
+                debug!("!!! LSP: Completion returned None (wrong context)");
                 Ok(None)
             }
             Err(e) => {
@@ -817,7 +783,7 @@ impl LanguageServer for LspBackend {
         let uri = params.text_document_position_params.text_document.uri;
         let position = params.text_document_position_params.position;
 
-        eprintln!(
+        debug!(
             "!!! LSP: Hover requested: uri={}, line={}, col={}",
             uri, position.line, position.character
         );
@@ -836,24 +802,7 @@ impl LanguageServer for LspBackend {
             }
         };
 
-        // Get engine configuration
-        let config = match self.get_config().await {
-            Some(cfg) => cfg,
-            None => {
-                // Use default configuration for testing
-                eprintln!("!!! LSP: No config found, using default MySQL config for hover");
-                let default_connection =
-                    std::env::var("E2E_MYSQL_CONNECTION").unwrap_or_else(|_| {
-                        "mysql://test_user:test_password@127.0.0.1:3307/test_db".to_string()
-                    });
-
-                crate::config::EngineConfig::new(
-                    unified_sql_lsp_ir::Dialect::MySQL,
-                    crate::config::DialectVersion::MySQL57,
-                    default_connection,
-                )
-            }
-        };
+        let config = self.get_config_or_default().await;
 
         // Get catalog
         let catalog = {
@@ -861,7 +810,7 @@ impl LanguageServer for LspBackend {
             match manager.get_catalog(&config).await {
                 Ok(catalog) => catalog,
                 Err(e) => {
-                    eprintln!("!!! LSP: Failed to get catalog for hover: {}", e);
+                    debug!("!!! LSP: Failed to get catalog for hover: {}", e);
                     error!("Failed to get catalog for hover: {}", e);
                     return Ok(None);
                 }
@@ -875,7 +824,7 @@ impl LanguageServer for LspBackend {
         let byte_offset = match self.position_to_byte_offset(&source, position) {
             Some(offset) => offset,
             None => {
-                eprintln!("!!! LSP: Failed to convert position to byte offset");
+                debug!("!!! LSP: Failed to convert position to byte offset");
                 return Ok(None);
             }
         };
@@ -883,17 +832,17 @@ impl LanguageServer for LspBackend {
         // Extract the word at cursor
         let word = self.extract_word_at(&source, byte_offset);
         if word.is_empty() {
-            eprintln!("!!! LSP: No word found at cursor position");
+            debug!("!!! LSP: No word found at cursor position");
             return Ok(None);
         }
 
-        eprintln!("!!! LSP: Word at cursor: '{}'", word);
+        debug!("!!! LSP: Word at cursor: '{}'", word);
 
         // Try to get column type information from catalog
         let hover_text = self.get_column_hover_info(&catalog, &word, &source).await;
 
         if let Some(text) = hover_text {
-            eprintln!("!!! LSP: Returning hover info: {}", text);
+            debug!("!!! LSP: Returning hover info: {}", text);
             Ok(Some(Hover {
                 contents: HoverContents::Markup(MarkupContent {
                     kind: MarkupKind::Markdown,
@@ -902,7 +851,7 @@ impl LanguageServer for LspBackend {
                 range: None,
             }))
         } else {
-            eprintln!("!!! LSP: No hover info found for word: {}", word);
+            debug!("!!! LSP: No hover info found for word: {}", word);
             Ok(None)
         }
     }
@@ -1106,25 +1055,25 @@ impl LanguageServer for LspBackend {
     ///
     /// Called when the client's configuration changes.
     async fn did_change_configuration(&self, params: DidChangeConfigurationParams) {
-        eprintln!("!!! LSP: did_change_configuration called");
-        eprintln!(
+        debug!("!!! LSP: did_change_configuration called");
+        debug!(
             "!!! LSP: Settings type: {:?}",
             std::any::type_name::<serde_json::Value>()
         );
-        eprintln!("!!! LSP: Settings value: {:?}", params.settings);
+        debug!("!!! LSP: Settings value: {:?}", params.settings);
 
         // Parse configuration from client settings
         match self.parse_config_from_settings(&params.settings) {
             Some(config) => {
-                eprintln!(
+                debug!(
                     "!!! LSP: Successfully parsed config: dialect={:?}",
                     config.dialect
                 );
                 self.set_config(config).await;
-                eprintln!("!!! LSP: Engine configuration updated from client settings");
+                debug!("!!! LSP: Engine configuration updated from client settings");
             }
             None => {
-                eprintln!("!!! LSP: Failed to parse configuration from client settings");
+                debug!("!!! LSP: Failed to parse configuration from client settings");
             }
         }
     }
