@@ -35,8 +35,10 @@
 use tower_lsp::lsp_types::{Location, Position, Url};
 use tree_sitter::{Node, TreeCursor};
 use unified_sql_lsp_context::{
-    Position as ContextPosition, Range as ContextRange, extract_identifier_name, extract_node_text,
-    find_node_at_position, node_to_range as context_node_to_range,
+    Position as ContextPosition, Range as ContextRange,
+    extract_alias, extract_column_info, extract_identifier_name, extract_table_name,
+    find_from_clause, find_node_at_position, find_parent_select, find_select_clause,
+    node_to_range as context_node_to_range,
 };
 
 /// Convert context Position to tower_lsp Position
@@ -327,67 +329,6 @@ impl DefinitionFinder {
     }
 }
 
-/// Extract table name from table_reference node
-fn extract_table_name(node: &Node, source: &str) -> Option<String> {
-    node.find_child(|c| matches!(c.kind(), "table_name" | "identifier"))
-        .map(|child| extract_node_text(&child, source))
-}
-
-/// Extract column info from column_reference node
-/// Returns (column_name, optional_table_name)
-fn extract_column_info(node: &Node, source: &str) -> Option<(String, Option<String>)> {
-    let mut column_name = None;
-    let mut table_name = None;
-
-    for child in node.iter_children() {
-        match child.kind() {
-            "column_name" | "identifier" => {
-                if column_name.is_none() {
-                    column_name = Some(extract_node_text(&child, source));
-                }
-            }
-            "table_name" => {
-                table_name = Some(extract_node_text(&child, source));
-            }
-            _ => {}
-        }
-    }
-
-    column_name.map(|col| (col, table_name))
-}
-
-/// Find parent SELECT statement
-fn find_parent_select<'a>(node: &Node<'a>) -> Option<Node<'a>> {
-    let mut current = *node;
-    loop {
-        if current.kind() == "select_statement" {
-            return Some(current);
-        }
-        current = current.parent()?;
-    }
-}
-
-/// Find FROM clause in SELECT statement
-fn find_from_clause<'a>(select_node: &'a Node<'a>) -> Option<Node<'a>> {
-    select_node.find_child(|c| c.kind() == "from_clause")
-}
-
-/// Find SELECT clause (projection) in SELECT statement
-fn find_select_clause<'a>(select_node: &'a Node<'a>) -> Option<Node<'a>> {
-    select_node.find_child(|c| c.kind() == "select" || c.kind() == "projection")
-}
-
-/// Extract alias from expression or function_call
-fn extract_alias(node: &Node, source: &str) -> Option<String> {
-    if let Some(child) = node.find_child(|c| c.kind() == "alias")
-        && let Some(alias_child) =
-            child.find_child(|c| matches!(c.kind(), "identifier" | "column_name"))
-    {
-        return Some(extract_node_text(&alias_child, source));
-    }
-    None
-}
-
 // Test helper functions
 #[cfg(test)]
 fn find_table_name_node<'a>(root_node: &Node<'a>) -> Option<Node<'a>> {
@@ -442,7 +383,7 @@ fn find_table_reference_node<'a>(root_node: &Node<'a>) -> Option<Node<'a>> {
 mod tests {
     use super::*;
     use crate::parsing::{ParseResult, ParserManager};
-    use unified_sql_lsp_context::{byte_to_position, position_to_byte_offset};
+    use unified_sql_lsp_context::{byte_to_position, extract_node_text, position_to_byte_offset};
     use unified_sql_lsp_ir::Dialect;
 
     /// Helper function to parse SQL and get root node

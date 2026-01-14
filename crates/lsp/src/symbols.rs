@@ -41,6 +41,7 @@ use tower_lsp::lsp_types::{DocumentSymbol, Position, Range, SymbolKind};
 use tracing::debug;
 use tree_sitter::Node;
 use unified_sql_lsp_catalog::{format_data_type, Catalog, CatalogError, DataType};
+use unified_sql_lsp_context::{extract_alias, extract_node_text, node_to_range as context_node_to_range, Range as ContextRange};
 use unified_sql_lsp_semantic::{ColumnSymbol, TableSymbol};
 
 /// Symbol extraction error
@@ -115,7 +116,7 @@ impl SymbolBuilder {
         let mut queries = Vec::new();
 
         // Find all SELECT statements
-        Self::find_select_statements(root_node, &mut queries);
+        Self::find_select_statements(root_node, source, &mut queries);
 
         // Extract tables from each SELECT
         for query in &mut queries {
@@ -126,11 +127,11 @@ impl SymbolBuilder {
     }
 
     /// Find all SELECT statements in the CST
-    fn find_select_statements(node: &Node, queries: &mut Vec<QuerySymbol>) {
+    fn find_select_statements(node: &Node, source: &str, queries: &mut Vec<QuerySymbol>) {
         if node.kind() == "select_statement" || node.kind() == "statement" {
             // Check if this is a SELECT statement
             if node.kind() == "select_statement" || Self::is_select_statement(node) {
-                let range = Self::node_to_range(node);
+                let range = Self::node_to_range(node, source);
                 queries.push(QuerySymbol {
                     range,
                     tables: Vec::new(),
@@ -140,7 +141,7 @@ impl SymbolBuilder {
 
         // Recurse into children
         for child in node.children(&mut node.walk()) {
-            Self::find_select_statements(&child, queries);
+            Self::find_select_statements(&child, source, queries);
         }
     }
 
@@ -198,18 +199,18 @@ impl SymbolBuilder {
             match child.kind() {
                 "table_name" | "identifier" => {
                     if table_name.is_none() {
-                        table_name = Some(Self::extract_node_text(&child, source));
+                        table_name = Some(extract_node_text(&child, source));
                     }
                 }
                 "alias" => {
-                    if let Some(a) = Self::extract_alias(&child, source) {
+                    if let Some(a) = extract_alias(&child, source) {
                         alias = Some(a);
                     }
                 }
                 _ => {
                     // Check for identifier that might be an implicit alias
                     if table_name.is_some() && alias.is_none() && child.kind() == "identifier" {
-                        let text = Self::extract_node_text(&child, source);
+                        let text = extract_node_text(&child, source);
                         if &text != table_name.as_ref().unwrap() {
                             alias = Some(text);
                         }
@@ -227,7 +228,7 @@ impl SymbolBuilder {
             symbol = symbol.with_alias(a);
         }
 
-        let range = Self::node_to_range(node);
+        let range = Self::context_range_to_lsp_range(context_node_to_range(node, source));
         let selection_range = Self::node_to_selection_range(node, source);
 
         Ok(TableSymbolWithRange {
@@ -237,48 +238,35 @@ impl SymbolBuilder {
         })
     }
 
-    /// Extract text from a node
-    fn extract_node_text(node: &Node, source: &str) -> String {
-        let bytes = node.byte_range();
-        source[bytes].to_string()
-    }
-
-    /// Extract alias from an alias node
-    fn extract_alias(alias_node: &Node, source: &str) -> Option<String> {
-        for child in alias_node.children(&mut alias_node.walk()) {
-            if child.kind() == "identifier" {
-                return Some(Self::extract_node_text(&child, source));
-            }
+    /// Convert context Range to LSP Range
+    fn context_range_to_lsp_range(range: ContextRange) -> Range {
+        Range {
+            start: Position {
+                line: range.start.line,
+                character: range.start.character,
+            },
+            end: Position {
+                line: range.end.line,
+                character: range.end.character,
+            },
         }
-        None
     }
 
     /// Convert a tree-sitter node to LSP Range
-    fn node_to_range(node: &Node) -> Range {
-        let start = Self::byte_to_position(node.start_byte());
-        let end = Self::byte_to_position(node.end_byte());
-        Range { start, end }
+    fn node_to_range(node: &Node, source: &str) -> Range {
+        Self::context_range_to_lsp_range(context_node_to_range(node, source))
     }
 
     /// Convert a tree-sitter node to LSP selection Range
-    fn node_to_selection_range(node: &Node, _source: &str) -> Range {
+    fn node_to_selection_range(node: &Node, source: &str) -> Range {
         // For selection range, try to find the identifier
         for child in node.children(&mut node.walk()) {
             if child.kind() == "table_name" || child.kind() == "identifier" {
-                return Self::node_to_range(&child);
+                return Self::node_to_range(&child, source);
             }
         }
         // Fallback to full range
-        Self::node_to_range(node)
-    }
-
-    /// Convert byte offset to LSP Position
-    fn byte_to_position(byte_offset: usize) -> Position {
-        // Simple implementation - uses byte offset as character offset
-        // Note: This is a simplification. For UTF-8 multi-byte characters,
-        // we would need to use Ropey for accurate position calculation.
-        // This is sufficient for basic functionality and can be improved later.
-        Position::new(0, byte_offset as u32)
+        Self::node_to_range(node, source)
     }
 }
 

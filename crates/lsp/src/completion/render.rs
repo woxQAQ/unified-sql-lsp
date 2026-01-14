@@ -9,7 +9,7 @@
 //! from semantic symbols.
 
 use tower_lsp::lsp_types::{CompletionItem, CompletionItemKind, Documentation};
-use unified_sql_lsp_catalog::{format_data_type, DataType, FunctionMetadata, FunctionType, TableMetadata, TableType};
+use unified_sql_lsp_catalog::{format_data_type, FunctionMetadata, FunctionType, TableMetadata, TableType};
 use unified_sql_lsp_semantic::{ColumnSymbol, TableSymbol};
 
 // Import keyword types from context crate
