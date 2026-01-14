@@ -176,26 +176,15 @@ pub fn detect_completion_context(
     position: Position,
     source: &str,
 ) -> CompletionContext {
-    debug!(
-        "!!! LSP: detect_completion_context called with position {:?}",
-        position
-    );
-    debug!("!!! LSP: Source content: {:?}", source);
 
     // Find the node at the cursor position
     let node = match find_node_at_position(root, position, source) {
         Some(n) => n,
         None => {
-            debug!("!!! LSP: No node found at position, falling back to text-based detection");
             return detect_context_from_text(source, position);
         }
     };
 
-    debug!(
-        "!!! LSP: Cursor at position {:?}, node kind: '{}'",
-        position,
-        node.kind()
-    );
 
     // Walk up the parent chain to find the context
     let mut current = Some(node);
@@ -225,6 +214,46 @@ pub fn detect_completion_context(
                         );
                         tables = extract_tables_from_source(source);
                     }
+
+                    // If qualifier is still None, try text-based extraction
+                    let qualifier = if qualifier.is_none() {
+                        extract_table_qualifier_from_position(source, position)
+                    } else {
+                        qualifier
+                    };
+
+                    return CompletionContext::SelectProjection { tables, qualifier };
+                }
+
+                // Additional check: if we're right after SELECT keyword (even with no projection node),
+                // treat it as projection context
+                // This handles cases like "SELECT | FROM table" where the projection list is empty
+                if is_right_after_select_keyword(&n, source, position) {
+                    // For subqueries, use text-based extraction to get the table name
+                    // because CST parsing might be incomplete for nested queries
+                    let text_before = if let Ok(offset) = position_to_byte_offset_checked(source, position) {
+                        &source[..offset.min(source.len())]
+                    } else {
+                        ""
+                    };
+
+                    // Check if we're in a subquery (parentheses)
+                    let is_subquery = text_before.matches('(').count() > text_before.matches(')').count();
+
+                    let tables = if is_subquery {
+                        // Extract table from text: look for the last FROM in the subquery
+                        extract_tables_from_subquery_text(source, position)
+                    } else {
+                        // For normal queries, use CST extraction
+                        let mut tables = extract_tables_from_from_clause(&n, source);
+
+                        // If CST extraction failed (incomplete SQL), use text-based fallback
+                        if tables.is_empty() {
+                            tables = extract_tables_from_source(source);
+                        }
+
+                        tables
+                    };
 
                     // If qualifier is still None, try text-based extraction
                     let qualifier = if qualifier.is_none() {
@@ -271,7 +300,6 @@ pub fn detect_completion_context(
 
             // JOIN clause
             "join_clause" => {
-                debug!("!!! LSP: Found join_clause node");
 
                 // Check if cursor is inside a subquery in the JOIN
                 // For example: "JOIN (SELECT | FROM orders)" should detect the SELECT projection
@@ -280,29 +308,62 @@ pub fn detect_completion_context(
                 let open_parens = text_before_cursor.matches('(').count();
                 let close_parens = text_before_cursor.matches(')').count();
 
+
                 if open_parens > close_parens {
-                    debug!("!!! LSP: Inside subquery in JOIN, falling back to text-based detection");
+
+                    // Check if we're right after SELECT in the subquery
+                    let text_before_upper = text_before_cursor.to_uppercase();
+
+                    if text_before_upper.ends_with("SELECT ")
+                        || text_before_upper.ends_with("SELECT\t")
+                        || text_before_upper.ends_with("SELECT(")
+                        || text_before_upper.trim_end().ends_with("(SELECT")
+                    {
+
+                        // Extract table from the subquery's FROM clause
+                        // Find the last SELECT, then find FROM after it
+                        let source_upper = source.to_uppercase();
+                        let tables = if let Some(last_select_pos) = source_upper.rfind("SELECT") {
+                            let after_select = &source_upper[last_select_pos + 6..]; // +6 for "SELECT"
+                            if let Some(from_pos) = after_select.find("FROM") {
+                                let from_absolute = last_select_pos + 6 + from_pos;
+                                let after_from = &source[from_absolute + 4..];
+                                let after_from_trimmed = after_from.trim_start();
+                                if let Some(table_end) = after_from_trimmed.find([' ', ')', ';']) {
+                                    let table_name = after_from_trimmed[..table_end].trim().to_string();
+                                    vec![table_name]
+                                } else {
+                                    vec![]
+                                }
+                            } else {
+                                vec![]
+                            }
+                        } else {
+                            vec![]
+                        };
+
+                        return CompletionContext::SelectProjection {
+                            tables,
+                            qualifier: None,
+                        };
+                    }
+
+                    // Not right after SELECT, fall back to text-based detection
                     return detect_context_from_text(source, position);
                 }
 
                 // Extract left and right table names from the join
                 let (left_table, right_table) = extract_join_tables(&n, source);
-                debug!(
-                    "!!! LSP: join_clause: left={:?}, right={:?}",
-                    left_table, right_table
-                );
 
                 // If we don't have the right table yet, user is typing table name after JOIN
                 // Return FromClause context to provide table completion
                 if right_table.is_none() {
-                    debug!("!!! LSP: No right table, returning FromClause");
                     // Extract tables from FROM clause for exclusion
                     let exclude_tables = extract_tables_from_join_parent(&n, source);
                     return CompletionContext::FromClause { exclude_tables };
                 }
 
                 // Otherwise, user is in the ON clause - return JoinCondition for column completion
-                debug!("!!! LSP: Both tables found, returning JoinCondition");
                 return CompletionContext::JoinCondition {
                     left_table,
                     right_table,
@@ -618,22 +679,12 @@ fn extract_real_table_names_from_source(source: &str) -> Vec<String> {
 fn detect_from_or_join_context(source: &str, text_before: &str) -> Option<CompletionContext> {
     let text_before_upper = text_before.to_uppercase();
 
-    debug!("!!! LSP: detect_from_or_join_context called");
-    debug!("!!! LSP: text_before='{}'", text_before);
 
     // Check if cursor is inside a subquery (parentheses)
     // If we're in a subquery, let other context detectors handle the inner context
     let open_parens = text_before.matches('(').count();
     let close_parens = text_before.matches(')').count();
-    debug!(
-        "!!! LSP: *** PARENTHESIS CHECK *** open_parens={}, close_parens={}",
-        open_parens, close_parens
-    );
     if open_parens > close_parens {
-        debug!(
-            "!!! LSP: Cursor inside subquery (open_parens={} > close_parens={}), skipping FROM/JOIN detection",
-            open_parens, close_parens
-        );
         return None;
     }
 
@@ -644,7 +695,24 @@ fn detect_from_or_join_context(source: &str, text_before: &str) -> Option<Comple
         || text_before_upper.trim_end().ends_with("SELECT\t")
         || text_before_upper.trim_end() == "SELECT"
     {
-        debug!("!!! LSP: Just typed SELECT, skipping FROM/JOIN detection");
+        return None;
+    }
+
+    // Additional check for patterns like "JOIN (SELECT |" where we're in a subquery projection
+    let trimmed = text_before.trim_end();
+
+    // More robust check: if we have "(SELECT" and very little content after it, we're in subquery projection
+    let in_subquery_after_select = trimmed.contains("(SELECT")
+        && (trimmed.ends_with("SELECT ")
+            || trimmed.ends_with("SELECT\t")
+            || trimmed.ends_with("SELECT(")
+            || trimmed.ends_with("(SELECT")
+            || (trimmed.contains("(SELECT ") && {
+                let after_select = trimmed.split("(SELECT ").last().unwrap_or("");
+                after_select.trim().split_whitespace().count() <= 2
+            }));
+
+    if in_subquery_after_select {
         return None;
     }
 
@@ -841,9 +909,13 @@ fn detect_projection_context(source: &str, text_before: &str) -> Option<Completi
             // BUT: If we're in a subquery, check for FROM within the subquery
             if in_subquery {
                 // In subquery: find the last SELECT to check if cursor is before its FROM
-                // For simplicity, if we're in parens and just typed SELECT, we're in projection
-                if text_before_upper.ends_with("SELECT ") || text_before_upper.ends_with("SELECT\t")
-                {
+                // For "JOIN (SELECT | FROM orders)", check if we just typed SELECT or if cursor is after SELECT in parens
+                let just_typed_select = text_before_upper.ends_with("SELECT ")
+                    || text_before_upper.ends_with("SELECT\t")
+                    || text_before_upper.ends_with("SELECT(")
+                    || text_before_upper.trim_end().ends_with("(SELECT");
+
+                if just_typed_select {
                     debug!(
                         "!!! LSP: Detected SELECT projection context (in subquery, just typed SELECT)"
                     );
@@ -1424,6 +1496,143 @@ fn is_in_projection(select_node: &Node, position: Position) -> bool {
     }
 
     false
+}
+
+/// Check if the position is right after the SELECT keyword
+/// This handles cases where the projection list is empty (e.g., "SELECT | FROM table")
+fn is_right_after_select_keyword(select_node: &Node, source: &str, position: Position) -> bool {
+    // Get the byte offset of the cursor position
+    let byte_offset = position_to_byte_offset(source, position);
+
+    // Get the text before the cursor
+    let text_before = if byte_offset <= source.len() {
+        &source[..byte_offset]
+    } else {
+        source
+    };
+
+    // Check if the text ends with "SELECT" (possibly with whitespace)
+    let text_upper = text_before.trim_end().to_uppercase();
+    if text_upper.ends_with("SELECT") || text_upper.ends_with("SELECT ") || text_upper.ends_with("SELECT\t") {
+        // Additional check: make sure we're after the SELECT keyword within this select_statement
+        // Find the SELECT keyword position in the source
+        let node_start = select_node.byte_range().start;
+        let node_end = select_node.byte_range().end;
+
+        // Look for SELECT keyword within this node
+        let node_text = &source[node_start..node_end.min(source.len())];
+        let node_text_upper = node_text.to_uppercase();
+
+        if let Some(select_pos) = node_text_upper.find("SELECT") {
+            let absolute_select_pos = node_start + select_pos + 6; // +6 for "SELECT"
+            // Check if cursor is after SELECT and within reasonable distance (e.g., within 10 chars)
+            if byte_offset >= absolute_select_pos && byte_offset - absolute_select_pos <= 10 {
+                // Also check that there's no FROM keyword between SELECT and cursor
+                let text_before_cursor_in_node = if byte_offset <= node_end {
+                    &node_text[select_pos + 6..byte_offset - node_start]
+                } else {
+                    &node_text[select_pos + 6..]
+                };
+
+                // If we haven't reached FROM yet, we're in the projection
+                !text_before_cursor_in_node.to_uppercase().contains("FROM")
+            } else {
+                false
+            }
+        } else {
+            false
+        }
+    } else {
+        false
+    }
+}
+
+/// Convert position to byte offset with error checking
+fn position_to_byte_offset_checked(source: &str, position: Position) -> Result<usize, String> {
+    let mut line = 0;
+    let mut col = 0;
+    let mut byte_offset = 0;
+
+    for ch in source.chars() {
+        if line == position.line as usize && col == position.character as usize {
+            return Ok(byte_offset);
+        }
+
+        byte_offset += ch.len_utf8();
+
+        if ch == '\n' {
+            line += 1;
+            col = 0;
+        } else {
+            col += 1;
+        }
+    }
+
+    // If we reach the end of the source, return the length
+    if line == position.line as usize {
+        Ok(byte_offset)
+    } else {
+        Err(format!("Position {:?} is out of bounds for source of length {}", position, source.len()))
+    }
+}
+
+/// Extract table names from subquery text
+/// For subqueries like "(SELECT | FROM orders)", extract "orders"
+fn extract_tables_from_subquery_text(source: &str, position: Position) -> Vec<String> {
+    let byte_offset = position_to_byte_offset(source, position);
+    let text_before = &source[..byte_offset.min(source.len())];
+
+    // Find the last unmatched opening parenthesis to locate the subquery start
+    let mut open_parens = 0;
+    let mut subquery_start = 0;
+
+    for (i, ch) in text_before.chars().enumerate() {
+        if ch == '(' {
+            open_parens += 1;
+            subquery_start = i;
+        } else if ch == ')' {
+            open_parens -= 1;
+        }
+    }
+
+    if open_parens == 0 {
+        // Not in a subquery, return empty
+        return Vec::new();
+    }
+
+    // Get the text from the subquery start
+    let subquery_text = &source[subquery_start..];
+
+    // Look for the FROM clause in the subquery
+    let subquery_upper = subquery_text.to_uppercase();
+
+    // Find FROM after the last SELECT (to handle nested subqueries)
+    if let Some(select_pos) = subquery_upper.rfind("SELECT") {
+        let after_select = &subquery_upper[select_pos + 6..];
+
+        if let Some(from_pos) = after_select.find("FROM") {
+            let from_absolute = select_pos + 6 + from_pos;
+            let after_from = &subquery_text[from_absolute + 4..];
+            let after_from_trimmed = after_from.trim_start();
+
+            // Extract the table name (up to next space, comma, parenthesis, or semicolon)
+            if let Some(table_end) = after_from_trimmed.find(|c| c == ' ' || c == ',' || c == ')' || c == ';') {
+                let table_name = after_from_trimmed[..table_end].trim().to_string();
+                // Filter out obvious non-table names
+                if !table_name.is_empty()
+                    && table_name != "SELECT"
+                    && table_name != "FROM"
+                    && table_name != "WHERE"
+                    && table_name != "JOIN"
+                    && !table_name.contains('(')
+                {
+                    return vec![table_name];
+                }
+            }
+        }
+    }
+
+    Vec::new()
 }
 
 /// Extract table names from the FROM clause
