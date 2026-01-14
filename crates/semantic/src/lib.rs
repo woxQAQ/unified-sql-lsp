@@ -118,6 +118,7 @@ pub mod error;
 pub mod resolution;
 pub mod scope;
 pub mod symbol;
+pub mod validator;
 
 // Re-export commonly used types
 pub use alias_resolution::{AliasResolutionError, AliasResolver, ResolutionResult, ResolutionStrategy};
@@ -128,3 +129,4 @@ pub use resolution::{
 };
 pub use scope::{Scope, ScopeManager, ScopeType};
 pub use symbol::{ColumnSymbol, TableSymbol};
+pub use validator::{SemanticValidator, ValidationError, ValidationResult};
