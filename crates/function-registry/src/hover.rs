@@ -71,7 +71,7 @@ impl HoverInfoProvider {
             .iter()
             .find(|f| f.name.eq_ignore_ascii_case(name))?;
 
-        let desc = func.description.as_ref().map(|s| s.as_str()).unwrap_or("SQL function");
+        let desc = func.description.as_deref().unwrap_or("SQL function");
         let params: Vec<String> = func.parameters.iter().map(|p| p.name.clone()).collect();
         let params_str = if params.is_empty() {
             String::new()
@@ -81,8 +81,13 @@ impl HoverInfoProvider {
 
         Some(format!(
             "```sql\n{}{}{}\n```\n\n{}",
-            func.name, params_str,
-            if func.return_type == DataType::Other("void".to_string()) { "" } else { " -> ..." },
+            func.name,
+            params_str,
+            if func.return_type == DataType::Other("void".to_string()) {
+                ""
+            } else {
+                " -> ..."
+            },
             desc
         ))
     }
@@ -199,9 +204,7 @@ impl HoverInfoProvider {
     /// true if the word matches a known function name
     pub fn is_function(&self, word: &str, dialect: &Dialect) -> bool {
         let functions = self.function_registry.get_functions(*dialect);
-        functions
-            .iter()
-            .any(|f| f.name.eq_ignore_ascii_case(word))
+        functions.iter().any(|f| f.name.eq_ignore_ascii_case(word))
     }
 }
 

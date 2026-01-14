@@ -20,10 +20,10 @@
 //! This validator uses the catalog to get schema information and performs
 //! semantic validation that would otherwise require hardcoded SQL knowledge.
 
+use crate::{error::SemanticError, SemanticAnalyzer};
 use std::sync::Arc;
 use unified_sql_lsp_catalog::{Catalog, CatalogError};
 use unified_sql_lsp_ir::Dialect;
-use crate::{error::SemanticError, ColumnSymbol, SemanticAnalyzer, TableSymbol};
 
 /// Result type for validation
 pub type ValidationResult<T> = Result<T, ValidationError>;
@@ -182,14 +182,10 @@ mod tests {
     impl MockCatalog {
         fn new() -> Self {
             Self {
-                tables: vec![
-                    TableMetadata::new("users", "public")
-                        .with_columns(vec![
-                            ColumnMetadata::new("id", DataType::Integer)
-                                .with_primary_key(),
-                            ColumnMetadata::new("username", DataType::Varchar(Some(50))),
-                        ]),
-                ],
+                tables: vec![TableMetadata::new("users", "public").with_columns(vec![
+                    ColumnMetadata::new("id", DataType::Integer).with_primary_key(),
+                    ColumnMetadata::new("username", DataType::Varchar(Some(50))),
+                ])],
             }
         }
     }
@@ -213,7 +209,9 @@ mod tests {
             ))
         }
 
-        async fn list_functions(&self) -> Result<Vec<unified_sql_lsp_catalog::FunctionMetadata>, CatalogError> {
+        async fn list_functions(
+            &self,
+        ) -> Result<Vec<unified_sql_lsp_catalog::FunctionMetadata>, CatalogError> {
             Ok(vec![])
         }
     }
@@ -248,7 +246,9 @@ mod tests {
         let catalog = Arc::new(MockCatalog::new());
         let validator = SemanticValidator::new(catalog, Dialect::MySQL);
 
-        let result = validator.validate_column("nonexistent", Some("users")).await;
+        let result = validator
+            .validate_column("nonexistent", Some("users"))
+            .await;
         assert!(result.is_err());
     }
 }

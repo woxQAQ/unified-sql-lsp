@@ -40,8 +40,10 @@ use std::sync::Arc;
 use tower_lsp::lsp_types::{DocumentSymbol, Position, Range, SymbolKind};
 use tracing::debug;
 use tree_sitter::Node;
-use unified_sql_lsp_catalog::{format_data_type, Catalog, CatalogError, DataType};
-use unified_sql_lsp_context::{extract_alias, extract_node_text, node_to_range as context_node_to_range, Range as ContextRange};
+use unified_sql_lsp_catalog::{Catalog, CatalogError, format_data_type};
+use unified_sql_lsp_context::{
+    Range as ContextRange, extract_alias, extract_node_text, node_to_range as context_node_to_range,
+};
 use unified_sql_lsp_semantic::{ColumnSymbol, TableSymbol};
 
 /// Symbol extraction error

@@ -76,4 +76,3 @@ pub fn format_data_type(data_type: &DataType) -> String {
         _ => "Unknown".to_string(),
     }
 }
-

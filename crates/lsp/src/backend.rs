@@ -300,8 +300,10 @@ impl LspBackend {
             Some(cfg) => cfg,
             None => {
                 // Use default configuration for testing
-                let default_connection = std::env::var("E2E_MYSQL_CONNECTION")
-                    .unwrap_or_else(|_| "mysql://test_user:test_password@127.0.0.1:3307/test_db".to_string());
+                let default_connection =
+                    std::env::var("E2E_MYSQL_CONNECTION").unwrap_or_else(|_| {
+                        "mysql://test_user:test_password@127.0.0.1:3307/test_db".to_string()
+                    });
 
                 EngineConfig::new(
                     unified_sql_lsp_ir::Dialect::MySQL,
@@ -369,7 +371,9 @@ impl LspBackend {
         let source_upper = source.to_uppercase();
 
         // Check for function names first
-        let dialect = self.get_config().await
+        let dialect = self
+            .get_config()
+            .await
             .map(|c| c.dialect)
             .unwrap_or(Dialect::MySQL);
 
@@ -407,19 +411,19 @@ impl LspBackend {
                 .trim_end_matches(|c: char| !c.is_alphanumeric() && c != '_')
                 .to_lowercase();
 
-            if !table_name.is_empty() {
-                if let Ok(columns) = catalog.get_columns(&table_name).await {
-                    let word_lower = word.to_lowercase();
-                    for column in columns {
-                        if column.name.to_lowercase() == word_lower {
-                            let hover_info = ColumnHoverInfo {
-                                name: column.name.clone(),
-                                data_type: column.data_type.clone(),
-                                is_primary_key: column.is_primary_key,
-                                is_foreign_key: column.is_foreign_key,
-                            };
-                            return Some(hover_provider.get_column_hover(&hover_info));
-                        }
+            if !table_name.is_empty()
+                && let Ok(columns) = catalog.get_columns(&table_name).await
+            {
+                let word_lower = word.to_lowercase();
+                for column in columns {
+                    if column.name.to_lowercase() == word_lower {
+                        let hover_info = ColumnHoverInfo {
+                            name: column.name.clone(),
+                            data_type: column.data_type.clone(),
+                            is_primary_key: column.is_primary_key,
+                            is_foreign_key: column.is_foreign_key,
+                        };
+                        return Some(hover_provider.get_column_hover(&hover_info));
                     }
                 }
             }

@@ -35,10 +35,9 @@
 use tower_lsp::lsp_types::{Location, Position, Url};
 use tree_sitter::{Node, TreeCursor};
 use unified_sql_lsp_context::{
-    Position as ContextPosition, Range as ContextRange,
-    extract_alias, extract_column_info, extract_identifier_name, extract_table_name,
-    find_from_clause, find_node_at_position, find_parent_select, find_select_clause,
-    node_to_range as context_node_to_range,
+    Position as ContextPosition, Range as ContextRange, extract_alias, extract_column_info,
+    extract_identifier_name, extract_table_name, find_from_clause, find_node_at_position,
+    find_parent_select, find_select_clause, node_to_range as context_node_to_range,
 };
 
 /// Convert context Position to tower_lsp Position

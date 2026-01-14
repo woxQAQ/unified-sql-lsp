@@ -176,7 +176,6 @@ pub fn detect_completion_context(
     position: Position,
     source: &str,
 ) -> CompletionContext {
-
     // Find the node at the cursor position
     let node = match find_node_at_position(root, position, source) {
         Some(n) => n,
@@ -184,7 +183,6 @@ pub fn detect_completion_context(
             return detect_context_from_text(source, position);
         }
     };
-
 
     // Walk up the parent chain to find the context
     let mut current = Some(node);
@@ -231,14 +229,16 @@ pub fn detect_completion_context(
                 if is_right_after_select_keyword(&n, source, position) {
                     // For subqueries, use text-based extraction to get the table name
                     // because CST parsing might be incomplete for nested queries
-                    let text_before = if let Ok(offset) = position_to_byte_offset_checked(source, position) {
-                        &source[..offset.min(source.len())]
-                    } else {
-                        ""
-                    };
+                    let text_before =
+                        if let Ok(offset) = position_to_byte_offset_checked(source, position) {
+                            &source[..offset.min(source.len())]
+                        } else {
+                            ""
+                        };
 
                     // Check if we're in a subquery (parentheses)
-                    let is_subquery = text_before.matches('(').count() > text_before.matches(')').count();
+                    let is_subquery =
+                        text_before.matches('(').count() > text_before.matches(')').count();
 
                     let tables = if is_subquery {
                         // Extract table from text: look for the last FROM in the subquery
@@ -300,7 +300,6 @@ pub fn detect_completion_context(
 
             // JOIN clause
             "join_clause" => {
-
                 // Check if cursor is inside a subquery in the JOIN
                 // For example: "JOIN (SELECT | FROM orders)" should detect the SELECT projection
                 let byte_offset = position_to_byte_offset(source, position);
@@ -308,9 +307,7 @@ pub fn detect_completion_context(
                 let open_parens = text_before_cursor.matches('(').count();
                 let close_parens = text_before_cursor.matches(')').count();
 
-
                 if open_parens > close_parens {
-
                     // Check if we're right after SELECT in the subquery
                     let text_before_upper = text_before_cursor.to_uppercase();
 
@@ -319,7 +316,6 @@ pub fn detect_completion_context(
                         || text_before_upper.ends_with("SELECT(")
                         || text_before_upper.trim_end().ends_with("(SELECT")
                     {
-
                         // Extract table from the subquery's FROM clause
                         // Find the last SELECT, then find FROM after it
                         let source_upper = source.to_uppercase();
@@ -330,7 +326,8 @@ pub fn detect_completion_context(
                                 let after_from = &source[from_absolute + 4..];
                                 let after_from_trimmed = after_from.trim_start();
                                 if let Some(table_end) = after_from_trimmed.find([' ', ')', ';']) {
-                                    let table_name = after_from_trimmed[..table_end].trim().to_string();
+                                    let table_name =
+                                        after_from_trimmed[..table_end].trim().to_string();
                                     vec![table_name]
                                 } else {
                                     vec![]
@@ -679,7 +676,6 @@ fn extract_real_table_names_from_source(source: &str) -> Vec<String> {
 fn detect_from_or_join_context(source: &str, text_before: &str) -> Option<CompletionContext> {
     let text_before_upper = text_before.to_uppercase();
 
-
     // Check if cursor is inside a subquery (parentheses)
     // If we're in a subquery, let other context detectors handle the inner context
     let open_parens = text_before.matches('(').count();
@@ -709,7 +705,7 @@ fn detect_from_or_join_context(source: &str, text_before: &str) -> Option<Comple
             || trimmed.ends_with("(SELECT")
             || (trimmed.contains("(SELECT ") && {
                 let after_select = trimmed.split("(SELECT ").last().unwrap_or("");
-                after_select.trim().split_whitespace().count() <= 2
+                after_select.split_whitespace().count() <= 2
             }));
 
     if in_subquery_after_select {
@@ -1513,7 +1509,10 @@ fn is_right_after_select_keyword(select_node: &Node, source: &str, position: Pos
 
     // Check if the text ends with "SELECT" (possibly with whitespace)
     let text_upper = text_before.trim_end().to_uppercase();
-    if text_upper.ends_with("SELECT") || text_upper.ends_with("SELECT ") || text_upper.ends_with("SELECT\t") {
+    if text_upper.ends_with("SELECT")
+        || text_upper.ends_with("SELECT ")
+        || text_upper.ends_with("SELECT\t")
+    {
         // Additional check: make sure we're after the SELECT keyword within this select_statement
         // Find the SELECT keyword position in the source
         let node_start = select_node.byte_range().start;
@@ -1572,7 +1571,11 @@ fn position_to_byte_offset_checked(source: &str, position: Position) -> Result<u
     if line == position.line as usize {
         Ok(byte_offset)
     } else {
-        Err(format!("Position {:?} is out of bounds for source of length {}", position, source.len()))
+        Err(format!(
+            "Position {:?} is out of bounds for source of length {}",
+            position,
+            source.len()
+        ))
     }
 }
 
@@ -1616,7 +1619,7 @@ fn extract_tables_from_subquery_text(source: &str, position: Position) -> Vec<St
             let after_from_trimmed = after_from.trim_start();
 
             // Extract the table name (up to next space, comma, parenthesis, or semicolon)
-            if let Some(table_end) = after_from_trimmed.find(|c| c == ' ' || c == ',' || c == ')' || c == ';') {
+            if let Some(table_end) = after_from_trimmed.find([' ', ',', ')', ';']) {
                 let table_name = after_from_trimmed[..table_end].trim().to_string();
                 // Filter out obvious non-table names
                 if !table_name.is_empty()

@@ -20,10 +20,10 @@
 //! 3. **First Letter + Numeric** - Match first letter with numeric suffix (e.g., "e1" -> "employees")
 //! 4. **Single Table Fallback** - If only one table exists, use it
 
+use crate::TableSymbol;
 use std::sync::Arc;
 use tracing::{debug, instrument};
 use unified_sql_lsp_catalog::Catalog;
-use crate::TableSymbol;
 
 /// Strategy for resolving table aliases to actual table names
 #[derive(Debug, Clone, Copy)]
@@ -45,7 +45,12 @@ impl ResolutionStrategy {
     /// Get all strategies in order of precedence
     pub fn all() -> &'static [ResolutionStrategy] {
         use ResolutionStrategy::*;
-        &[ExactMatch, StartsWith, FirstLetterPlusNumeric, SingleTableFallback]
+        &[
+            ExactMatch,
+            StartsWith,
+            FirstLetterPlusNumeric,
+            SingleTableFallback,
+        ]
     }
 }
 
@@ -145,16 +150,15 @@ impl AliasResolver {
         match strategy {
             ResolutionStrategy::ExactMatch => self.try_exact_match(alias).await,
             ResolutionStrategy::StartsWith => self.try_starts_with(alias).await,
-            ResolutionStrategy::FirstLetterPlusNumeric => self.try_first_letter_numeric(alias).await,
+            ResolutionStrategy::FirstLetterPlusNumeric => {
+                self.try_first_letter_numeric(alias).await
+            }
             ResolutionStrategy::SingleTableFallback => self.try_single_table_fallback(alias).await,
         }
     }
 
     /// Strategy 1: Try exact table name match
-    async fn try_exact_match(
-        &self,
-        alias: &str,
-    ) -> Result<ResolutionResult, AliasResolutionError> {
+    async fn try_exact_match(&self, alias: &str) -> Result<ResolutionResult, AliasResolutionError> {
         match self.catalog.get_columns(alias).await {
             Ok(columns) => {
                 let mut table = TableSymbol::new(alias);
@@ -189,10 +193,7 @@ impl AliasResolver {
     }
 
     /// Strategy 2: Find tables that start with the alias
-    async fn try_starts_with(
-        &self,
-        alias: &str,
-    ) -> Result<ResolutionResult, AliasResolutionError> {
+    async fn try_starts_with(&self, alias: &str) -> Result<ResolutionResult, AliasResolutionError> {
         let all_tables = self.catalog.list_tables().await?;
 
         for table in all_tables {
@@ -361,12 +362,10 @@ mod tests {
     #[tokio::test]
     async fn test_exact_match_resolution() {
         let catalog = MockCatalogBuilder::new()
-            .with_table(
-                TableMetadata::new("users", "public").with_columns(vec![
-                    unified_sql_lsp_catalog::ColumnMetadata::new("id", DataType::Integer),
-                    unified_sql_lsp_catalog::ColumnMetadata::new("name", DataType::Text),
-                ]),
-            )
+            .with_table(TableMetadata::new("users", "public").with_columns(vec![
+                unified_sql_lsp_catalog::ColumnMetadata::new("id", DataType::Integer),
+                unified_sql_lsp_catalog::ColumnMetadata::new("name", DataType::Text),
+            ]))
             .build();
 
         let resolver = AliasResolver::new(Arc::new(catalog));
@@ -383,11 +382,9 @@ mod tests {
     #[tokio::test]
     async fn test_starts_with_resolution() {
         let catalog = MockCatalogBuilder::new()
-            .with_table(
-                TableMetadata::new("users", "public").with_columns(vec![
-                    unified_sql_lsp_catalog::ColumnMetadata::new("id", DataType::Integer),
-                ]),
-            )
+            .with_table(TableMetadata::new("users", "public").with_columns(vec![
+                unified_sql_lsp_catalog::ColumnMetadata::new("id", DataType::Integer),
+            ]))
             .build();
 
         let resolver = AliasResolver::new(Arc::new(catalog));
@@ -404,11 +401,9 @@ mod tests {
     #[tokio::test]
     async fn test_first_letter_numeric_resolution() {
         let catalog = MockCatalogBuilder::new()
-            .with_table(
-                TableMetadata::new("employees", "public").with_columns(vec![
-                    unified_sql_lsp_catalog::ColumnMetadata::new("id", DataType::Integer),
-                ]),
-            )
+            .with_table(TableMetadata::new("employees", "public").with_columns(vec![
+                unified_sql_lsp_catalog::ColumnMetadata::new("id", DataType::Integer),
+            ]))
             .build();
 
         let resolver = AliasResolver::new(Arc::new(catalog));

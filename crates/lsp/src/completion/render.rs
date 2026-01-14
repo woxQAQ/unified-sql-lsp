@@ -9,7 +9,9 @@
 //! from semantic symbols.
 
 use tower_lsp::lsp_types::{CompletionItem, CompletionItemKind, Documentation};
-use unified_sql_lsp_catalog::{format_data_type, FunctionMetadata, FunctionType, TableMetadata, TableType};
+use unified_sql_lsp_catalog::{
+    FunctionMetadata, FunctionType, TableMetadata, TableType, format_data_type,
+};
 use unified_sql_lsp_semantic::{ColumnSymbol, TableSymbol};
 
 // Import keyword types from context crate
@@ -615,18 +617,12 @@ mod tests {
 
     #[test]
     fn test_format_data_type() {
-        assert_eq!(
-            format_data_type(&DataType::Integer),
-            "Integer"
-        );
+        assert_eq!(format_data_type(&DataType::Integer), "Integer");
         assert_eq!(
             format_data_type(&DataType::Varchar(Some(255))),
             "VarChar(255)"
         );
-        assert_eq!(
-            format_data_type(&DataType::Text),
-            "Text"
-        );
+        assert_eq!(format_data_type(&DataType::Text), "Text");
         assert_eq!(
             format_data_type(&DataType::Array(Box::new(DataType::Integer))),
             "Integer[]"

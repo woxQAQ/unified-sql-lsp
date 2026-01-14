@@ -936,9 +936,21 @@ impl CompletionEngine {
     fn is_sql_keyword(word: &str) -> bool {
         matches!(
             word.to_uppercase().as_str(),
-            "FROM" | "JOIN" | "INNER" | "LEFT" | "RIGHT" | "FULL"
-                | "CROSS" | "STRAIGHT" | "UPDATE" | "INSERT"
-                | "DELETE" | "CREATE" | "ALTER" | "DROP" | "INTO"
+            "FROM"
+                | "JOIN"
+                | "INNER"
+                | "LEFT"
+                | "RIGHT"
+                | "FULL"
+                | "CROSS"
+                | "STRAIGHT"
+                | "UPDATE"
+                | "INSERT"
+                | "DELETE"
+                | "CREATE"
+                | "ALTER"
+                | "DROP"
+                | "INTO"
         )
     }
 }
