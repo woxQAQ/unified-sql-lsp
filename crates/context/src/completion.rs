@@ -272,6 +272,19 @@ pub fn detect_completion_context(
             // JOIN clause
             "join_clause" => {
                 debug!("!!! LSP: Found join_clause node");
+
+                // Check if cursor is inside a subquery in the JOIN
+                // For example: "JOIN (SELECT | FROM orders)" should detect the SELECT projection
+                let byte_offset = position_to_byte_offset(source, position);
+                let text_before_cursor = &source[..byte_offset.min(source.len())];
+                let open_parens = text_before_cursor.matches('(').count();
+                let close_parens = text_before_cursor.matches(')').count();
+
+                if open_parens > close_parens {
+                    debug!("!!! LSP: Inside subquery in JOIN, falling back to text-based detection");
+                    return detect_context_from_text(source, position);
+                }
+
                 // Extract left and right table names from the join
                 let (left_table, right_table) = extract_join_tables(&n, source);
                 debug!(

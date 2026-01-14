@@ -296,32 +296,89 @@ impl CompletionEngine {
                     .unwrap_or(self.dialect);
                 let provider = KeywordProvider::new(dialect);
 
-                // Determine which keywords to show based on context
-                let keywords = if let Some(stmt_type) = &statement_type {
+                // Render completion items
+                let items = if let Some(stmt_type) = &statement_type {
                     // Show keywords based on statement type
                     match stmt_type.as_str() {
                         "SELECT" => {
                             // Show SELECT clause keywords, excluding existing ones
                             let all = provider.select_clause_keywords();
                             let exclude: HashSet<String> = existing_clauses.into_iter().collect();
-                            all.exclude(&exclude)
+                            let keywords = all.exclude(&exclude);
+                            CompletionRenderer::render_keywords(&keywords)
                         }
-                        "INSERT" => provider.insert_keywords().keywords,
-                        "UPDATE" => provider.update_keywords().keywords,
-                        "DELETE" => provider.delete_keywords().keywords,
-                        "CREATE" => provider.create_keywords().keywords,
-                        "ALTER" => provider.alter_keywords().keywords,
-                        "DROP" => provider.drop_keywords().keywords,
-                        "UNION" => provider.union_keywords().keywords,
-                        _ => provider.select_clause_keywords().keywords,
+                        "UPDATE" => {
+                            // For UPDATE, we need both table names and SET keyword
+                            // SQL syntax: UPDATE table_name SET ...
+                            let keywords = provider.update_keywords().keywords;
+
+                            // Get table names for UPDATE statement
+                            let tables = match self.catalog_fetcher.list_tables().await {
+                                Ok(t) => t,
+                                Err(_) => vec![],
+                            };
+                            let table_items = CompletionRenderer::render_tables(&tables, false);
+
+                            // Render keywords
+                            let keyword_items = CompletionRenderer::render_keywords(&keywords);
+
+                            // Combine: tables first (higher priority), then keywords
+                            let mut all_items = table_items;
+                            all_items.extend(keyword_items);
+                            all_items
+                        }
+                        "DELETE" => {
+                            // For DELETE, we need both table names and FROM keyword
+                            // SQL syntax: DELETE FROM table_name ...
+                            // But also support: DELETE table_name (MySQL syntax)
+                            let keywords = provider.delete_keywords().keywords;
+
+                            // Get table names for DELETE statement
+                            let tables = match self.catalog_fetcher.list_tables().await {
+                                Ok(t) => t,
+                                Err(_) => vec![],
+                            };
+                            let table_items = CompletionRenderer::render_tables(&tables, false);
+
+                            // Render keywords
+                            let keyword_items = CompletionRenderer::render_keywords(&keywords);
+
+                            // Combine: tables first (higher priority), then keywords
+                            let mut all_items = table_items;
+                            all_items.extend(keyword_items);
+                            all_items
+                        }
+                        "INSERT" => {
+                            let keywords = provider.insert_keywords().keywords;
+                            CompletionRenderer::render_keywords(&keywords)
+                        }
+                        "CREATE" => {
+                            let keywords = provider.create_keywords().keywords;
+                            CompletionRenderer::render_keywords(&keywords)
+                        }
+                        "ALTER" => {
+                            let keywords = provider.alter_keywords().keywords;
+                            CompletionRenderer::render_keywords(&keywords)
+                        }
+                        "DROP" => {
+                            let keywords = provider.drop_keywords().keywords;
+                            CompletionRenderer::render_keywords(&keywords)
+                        }
+                        "UNION" => {
+                            let keywords = provider.union_keywords().keywords;
+                            CompletionRenderer::render_keywords(&keywords)
+                        }
+                        _ => {
+                            let keywords = provider.select_clause_keywords().keywords;
+                            CompletionRenderer::render_keywords(&keywords)
+                        }
                     }
                 } else {
                     // No statement type, show statement keywords
-                    provider.statement_keywords().keywords
+                    let keywords = provider.statement_keywords().keywords;
+                    CompletionRenderer::render_keywords(&keywords)
                 };
 
-                // Render completion items
-                let items = CompletionRenderer::render_keywords(&keywords);
                 Ok(Some(items))
             }
             CompletionContext::OrderByClause { tables, qualifier } => {
