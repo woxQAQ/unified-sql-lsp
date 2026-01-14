@@ -1901,9 +1901,11 @@ version = "0.1.0"
 dependencies = [
  "serde",
  "thiserror",
+ "tracing",
  "tree-sitter",
  "unified-sql-grammar",
  "unified-sql-lsp-ir",
+ "unified-sql-lsp-semantic",
 ]
 
 [[package]]
@@ -1976,6 +1978,7 @@ dependencies = [
  "unified-sql-grammar",
  "unified-sql-lsp-catalog",
  "unified-sql-lsp-context",
+ "unified-sql-lsp-function-registry",
  "unified-sql-lsp-ir",
  "unified-sql-lsp-lowering",
  "unified-sql-lsp-semantic",
@@ -1988,6 +1991,7 @@ dependencies = [
  "async-trait",
  "serde",
  "thiserror",
+ "tracing",
  "unified-sql-lsp-catalog",
  "unified-sql-lsp-ir",
 ]

@@ -498,9 +498,15 @@ impl Catalog for LivePostgreSQLCatalog {
     ///
     /// Returns a list of built-in PostgreSQL functions and custom functions.
     async fn list_functions(&self) -> CatalogResult<Vec<FunctionMetadata>> {
-        // Start with empty vector (TODO: load from function-registry)
-        let mut all_functions: Vec<FunctionMetadata> = Vec::new();
+        use unified_sql_lsp_function_registry::FunctionRegistry;
+        use unified_sql_lsp_ir::Dialect;
 
+        // Start with builtin functions from function-registry
+        let registry = FunctionRegistry::new();
+        let builtin_functions = registry.get_functions(Dialect::PostgreSQL);
+        let mut all_functions: Vec<FunctionMetadata> = builtin_functions;
+
+        // Add custom functions from database
         #[cfg(feature = "postgresql")]
         if let Some(pool) = &self.pool {
             // Query custom functions from pg_catalog.pg_proc

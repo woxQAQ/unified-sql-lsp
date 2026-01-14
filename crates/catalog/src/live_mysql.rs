@@ -442,9 +442,15 @@ impl Catalog for LiveMySQLCatalog {
     ///
     /// Returns a list of built-in MySQL functions and custom stored procedures/functions.
     async fn list_functions(&self) -> CatalogResult<Vec<FunctionMetadata>> {
-        // Start with builtin functions (TODO: load from function-registry)
-        let mut all_functions: Vec<FunctionMetadata> = Vec::new();
+        use unified_sql_lsp_function_registry::FunctionRegistry;
+        use unified_sql_lsp_ir::Dialect;
 
+        // Start with builtin functions from function-registry
+        let registry = FunctionRegistry::new();
+        let builtin_functions = registry.get_functions(Dialect::MySQL);
+        let mut all_functions: Vec<FunctionMetadata> = builtin_functions;
+
+        // Add custom stored procedures/functions from database
         #[cfg(feature = "mysql")]
         if let Some(pool) = &self.pool {
             // Query custom stored procedures/functions from mysql.proc
