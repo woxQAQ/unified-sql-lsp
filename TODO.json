@@ -1,23 +1,7 @@
 [
   {
-    "file": "crates/lowering/src/dialect/mysql.rs",
-    "line": "791-795",
-    "description": "Implement full function call lowering with: - DISTINCT modifier parsing (already done for PostgreSQL, add for MySQL) - Window function support (OVER clause) - Aggregate function handling - Function type detection (aggregate vs scalar vs window)",
-    "dependencies": [
-      "COMPLETION-006"
-    ]
-  },
-  {
-    "file": "crates/lowering/src/dialect/mysql.rs",
-    "line": "816-816",
-    "description": "Parse DISTINCT modifier (currently hardcoded to false)",
-    "dependencies": [
-      "COMPLETION-006"
-    ]
-  },
-  {
     "file": "crates/lsp/src/backend.rs",
-    "line": "243-245",
+    "line": "533-535",
     "description": "Load configuration from client settings For now, we'll wait for the client to send configuration through workspace/didChangeConfiguration",
     "dependencies": [
       "CONFIG-001"
@@ -25,42 +9,42 @@
   },
   {
     "file": "crates/lsp/src/backend.rs",
-    "line": "323-323",
-    "description": "Publish diagnostics",
-    "dependencies": [
-      "DIAG-002"
-    ]
-  },
-  {
-    "file": "crates/lsp/src/backend.rs",
-    "line": "411-411",
-    "description": "Publish diagnostics",
-    "dependencies": [
-      "DIAG-002"
-    ]
-  },
-  {
-    "file": "crates/lsp/src/backend.rs",
-    "line": "547-547",
-    "description": "Implement actual hover logic",
-    "dependencies": [
-      "HOVER-001"
-    ]
-  },
-  {
-    "file": "crates/lsp/src/backend.rs",
-    "line": "636-636",
+    "line": "925-925",
     "description": "Implement SQL formatting",
     "dependencies": [
       "FORMAT-001"
     ]
   },
   {
-    "file": "crates/lsp/src/backend.rs",
-    "line": "752-753",
-    "description": "Parse and apply configuration from client For now, just log that configuration changed",
+    "file": "crates/lsp/src/catalog_manager.rs",
+    "line": "69-69",
+    "description": "Add support for additional dialects (TiDB, MariaDB, CockroachDB)",
     "dependencies": [
-      "CONFIG-001"
+      "DIALECT-TIDB-001"
+    ]
+  },
+  {
+    "file": "crates/lsp/src/catalog_manager.rs",
+    "line": "159-159",
+    "description": "Remove this test once TiDB catalog support is implemented",
+    "dependencies": [
+      "DIALECT-TIDB-001"
+    ]
+  },
+  {
+    "file": "crates/lsp/src/sync.rs",
+    "line": "206-206",
+    "description": "Incremental parsing not yet fully implemented, falling back to full parse",
+    "dependencies": [
+      "PERF-004"
+    ]
+  },
+  {
+    "file": "crates/lsp/tests/e2e_completion_tests.rs",
+    "line": "98-99",
+    "description": "Implement LIMIT/OFFSET clause completion context detection LIMIT clause completion not implemented yet, so we just verify it doesn't crash",
+    "dependencies": [
+      "COMPLETION-005"
     ]
   }
 ]
