@@ -59,13 +59,13 @@ pub fn validate_completion(
     let options = expected_case.options.as_ref().unwrap_or(&default_options);
 
     // Check minimum item count
-    if let Some(min) = options.min_items {
-        if actual.len() < min {
-            return Err(ValidationError::TooFewItems {
-                expected: min,
-                actual: actual.len(),
-            });
-        }
+    if let Some(min) = options.min_items
+        && actual.len() < min
+    {
+        return Err(ValidationError::TooFewItems {
+            expected: min,
+            actual: actual.len(),
+        });
     }
 
     // Check required items

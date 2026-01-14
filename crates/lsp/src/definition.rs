@@ -262,16 +262,15 @@ impl DefinitionFinder {
         let from_clause = find_from_clause(&select_stmt)?;
 
         // 4. Search for matching table_reference in FROM clause
-        if let Some(child) = from_clause.find_child(|c| c.kind() == "table_reference") {
-            if let Some(ref_name) = extract_table_name(&child, source) {
-                if ref_name == table_name {
-                    let range = node_to_range(&child, source);
-                    return Some(Location {
-                        uri: uri.clone(),
-                        range,
-                    });
-                }
-            }
+        if let Some(child) = from_clause.find_child(|c| c.kind() == "table_reference")
+            && let Some(ref_name) = extract_table_name(&child, source)
+            && ref_name == table_name
+        {
+            let range = node_to_range(&child, source);
+            return Some(Location {
+                uri: uri.clone(),
+                range,
+            });
         }
 
         None
@@ -298,26 +297,26 @@ impl DefinitionFinder {
                     let (ref_col, ref_table) = extract_column_info(&child, source)?;
 
                     // Match if column names match AND (no qualifier OR qualifiers match)
-                    if ref_col == col_name {
-                        if table_qualifier.is_none() || ref_table == table_qualifier {
-                            let range = node_to_range(&child, source);
-                            return Some(Location {
-                                uri: uri.clone(),
-                                range,
-                            });
-                        }
+                    if ref_col == col_name
+                        && (table_qualifier.is_none() || ref_table == table_qualifier)
+                    {
+                        let range = node_to_range(&child, source);
+                        return Some(Location {
+                            uri: uri.clone(),
+                            range,
+                        });
                     }
                 }
                 // Handle expressions: SELECT COUNT(*) AS cnt
                 "expression" | "function_call" => {
-                    if let Some(alias) = extract_alias(&child, source) {
-                        if alias == col_name {
-                            let range = node_to_range(&child, source);
-                            return Some(Location {
-                                uri: uri.clone(),
-                                range,
-                            });
-                        }
+                    if let Some(alias) = extract_alias(&child, source)
+                        && alias == col_name
+                    {
+                        let range = node_to_range(&child, source);
+                        return Some(Location {
+                            uri: uri.clone(),
+                            range,
+                        });
                     }
                 }
                 _ => {}
@@ -330,11 +329,8 @@ impl DefinitionFinder {
 
 /// Extract table name from table_reference node
 fn extract_table_name(node: &Node, source: &str) -> Option<String> {
-    if let Some(child) = node.find_child(|c| matches!(c.kind(), "table_name" | "identifier")) {
-        Some(extract_node_text(&child, source))
-    } else {
-        None
-    }
+    node.find_child(|c| matches!(c.kind(), "table_name" | "identifier"))
+        .map(|child| extract_node_text(&child, source))
 }
 
 /// Extract column info from column_reference node
@@ -383,12 +379,11 @@ fn find_select_clause<'a>(select_node: &'a Node<'a>) -> Option<Node<'a>> {
 
 /// Extract alias from expression or function_call
 fn extract_alias(node: &Node, source: &str) -> Option<String> {
-    if let Some(child) = node.find_child(|c| c.kind() == "alias") {
-        if let Some(alias_child) =
+    if let Some(child) = node.find_child(|c| c.kind() == "alias")
+        && let Some(alias_child) =
             child.find_child(|c| matches!(c.kind(), "identifier" | "column_name"))
-        {
-            return Some(extract_node_text(&alias_child, source));
-        }
+    {
+        return Some(extract_node_text(&alias_child, source));
     }
     None
 }

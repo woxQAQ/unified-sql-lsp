@@ -199,7 +199,7 @@ impl CompletionEngine {
                 );
                 // Extract prefix from source for filtering
                 // Only filter if the prefix looks like a table name (not SQL keywords)
-                let prefix = Self::extract_prefix_from_document(&document, position).filter(|p| {
+                let prefix = Self::extract_prefix_from_document(document, position).filter(|p| {
                     let p_upper = p.to_uppercase();
                     // Don't filter if the "prefix" is a SQL keyword
                     !matches!(
@@ -250,16 +250,16 @@ impl CompletionEngine {
                 }
 
                 // Filter tables by prefix if present
-                if let Some(ref p) = prefix {
-                    if !p.is_empty() {
-                        let p_lower = p.to_lowercase();
-                        tables.retain(|t| t.name.to_lowercase().starts_with(&p_lower));
-                        eprintln!(
-                            "!!! LSP: Filtered to {} tables matching prefix '{}'",
-                            tables.len(),
-                            p
-                        );
-                    }
+                if let Some(ref p) = prefix
+                    && !p.is_empty()
+                {
+                    let p_lower = p.to_lowercase();
+                    tables.retain(|t| t.name.to_lowercase().starts_with(&p_lower));
+                    eprintln!(
+                        "!!! LSP: Filtered to {} tables matching prefix '{}'",
+                        tables.len(),
+                        p
+                    );
                 }
 
                 // Check if we should show schema qualifier
@@ -286,9 +286,8 @@ impl CompletionEngine {
                     left_table, right_table
                 );
                 // We can complete if we have at least one table
-                match (left_table.as_ref(), right_table.as_ref()) {
-                    (None, None) => return Ok(None),
-                    _ => {}
+                if let (None, None) = (left_table.as_ref(), right_table.as_ref()) {
+                    return Ok(None);
                 }
 
                 // Helper function to load table by alias or real name
@@ -351,7 +350,7 @@ impl CompletionEngine {
                                             eprintln!(
                                                 "!!! LSP: load_table_by_alias: trying strategy 2 (first letter match)"
                                             );
-                                            if alias.len() >= 1 {
+                                            if !alias.is_empty() {
                                                 let alias_first_char = alias
                                                     .chars()
                                                     .next()
@@ -422,7 +421,7 @@ impl CompletionEngine {
                                                         populated_table.columns.len()
                                                     );
                                                     populated_table.alias = Some(alias.clone());
-                                                    return Ok(populated_table);
+                                                    Ok(populated_table)
                                                 }
                                                 Err(e) => {
                                                     eprintln!(
@@ -993,11 +992,7 @@ impl CompletionEngine {
                         // Try to match by alias
                         let alias_match: Vec<_> = tables_with_columns
                             .iter()
-                            .filter(|t| {
-                                t.alias
-                                    .as_ref()
-                                    .map_or(false, |a| a.eq_ignore_ascii_case(q))
-                            })
+                            .filter(|t| t.alias.as_ref().is_some_and(|a| a.eq_ignore_ascii_case(q)))
                             .cloned()
                             .collect();
 

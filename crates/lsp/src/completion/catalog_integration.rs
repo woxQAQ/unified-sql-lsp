@@ -102,7 +102,7 @@ impl CatalogCompletionFetcher {
             .catalog
             .get_columns(&table.table_name)
             .await
-            .map_err(|e| CompletionError::Catalog(e))?;
+            .map_err(CompletionError::Catalog)?;
 
         // Convert ColumnMetadata to ColumnSymbol
         let columns: Vec<ColumnSymbol> = columns_metadata

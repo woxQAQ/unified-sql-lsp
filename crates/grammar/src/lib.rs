@@ -223,7 +223,7 @@ pub fn language_for_dialect_with_version(
     version: Option<DialectVersion>,
 ) -> Option<&'static tree_sitter::Language> {
     // If no version specified, use the default (latest) grammar
-    let version = version.unwrap_or_else(|| match dialect {
+    let version = version.unwrap_or(match dialect {
         Dialect::MySQL | Dialect::TiDB | Dialect::MariaDB => DialectVersion::MySQL80,
         Dialect::PostgreSQL | Dialect::CockroachDB => DialectVersion::PostgreSQL14,
         _ => DialectVersion::MySQL80, // Fallback

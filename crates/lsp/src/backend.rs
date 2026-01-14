@@ -133,14 +133,13 @@ impl LspBackend {
             crate::parsing::ParseResult::Success { tree, parse_time } => {
                 info!("Document parsed successfully in {:?}", parse_time);
                 let metadata = ParseMetadata::new(parse_time.as_millis() as u64, dialect, false, 0);
-                if let Some(tree) = tree {
-                    if let Err(e) = self
+                if let Some(tree) = tree
+                    && let Err(e) = self
                         .documents
                         .update_document_tree(uri, tree, metadata)
                         .await
-                    {
-                        error!("Failed to update document tree: {}", e);
-                    }
+                {
+                    error!("Failed to update document tree: {}", e);
                 }
                 // Publish diagnostics
                 let updated_document = self.documents.get_document(uri).await;
@@ -160,14 +159,13 @@ impl LspBackend {
             crate::parsing::ParseResult::Partial { tree, errors } => {
                 warn!("Document parsed with {} errors", errors.len());
                 let metadata = ParseMetadata::new(0, dialect, true, errors.len());
-                if let Some(tree) = tree {
-                    if let Err(e) = self
+                if let Some(tree) = tree
+                    && let Err(e) = self
                         .documents
                         .update_document_tree(uri, tree, metadata)
                         .await
-                    {
-                        error!("Failed to update document tree: {}", e);
-                    }
+                {
+                    error!("Failed to update document tree: {}", e);
                 }
                 // Publish diagnostics
                 let updated_document = self.documents.get_document(uri).await;
@@ -213,14 +211,13 @@ impl LspBackend {
             crate::parsing::ParseResult::Success { tree, parse_time } => {
                 info!("Document reparsed in {:?}", parse_time);
                 let metadata = ParseMetadata::new(parse_time.as_millis() as u64, dialect, false, 0);
-                if let Some(tree) = tree {
-                    if let Err(e) = self
+                if let Some(tree) = tree
+                    && let Err(e) = self
                         .documents
                         .update_document_tree(uri, tree, metadata)
                         .await
-                    {
-                        error!("Failed to update document tree: {}", e);
-                    }
+                {
+                    error!("Failed to update document tree: {}", e);
                 }
                 // Publish diagnostics
                 let updated_document = self.documents.get_document(uri).await;
@@ -240,14 +237,13 @@ impl LspBackend {
             crate::parsing::ParseResult::Partial { tree, errors } => {
                 warn!("Document reparsed with {} errors", errors.len());
                 let metadata = ParseMetadata::new(0, dialect, true, errors.len());
-                if let Some(tree) = tree {
-                    if let Err(e) = self
+                if let Some(tree) = tree
+                    && let Err(e) = self
                         .documents
                         .update_document_tree(uri, tree, metadata)
                         .await
-                    {
-                        error!("Failed to update document tree: {}", e);
-                    }
+                {
+                    error!("Failed to update document tree: {}", e);
                 }
                 // Publish diagnostics
                 let updated_document = self.documents.get_document(uri).await;

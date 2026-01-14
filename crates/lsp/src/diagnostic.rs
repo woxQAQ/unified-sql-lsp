@@ -228,7 +228,7 @@ pub struct DiagnosticCollector;
 impl DiagnosticCollector {
     /// Create a new diagnostic collector
     pub fn new() -> Self {
-        Self::default()
+        Self
     }
 
     /// Collect diagnostics from a parsed document
@@ -375,7 +375,7 @@ impl DiagnosticCollector {
 
             // 3. Unterminated string literals
             let quote_count = source.matches('"').count() + source.matches('\'').count();
-            if quote_count % 2 != 0 {
+            if !quote_count.is_multiple_of(2) {
                 eprintln!("!!! DIAG: Found unterminated string");
                 let diagnostic = SqlDiagnostic::error(
                     "Unterminated string literal".to_string(),
@@ -419,119 +419,116 @@ impl DiagnosticCollector {
 
             // 5. Unknown column detection (basic pattern matching)
             // Check for SELECT <nonexistent_column> FROM <known_table>
-            if let Some(select_pos) = source_upper.find("SELECT") {
-                if let Some(from_pos) = source_upper.find("FROM") {
-                    let select_clause = &source[select_pos + 6..from_pos]; // Between SELECT and FROM
-                    let from_clause = &source[from_pos + 4..]; // After FROM
+            if let Some(select_pos) = source_upper.find("SELECT")
+                && let Some(from_pos) = source_upper.find("FROM")
+            {
+                let select_clause = &source[select_pos + 6..from_pos]; // Between SELECT and FROM
+                let from_clause = &source[from_pos + 4..]; // After FROM
 
-                    // Extract table name
-                    let table_name = from_clause
+                // Extract table name
+                let table_name = from_clause
+                    .split_whitespace()
+                    .next()
+                    .unwrap_or("")
+                    .trim_end_matches(|c: char| !c.is_alphanumeric() && c != '_')
+                    .to_lowercase();
+
+                // Known table columns (simplified for testing)
+                let known_columns: std::collections::HashMap<String, Vec<&str>> = [
+                    (
+                        "users".to_string(),
+                        vec![
+                            "id",
+                            "username",
+                            "email",
+                            "bio",
+                            "balance",
+                            "is_active",
+                            "created_at",
+                        ],
+                    ),
+                    (
+                        "orders".to_string(),
+                        vec!["id", "user_id", "order_date", "total_amount"],
+                    ),
+                    (
+                        "products".to_string(),
+                        vec!["id", "name", "price", "description", "category_id"],
+                    ),
+                    (
+                        "order_items".to_string(),
+                        vec!["id", "order_id", "product_id", "quantity"],
+                    ),
+                    (
+                        "posts".to_string(),
+                        vec!["id", "title", "content", "author_id", "created_at"],
+                    ),
+                ]
+                .iter()
+                .cloned()
+                .collect();
+
+                // Known SQL function names to avoid flagging as unknown columns
+                let known_functions = [
+                    "COUNT",
+                    "SUM",
+                    "AVG",
+                    "MIN",
+                    "MAX",
+                    "CONCAT",
+                    "UPPER",
+                    "LOWER",
+                    "SUBSTRING",
+                    "LENGTH",
+                    "COALESCE",
+                    "NOW",
+                    "DATE",
+                    "UNKNOWN_FUNCTION",
+                ];
+
+                // Extract column names from SELECT clause
+                for word in select_clause.split(',') {
+                    let col = word
                         .split_whitespace()
                         .next()
                         .unwrap_or("")
-                        .trim_end_matches(|c: char| !c.is_alphanumeric() && c != '_')
-                        .to_lowercase();
+                        .trim_end_matches(|c: char| !c.is_alphanumeric() && c != '_');
+                    if !col.is_empty() && col != "*" {
+                        // Check if this is a qualified column reference (table.column)
+                        if col.contains('.') {
+                            continue; // Skip qualified references for now
+                        }
 
-                    // Known table columns (simplified for testing)
-                    let known_columns: std::collections::HashMap<String, Vec<&str>> = [
-                        (
-                            "users".to_string(),
-                            vec![
-                                "id",
-                                "username",
-                                "email",
-                                "bio",
-                                "balance",
-                                "is_active",
-                                "created_at",
-                            ],
-                        ),
-                        (
-                            "orders".to_string(),
-                            vec!["id", "user_id", "order_date", "total_amount"],
-                        ),
-                        (
-                            "products".to_string(),
-                            vec!["id", "name", "price", "description", "category_id"],
-                        ),
-                        (
-                            "order_items".to_string(),
-                            vec!["id", "order_id", "product_id", "quantity"],
-                        ),
-                        (
-                            "posts".to_string(),
-                            vec!["id", "title", "content", "author_id", "created_at"],
-                        ),
-                    ]
-                    .iter()
-                    .cloned()
-                    .collect();
+                        // Check if this is a function call (contains opening parenthesis)
+                        // Function calls look like: FUNCTION_NAME(...) or TABLE.FUNCTION_NAME(...)
+                        if col.contains('(') {
+                            continue; // Skip function calls
+                        }
 
-                    // Known SQL function names to avoid flagging as unknown columns
-                    let known_functions = [
-                        "COUNT",
-                        "SUM",
-                        "AVG",
-                        "MIN",
-                        "MAX",
-                        "CONCAT",
-                        "UPPER",
-                        "LOWER",
-                        "SUBSTRING",
-                        "LENGTH",
-                        "COALESCE",
-                        "NOW",
-                        "DATE",
-                        "UNKNOWN_FUNCTION",
-                    ];
+                        // Skip if this is a known function name (even without parentheses in the column name)
+                        if known_functions.contains(&col.to_uppercase().as_str()) {
+                            continue;
+                        }
 
-                    // Extract column names from SELECT clause
-                    for word in select_clause.split(',') {
-                        let col = word
-                            .split_whitespace()
-                            .next()
-                            .unwrap_or("")
-                            .trim_end_matches(|c: char| !c.is_alphanumeric() && c != '_');
-                        if !col.is_empty() && col != "*" {
-                            // Check if this is a qualified column reference (table.column)
-                            if col.contains('.') {
-                                continue; // Skip qualified references for now
-                            }
-
-                            // Check if this is a function call (contains opening parenthesis)
-                            // Function calls look like: FUNCTION_NAME(...) or TABLE.FUNCTION_NAME(...)
-                            if col.contains('(') {
-                                continue; // Skip function calls
-                            }
-
-                            // Skip if this is a known function name (even without parentheses in the column name)
-                            if known_functions.contains(&col.to_uppercase().as_str()) {
-                                continue;
-                            }
-
-                            // Check if column exists in the table
-                            if let Some(table_columns) = known_columns.get(&table_name) {
-                                if !table_columns.contains(&col) {
-                                    eprintln!(
-                                        "!!! DIAG: Unknown column: {} in table {}",
-                                        col, table_name
-                                    );
-                                    let diagnostic = SqlDiagnostic::error(
-                                        format!("Unknown column: '{}'", col),
-                                        Range {
-                                            start: Position {
-                                                line: 0,
-                                                character: 0,
-                                            },
-                                            end: Position {
-                                                line: 0,
-                                                character: source.len() as u32,
-                                            },
-                                        },
-                                    );
-                                    diagnostics.push(diagnostic);
-                                }
-                            }
+                        // Check if column exists in the table
+                        if let Some(table_columns) = known_columns.get(&table_name)
+                            && !table_columns.contains(&col)
+                        {
+                            eprintln!("!!! DIAG: Unknown column: {} in table {}", col, table_name);
+                            let diagnostic = SqlDiagnostic::error(
+                                format!("Unknown column: '{}'", col),
+                                Range {
+                                    start: Position {
+                                        line: 0,
+                                        character: 0,
+                                    },
+                                    end: Position {
+                                        line: 0,
+                                        character: source.len() as u32,
+                                    },
+                                },
+                            );
+                            diagnostics.push(diagnostic);
                         }
                     }
                 }
@@ -596,32 +593,36 @@ impl DiagnosticCollector {
 
             // 8. Type mismatch in comparison
             // Check for WHERE <string_column> = <number_value> pattern
-            if source_upper.contains("WHERE") {
-                if source_upper.contains("USERNAME = 123") || source_upper.contains("EMAIL = 123") {
-                    eprintln!("!!! DIAG: Type mismatch in comparison");
-                    let diagnostic = SqlDiagnostic::error(
-                        "Type mismatch in comparison: cannot compare string column with integer value".to_string(),
-                        Range {
-                            start: Position { line: 0, character: 0 },
-                            end: Position {
-                                line: 0,
-                                character: source.len() as u32,
-                            },
+            if source_upper.contains("WHERE")
+                && (source_upper.contains("USERNAME = 123") || source_upper.contains("EMAIL = 123"))
+            {
+                eprintln!("!!! DIAG: Type mismatch in comparison");
+                let diagnostic = SqlDiagnostic::error(
+                    "Type mismatch in comparison: cannot compare string column with integer value"
+                        .to_string(),
+                    Range {
+                        start: Position {
+                            line: 0,
+                            character: 0,
                         },
-                    );
-                    diagnostics.push(diagnostic);
-                }
+                        end: Position {
+                            line: 0,
+                            character: source.len() as u32,
+                        },
+                    },
+                );
+                diagnostics.push(diagnostic);
             }
 
             // 9. Invalid aggregate usage
             // Check for SELECT id, COUNT(*) pattern (non-aggregated column with aggregate)
-            if source_upper.contains("COUNT(*)")
+            if (source_upper.contains("COUNT(*)")
                 || source_upper.contains("SUM(")
-                || source_upper.contains("AVG(")
+                || source_upper.contains("AVG("))
+                && (source_upper.contains("SELECT ID,") || source_upper.contains("SELECT NAME,"))
             {
-                if source_upper.contains("SELECT ID,") || source_upper.contains("SELECT NAME,") {
-                    eprintln!("!!! DIAG: Invalid aggregate usage");
-                    let diagnostic = SqlDiagnostic::error(
+                eprintln!("!!! DIAG: Invalid aggregate usage");
+                let diagnostic = SqlDiagnostic::error(
                         "Invalid use of aggregate function: non-aggregated column in SELECT with aggregate function".to_string(),
                         Range {
                             start: Position { line: 0, character: 0 },
@@ -631,8 +632,7 @@ impl DiagnosticCollector {
                             },
                         },
                     );
-                    diagnostics.push(diagnostic);
-                }
+                diagnostics.push(diagnostic);
             }
 
             // 10. Unknown function detection
@@ -679,24 +679,25 @@ impl DiagnosticCollector {
 
             // 12. Invalid join column detection
             // Check for JOIN ON with invalid column reference
-            if source_upper.contains("JOIN") && source_upper.contains("ON") {
-                if source_upper.contains("INVALID_COL") {
-                    eprintln!("!!! DIAG: Invalid column in JOIN ON clause");
-                    let diagnostic = SqlDiagnostic::error(
-                        "Invalid column reference in JOIN ON clause".to_string(),
-                        Range {
-                            start: Position {
-                                line: 0,
-                                character: 0,
-                            },
-                            end: Position {
-                                line: 0,
-                                character: source.len() as u32,
-                            },
+            if source_upper.contains("JOIN")
+                && source_upper.contains("ON")
+                && source_upper.contains("INVALID_COL")
+            {
+                eprintln!("!!! DIAG: Invalid column in JOIN ON clause");
+                let diagnostic = SqlDiagnostic::error(
+                    "Invalid column reference in JOIN ON clause".to_string(),
+                    Range {
+                        start: Position {
+                            line: 0,
+                            character: 0,
                         },
-                    );
-                    diagnostics.push(diagnostic);
-                }
+                        end: Position {
+                            line: 0,
+                            character: source.len() as u32,
+                        },
+                    },
+                );
+                diagnostics.push(diagnostic);
             }
         }
 
@@ -843,7 +844,7 @@ impl DiagnosticCollector {
         let message = if error_text.len() <= 50 {
             format!("Syntax error near: '{}'", error_text)
         } else {
-            format!("Syntax error in this region")
+            "Syntax error in this region".to_string()
         };
 
         SqlDiagnostic::error(message, range).with_code(DiagnosticCode::SyntaxError)

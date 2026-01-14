@@ -224,14 +224,9 @@ pub fn extract_identifier_name(node: &Node, source: &str) -> Option<String> {
         "table_name" | "column_name" | "identifier" => Some(extract_node_text(node, source)),
         _ => {
             // Try to find identifier child
-            if let Some(child) = node
-                .children(&mut node.walk())
+            node.children(&mut node.walk())
                 .find(|c| matches!(c.kind(), "table_name" | "column_name" | "identifier"))
-            {
-                Some(extract_node_text(&child, source))
-            } else {
-                None
-            }
+                .map(|child| extract_node_text(&child, source))
         }
     }
 }

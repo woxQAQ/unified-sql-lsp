@@ -311,19 +311,19 @@ fn parse_expected_item(s: &str) -> Result<ExpectedItem, ParseError> {
     }
 
     // Check for full format: label [kind] detail
-    if let Some(kind_start) = s.find('[') {
-        if let Some(kind_end) = s.find(']') {
-            let label = s[..kind_start].trim().to_string();
-            let kind = s[kind_start + 1..kind_end].to_string();
-            let detail = s[kind_end + 1..].trim().to_string();
+    if let Some(kind_start) = s.find('[')
+        && let Some(kind_end) = s.find(']')
+    {
+        let label = s[..kind_start].trim().to_string();
+        let kind = s[kind_start + 1..kind_end].to_string();
+        let detail = s[kind_end + 1..].trim().to_string();
 
-            if !label.is_empty() {
-                return Ok(ExpectedItem::Full {
-                    label,
-                    kind,
-                    detail,
-                });
-            }
+        if !label.is_empty() {
+            return Ok(ExpectedItem::Full {
+                label,
+                kind,
+                detail,
+            });
         }
     }
 

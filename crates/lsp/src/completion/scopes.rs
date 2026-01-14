@@ -98,12 +98,9 @@ impl ScopeBuilder {
 
     /// Find the FROM clause in a SELECT statement
     fn find_from_clause<'a>(select_node: &'a Node) -> Option<Node<'a>> {
-        for child in select_node.children(&mut select_node.walk()) {
-            if child.kind() == "from_clause" {
-                return Some(child);
-            }
-        }
-        None
+        select_node
+            .children(&mut select_node.walk())
+            .find(|&child| child.kind() == "from_clause")
     }
 
     /// Extract table references from a FROM clause

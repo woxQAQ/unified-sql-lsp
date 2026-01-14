@@ -62,7 +62,8 @@ impl SharedLowering {
         ctx: &mut LoweringContext,
     ) -> BinaryOp {
         // Standard SQL operators
-        let op = match op_str {
+
+        match op_str {
             "+" => BinaryOp::Add,
             "-" => BinaryOp::Sub,
             "*" => BinaryOp::Mul,
@@ -99,9 +100,7 @@ impl SharedLowering {
                 });
                 return BinaryOp::Eq; // Default fallback
             }
-        };
-
-        op
+        }
     }
 
     /// Lower unary expression (NOT, negation)
@@ -379,14 +378,14 @@ impl SharedLowering {
                     expr,
                     direction: None,
                 });
-            } else if matches!(child.kind(), "ASC" | "DESC") {
-                if let Some(last) = order_by.last_mut() {
-                    last.direction = if child.kind() == "DESC" {
-                        Some(SortDirection::Desc)
-                    } else {
-                        Some(SortDirection::Asc)
-                    };
-                }
+            } else if matches!(child.kind(), "ASC" | "DESC")
+                && let Some(last) = order_by.last_mut()
+            {
+                last.direction = if child.kind() == "DESC" {
+                    Some(SortDirection::Desc)
+                } else {
+                    Some(SortDirection::Asc)
+                };
             }
         }
 
@@ -449,10 +448,10 @@ impl SharedLowering {
         } else if let Some(using_node) = Self::optional_child(node, "join_using") {
             let mut columns = Vec::new();
             for child in using_node.all_children() {
-                if child.kind() == "identifier" {
-                    if let Some(name) = child.text() {
-                        columns.push(normalize_fn(name));
-                    }
+                if child.kind() == "identifier"
+                    && let Some(name) = child.text()
+                {
+                    columns.push(normalize_fn(name));
                 }
             }
             JoinCondition::Using(columns)
@@ -490,12 +489,10 @@ impl SharedLowering {
             if matches!(
                 child.kind(),
                 "table_reference" | "table_name" | "joined_table"
-            ) {
-                if let Some(table) =
-                    Self::lower_table_reference(ctx, child, dialect_name, normalize_fn)?
-                {
-                    tables.push(table);
-                }
+            ) && let Some(table) =
+                Self::lower_table_reference(ctx, child, dialect_name, normalize_fn)?
+            {
+                tables.push(table);
             }
         }
 
@@ -670,14 +667,14 @@ impl SharedLowering {
     {
         let mut columns = Vec::new();
 
-        if let Some(columns_node) = Self::optional_child(node, "column_list") {
-            if let Some(identifiers_node) = Self::optional_child(columns_node, "identifier_list") {
-                for ident in identifiers_node.all_children() {
-                    if ident.kind() == "identifier" {
-                        if let Some(name) = ident.text() {
-                            columns.push(normalize_fn(name));
-                        }
-                    }
+        if let Some(columns_node) = Self::optional_child(node, "column_list")
+            && let Some(identifiers_node) = Self::optional_child(columns_node, "identifier_list")
+        {
+            for ident in identifiers_node.all_children() {
+                if ident.kind() == "identifier"
+                    && let Some(name) = ident.text()
+                {
+                    columns.push(normalize_fn(name));
                 }
             }
         }

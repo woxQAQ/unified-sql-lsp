@@ -67,7 +67,7 @@ pub struct ParserManager;
 impl ParserManager {
     /// Create a new parser manager
     pub fn new() -> Self {
-        Self::default()
+        Self
     }
 
     /// Create a new parser for a specific dialect
@@ -229,7 +229,7 @@ impl ParserManager {
 
         // Recursively find ERROR nodes
         let mut node = tree.root_node();
-        self.find_error_nodes(&mut node, &mut errors, text);
+        self.find_error_nodes(&node, &mut errors, text);
 
         errors
     }

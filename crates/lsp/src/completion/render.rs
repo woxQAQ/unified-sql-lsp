@@ -61,7 +61,7 @@ impl CompletionRenderer {
             for column in &table.columns {
                 column_map
                     .entry(column.name.clone())
-                    .or_insert_with(Vec::new)
+                    .or_default()
                     .push(column);
             }
         }
@@ -351,8 +351,7 @@ impl CompletionRenderer {
     ///
     /// Shows the data type and whether it's nullable
     fn format_column_detail(column: &ColumnSymbol) -> String {
-        let type_str = Self::format_data_type(&column.data_type);
-        type_str
+        Self::format_data_type(&column.data_type)
     }
 
     /// Format a DataType to a display string
@@ -430,10 +429,10 @@ impl CompletionRenderer {
 
         for function in functions {
             // Apply filter if specified
-            if let Some(ft) = &filter {
-                if &function.function_type != ft {
-                    continue;
-                }
+            if let Some(ft) = &filter
+                && &function.function_type != ft
+            {
+                continue;
             }
 
             items.push(Self::function_item(function));

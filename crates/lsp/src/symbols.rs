@@ -388,19 +388,12 @@ impl SymbolRenderer {
     ///
     /// Vector of LSP DocumentSymbol
     pub fn render_document(queries: Vec<QuerySymbol>) -> Vec<DocumentSymbol> {
-        queries
-            .into_iter()
-            .map(|query| Self::render_query(query))
-            .collect()
+        queries.into_iter().map(Self::render_query).collect()
     }
 
     /// Render a single query symbol
     fn render_query(query: QuerySymbol) -> DocumentSymbol {
-        let children = query
-            .tables
-            .into_iter()
-            .map(|table| Self::render_table(table))
-            .collect();
+        let children = query.tables.into_iter().map(Self::render_table).collect();
 
         #[allow(deprecated)]
         DocumentSymbol {
@@ -455,10 +448,7 @@ impl SymbolRenderer {
             a.name.cmp(&b.name)
         });
 
-        sorted
-            .into_iter()
-            .map(|col| Self::render_column(col))
-            .collect()
+        sorted.into_iter().map(Self::render_column).collect()
     }
 
     /// Render a single column symbol

@@ -91,16 +91,17 @@ impl DocumentSync {
     pub fn resolve_dialect(&self, document: &Document) -> Dialect {
         // 1. Check engine config
         // Note: We use try_read() to avoid blocking in async context
-        if let Ok(config_guard) = self.config.try_read() {
-            if let Some(config) = config_guard.as_ref() {
-                debug!("Using dialect from engine config: {:?}", config.dialect);
-                return config.dialect;
-            }
+        if let Ok(config_guard) = self.config.try_read()
+            && let Some(config) = config_guard.as_ref()
+        {
+            debug!("Using dialect from engine config: {:?}", config.dialect);
+            return config.dialect;
         }
 
         // 2. Check language_id
         let language_id = document.language_id();
-        let dialect = match language_id {
+
+        match language_id {
             "mysql" => {
                 debug!("Resolved dialect as MySQL from language_id");
                 Dialect::MySQL
@@ -117,9 +118,7 @@ impl DocumentSync {
                 );
                 Dialect::MySQL
             }
-        };
-
-        dialect
+        }
     }
 
     /// Parse document on open (full parse)
@@ -274,9 +273,8 @@ impl DocumentSync {
         }
 
         // Change must have range (not full replacement)
-        let has_range = changes[0].range.is_some();
 
-        has_range
+        changes[0].range.is_some()
     }
 
     /// Create parse metadata from parse result
