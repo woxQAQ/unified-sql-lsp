@@ -33,6 +33,11 @@ impl CatalogCompletionFetcher {
         Self { catalog }
     }
 
+    /// Get the inner catalog
+    pub fn catalog(&self) -> Arc<dyn Catalog> {
+        Arc::clone(&self.catalog)
+    }
+
     /// List all tables from the catalog
     ///
     /// # Returns

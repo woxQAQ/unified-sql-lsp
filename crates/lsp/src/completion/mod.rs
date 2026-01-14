@@ -32,12 +32,11 @@
 //! 6. Return CompletionResponse to client
 //! ```
 
-pub mod alias_resolution;
 pub mod catalog_integration;
 pub mod error;
 pub mod render;
-pub mod scopes;
 
+// Note: alias_resolution and scopes modules are now provided by semantic and context crates
 // Note: context and keywords modules are now provided by unified_sql-lsp-context crate
 
 use std::collections::HashSet;
@@ -47,11 +46,15 @@ use tracing::{debug, instrument};
 use unified_sql_lsp_catalog::{Catalog, FunctionType};
 use unified_sql_lsp_ir::Dialect;
 
-use crate::completion::alias_resolution::AliasResolver;
+// Import from semantic crate (moved from LSP)
+use unified_sql_lsp_semantic::AliasResolver;
+
+// Import from context crate (moved from LSP)
+use unified_sql_lsp_context::ScopeBuilder;
+
 use crate::completion::catalog_integration::CatalogCompletionFetcher;
 use crate::completion::error::CompletionError;
 use crate::completion::render::CompletionRenderer;
-use crate::completion::scopes::ScopeBuilder;
 use crate::document::Document;
 
 // Use context crate for keywords
@@ -206,7 +209,7 @@ impl CompletionEngine {
                 }
 
                 // Use AliasResolver to resolve table names
-                let resolver = AliasResolver::new(Arc::clone(&self.catalog_fetcher));
+                let resolver = AliasResolver::new(self.catalog_fetcher.catalog());
 
                 // Collect table names to resolve
                 let table_names: Vec<_> = left_table
@@ -561,7 +564,7 @@ impl CompletionEngine {
             debug!(?context_tables, "Using context tables for completion");
 
             // Use AliasResolver to resolve all context tables
-            let resolver = AliasResolver::new(Arc::clone(&self.catalog_fetcher));
+            let resolver = AliasResolver::new(self.catalog_fetcher.catalog());
             let tables_with_columns = resolver.resolve_multiple(context_tables).await?;
 
             debug!(

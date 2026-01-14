@@ -8,7 +8,7 @@
 //! This module provides shared utility functions for working with tree-sitter CST nodes.
 //! These functions are used across multiple LSP modules (completion, definition, etc.)
 
-use tree_sitter::Node;
+use tree_sitter::{Node, TreeCursor};
 
 /// Position in a document (line, character)
 ///
@@ -229,6 +229,131 @@ pub fn extract_identifier_name(node: &Node, source: &str) -> Option<String> {
                 .map(|child| extract_node_text(&child, source))
         }
     }
+}
+
+/// Iterator over a node's children
+///
+/// This provides a cleaner interface than repeatedly calling `node.children(&mut node.walk())`.
+pub struct ChildIter<'a> {
+    cursor: TreeCursor<'a>,
+    finished_first: bool,
+}
+
+impl<'a> ChildIter<'a> {
+    pub fn new(node: &Node<'a>) -> Self {
+        Self {
+            cursor: node.walk(),
+            finished_first: false,
+        }
+    }
+}
+
+impl<'a> Iterator for ChildIter<'a> {
+    type Item = Node<'a>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if !self.finished_first {
+            self.finished_first = true;
+            if self.cursor.goto_first_child() {
+                Some(self.cursor.node())
+            } else {
+                None
+            }
+        } else if self.cursor.goto_next_sibling() {
+            Some(self.cursor.node())
+        } else {
+            None
+        }
+    }
+}
+
+/// Extension trait for tree-sitter Node to provide more convenient child traversal
+///
+/// This trait eliminates the ugly `node.children(&mut node.walk())` pattern.
+pub trait NodeExt {
+    /// Iterate over children of this node
+    fn iter_children(&self) -> ChildIter<'_>;
+
+    /// Find first child matching a predicate
+    fn find_child<P>(&self, predicate: P) -> Option<Node<'_>>
+    where
+        P: Fn(&Node) -> bool;
+}
+
+impl NodeExt for Node<'_> {
+    fn iter_children(&self) -> ChildIter<'_> {
+        ChildIter::new(self)
+    }
+
+    fn find_child<P>(&self, predicate: P) -> Option<Node<'_>>
+    where
+        P: Fn(&Node) -> bool,
+    {
+        self.iter_children().find(predicate)
+    }
+}
+
+/// Find parent SELECT statement
+///
+/// Traverses up the tree from the given node to find the enclosing select_statement.
+pub fn find_parent_select<'a>(node: &Node<'a>) -> Option<Node<'a>> {
+    let mut current = *node;
+    loop {
+        if current.kind() == "select_statement" {
+            return Some(current);
+        }
+        current = current.parent()?;
+    }
+}
+
+/// Find FROM clause in SELECT statement
+pub fn find_from_clause<'a>(select_node: &'a Node<'a>) -> Option<Node<'a>> {
+    select_node.find_child(|c| c.kind() == "from_clause")
+}
+
+/// Find SELECT clause (projection) in SELECT statement
+pub fn find_select_clause<'a>(select_node: &'a Node<'a>) -> Option<Node<'a>> {
+    select_node.find_child(|c| c.kind() == "select" || c.kind() == "projection")
+}
+
+/// Extract table name from table_reference node
+pub fn extract_table_name(node: &Node, source: &str) -> Option<String> {
+    node.find_child(|c| matches!(c.kind(), "table_name" | "identifier"))
+        .map(|child| extract_node_text(&child, source))
+}
+
+/// Extract column info from column_reference node
+/// Returns (column_name, optional_table_name)
+pub fn extract_column_info(node: &Node, source: &str) -> Option<(String, Option<String>)> {
+    let mut column_name = None;
+    let mut table_name = None;
+
+    for child in node.iter_children() {
+        match child.kind() {
+            "column_name" | "identifier" => {
+                if column_name.is_none() {
+                    column_name = Some(extract_node_text(&child, source));
+                }
+            }
+            "table_name" => {
+                table_name = Some(extract_node_text(&child, source));
+            }
+            _ => {}
+        }
+    }
+
+    column_name.map(|col| (col, table_name))
+}
+
+/// Extract alias from expression or function_call
+pub fn extract_alias(node: &Node, source: &str) -> Option<String> {
+    if let Some(child) = node.find_child(|c| c.kind() == "alias")
+        && let Some(alias_child) =
+            child.find_child(|c| matches!(c.kind(), "identifier" | "column_name"))
+    {
+        return Some(extract_node_text(&alias_child, source));
+    }
+    None
 }
 
 #[cfg(test)]

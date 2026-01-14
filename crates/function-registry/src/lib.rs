@@ -25,6 +25,7 @@
 //! ```
 
 pub mod builtin;
+pub mod hover;
 pub mod registry;
 
 // Re-exports from ir for convenience
@@ -32,4 +33,5 @@ pub use unified_sql_lsp_ir::{
     DataType, Dialect, FunctionMetadata, FunctionParameter, FunctionType,
 };
 
+pub use hover::HoverInfoProvider;
 pub use registry::FunctionRegistry;

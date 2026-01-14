@@ -112,6 +112,7 @@
 //! assert!(result.is_err());
 //! ```
 
+pub mod alias_resolution;
 pub mod analyzer;
 pub mod error;
 pub mod resolution;
@@ -119,6 +120,7 @@ pub mod scope;
 pub mod symbol;
 
 // Re-export commonly used types
+pub use alias_resolution::{AliasResolutionError, AliasResolver, ResolutionResult, ResolutionStrategy};
 pub use analyzer::SemanticAnalyzer;
 pub use error::{SemanticError, SemanticResult};
 pub use resolution::{

@@ -22,6 +22,7 @@ tracing = "0.1"
 # Internal crates
 unified-sql-grammar = { path = "../grammar" }
 unified-sql-lsp-ir = { path = "../ir" }
+unified-sql-lsp-semantic = { path = "../semantic" }
 
 [dev-dependencies]
 lsp-types = { workspace = true }

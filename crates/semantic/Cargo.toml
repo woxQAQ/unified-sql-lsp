@@ -7,9 +7,11 @@ edition = "2021"
 async-trait = { workspace = true }
 serde = { workspace = true }
 thiserror = { workspace = true }
+tracing = "0.1"
 unified-sql-lsp-catalog = { path = "../catalog" }
 unified-sql-lsp-ir = { path = "../ir" }
 
 [dev-dependencies]
 serde_json = { workspace = true }
 tokio = { workspace = true, features = ["full", "test-util"] }
+unified-sql-lsp-test-utils = { path = "../test-utils" }

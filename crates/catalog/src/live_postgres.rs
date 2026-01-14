@@ -37,13 +37,10 @@
 //! ```
 
 use crate::error::{CatalogError, CatalogResult};
-use crate::metadata::{ColumnMetadata, DataType, FunctionMetadata, TableMetadata};
+use crate::metadata::{ColumnMetadata, DataType, FunctionMetadata, FunctionType, TableMetadata};
 use crate::r#trait::Catalog;
-use std::sync::Arc;
 
 use async_trait::async_trait;
-use unified_sql_lsp_function_registry::{FunctionRegistry, FunctionType};
-use unified_sql_lsp_ir::Dialect;
 
 #[cfg(feature = "postgresql")]
 use crate::metadata::TableType;
@@ -71,8 +68,6 @@ pub struct LivePostgreSQLCatalog {
     timeout_secs: u64,
     /// Connection pool
     pool: Option<Pool<Postgres>>,
-    /// Function registry for builtin functions
-    registry: Arc<FunctionRegistry>,
 }
 
 /// Live PostgreSQL Catalog implementation (stub when feature is disabled)
@@ -84,8 +79,6 @@ pub struct LivePostgreSQLCatalog {
     pool_size: u32,
     /// Query timeout in seconds
     timeout_secs: u64,
-    /// Function registry for builtin functions
-    registry: Arc<FunctionRegistry>,
 }
 
 impl LivePostgreSQLCatalog {
@@ -121,7 +114,6 @@ impl LivePostgreSQLCatalog {
                 pool_size: DEFAULT_POOL_SIZE,
                 timeout_secs: DEFAULT_TIMEOUT_SECS,
                 pool,
-                registry: Arc::new(FunctionRegistry::new()),
             })
         }
 
@@ -131,7 +123,6 @@ impl LivePostgreSQLCatalog {
                 connection_string: conn_str,
                 pool_size: DEFAULT_POOL_SIZE,
                 timeout_secs: DEFAULT_TIMEOUT_SECS,
-                registry: Arc::new(FunctionRegistry::new()),
             })
         }
     }
@@ -183,7 +174,6 @@ impl LivePostgreSQLCatalog {
                 pool_size,
                 timeout_secs,
                 pool,
-                registry: Arc::new(FunctionRegistry::new()),
             })
         }
 
@@ -193,7 +183,6 @@ impl LivePostgreSQLCatalog {
                 connection_string: conn_str,
                 pool_size,
                 timeout_secs,
-                registry: Arc::new(FunctionRegistry::new()),
             })
         }
     }
@@ -509,8 +498,8 @@ impl Catalog for LivePostgreSQLCatalog {
     ///
     /// Returns a list of built-in PostgreSQL functions and custom functions.
     async fn list_functions(&self) -> CatalogResult<Vec<FunctionMetadata>> {
-        // Get builtin functions from registry
-        let mut all_functions = self.registry.get_functions(Dialect::PostgreSQL);
+        // Start with empty vector (TODO: load from function-registry)
+        let mut all_functions: Vec<FunctionMetadata> = Vec::new();
 
         #[cfg(feature = "postgresql")]
         if let Some(pool) = &self.pool {

@@ -59,11 +59,14 @@
 pub mod completion;
 pub mod cst_utils;
 pub mod keywords;
+pub mod scope_builder;
 
 // Re-export commonly used types
 pub use completion::{CompletionContext, detect_completion_context};
 pub use cst_utils::{
-    Position, Range, byte_to_position, extract_identifier_name, extract_node_text,
-    find_node_at_position, node_to_range, position_to_byte_offset,
+    byte_to_position, extract_alias, extract_column_info, extract_identifier_name, extract_node_text,
+    extract_table_name, find_from_clause, find_node_at_position, find_parent_select, find_select_clause,
+    ChildIter, NodeExt, node_to_range, position_to_byte_offset, Position, Range,
 };
 pub use keywords::{KeywordProvider, KeywordSet, SqlKeyword};
+pub use scope_builder::{ScopeBuilder, ScopeBuildError};

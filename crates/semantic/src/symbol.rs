@@ -235,4 +235,16 @@ impl ColumnSymbol {
         self.is_foreign_key = true;
         self
     }
+
+    /// Conditionally mark this column as a primary key
+    pub fn with_primary_key_if(mut self, is_pk: bool) -> Self {
+        self.is_primary_key = is_pk;
+        self
+    }
+
+    /// Conditionally mark this column as a foreign key
+    pub fn with_foreign_key_if(mut self, is_fk: bool) -> Self {
+        self.is_foreign_key = is_fk;
+        self
+    }
 }

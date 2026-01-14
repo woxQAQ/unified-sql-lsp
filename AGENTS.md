@@ -6,15 +6,47 @@ Unified SQL LSP is a Language Server Protocol implementation supporting multiple
 
 ## 1. Project Structure & Module Organization
 
-The codebase follows a layered architecture with the following dependency flow:
+The codebase follows a layered architecture with clear separation of concerns. The dependency flow is:
 
-- `crates/lsp/` - LSP server using tower-lsp framework. Handles completion, hover, diagnostics, and multi-connection management. Binary entry point at `src/bin/main.rs`
-- `crates/semantic/` - Semantic analysis layer including scope management, symbol tables, and resolution of table/column references
-- `crates/lowering/` - CST to IR conversion layer with dialect-specific implementations. Each dialect implements the `Lowering` trait with three outcomes: Success, Partial (with placeholders), or Failed
-- `crates/ir/` - Unified intermediate representation types (Query, Expr, Stmt, etc.) that abstract away dialect differences
-- `crates/grammar/` - Tree-sitter grammar definitions with compile-time dialect selection via `DIALECT` environment variable
-- `crates/catalog/` - Database schema abstraction. `LiveCatalog` connects to real databases, `StaticCatalog` loads from YAML/JSON files
-- `crates/function-registry/` - Function metadata and registry for completion
+```
+┌─────────────────────────────────────────────┐
+│  LSP Layer (crates/lsp/)                    │
+│  - Protocol handlers only                   │
+│  - LSP type conversions                     │
+│  - Thin adapter layer (~3,000 lines)        │
+└──────────────┬──────────────────────────────┘
+               │ depends on
+┌──────────────▼──────────────────────────────┐
+│  Semantic Layer (crates/semantic/)          │
+│  - AliasResolver for table alias resolution  │
+│  - ScopeManager for tracking tables/columns │
+│  - ColumnResolver for column references     │
+└──────────────┬──────────────────────────────┘
+               │ depends on
+┌──────────────▼──────────────────────────────┐
+│  Context Layer (crates/context/)            │
+│  - CST utilities (NodeExt, ScopeBuilder)    │
+│  - CompletionContext detection              │
+│  - SQL keyword providers                    │
+└──────────────┬──────────────────────────────┘
+               │ depends on
+┌──────────────▼──────────────────────────────┐
+│  IR & Grammar Layers                        │
+│  - crates/ir/ - Unified IR types            │
+│  - crates/grammar/ - Tree-sitter parsers    │
+└─────────────────────────────────────────────┘
+```
+
+**Crates Overview:**
+
+- `crates/lsp/` - LSP server using tower-lsp framework. Handles LSP protocol, type conversions, and delegates business logic to semantic/context layers
+- `crates/semantic/` - Semantic analysis including scope management, symbol resolution, and alias resolution
+- `crates/context/` - CST utilities, context detection, and scope building for completion
+- `crates/lowering/` - CST to IR conversion with dialect-specific implementations (Success, Partial, or Failed outcomes)
+- `crates/ir/` - Unified intermediate representation types that abstract away dialect differences
+- `crates/grammar/` - Tree-sitter grammar definitions with compile-time dialect selection
+- `crates/catalog/` - Database schema abstraction. `LiveCatalog` for real databases, `StaticCatalog` for YAML/JSON files
+- `crates/function-registry/` - Function metadata and hover information provider
 - `crates/test-utils/` - Testing utilities and fixtures
 
 ### Dialect Strategy
@@ -29,11 +61,27 @@ Dialects use compile-time merging approach:
 
 ### Key Architecture Concepts
 
-- IR is a unified syntax tree that is dialect-independent
-- Semantic layer adds meaning through scope, symbols, and resolution
-- Lowering layer uses three-tier error handling: Success, Partial, or Failed
-- Partial success mode allows degraded completion when some parts fail to parse
+**Layered Architecture:**
+- LSP layer is a thin protocol adapter (~3,000 lines, down from ~4,000)
+- Business logic moved to semantic and context layers for reusability
+- Clear dependency flow: LSP → Semantic → Context → IR/Grammar
+
+**Core Abstractions:**
+- **IR (Intermediate Representation)**: Dialect-independent syntax tree
+- **Semantic Layer**: Adds meaning through scope, symbols, and resolution
+- **Context Layer**: Provides CST utilities and completion context detection
+- **Lowering**: Three-tier error handling (Success, Partial, or Failed)
+
+**Key Components:**
+- `ScopeManager`: Tracks tables and columns visible at each position in SQL queries
+- `AliasResolver`: Multi-strategy table alias resolution (ExactMatch, StartsWith, FirstLetterPlusNumeric, SingleTableFallback)
+- `HoverInfoProvider`: Provides hover information for functions, columns, and tables
+- `CompletionContext`: Detects where completion is requested (SELECT, FROM, WHERE, etc.)
+
+**Performance:**
+- Partial success mode allows degraded completion when parsing fails
 - Coarse-grained cache invalidation (any edit invalidates entire document cache)
+- SQL queries are typically short, so full re-parsing is acceptable
 
 ## 2. Common Development Commands
 

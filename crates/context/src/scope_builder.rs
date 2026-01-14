@@ -36,10 +36,22 @@
 //!
 //! TODO: (SEMANTIC-002) Replace with full semantic analyzer when available
 
-use crate::completion::error::CompletionError;
 use std::collections::HashMap;
 use tree_sitter::Node;
 use unified_sql_lsp_semantic::{ScopeManager, ScopeType, TableSymbol};
+
+/// Scope builder error
+#[derive(Debug, thiserror::Error)]
+pub enum ScopeBuildError {
+    #[error("No FROM clause found")]
+    NoFromClause,
+
+    #[error("Scope build error: {0}")]
+    ScopeBuild(String),
+
+    #[error("Semantic error: {0}")]
+    SemanticError(#[from] unified_sql_lsp_semantic::SemanticError),
+}
 
 /// Scope builder for completion
 ///
@@ -61,7 +73,7 @@ impl ScopeBuilder {
     /// # Examples
     ///
     /// ```
-    /// # use unified_sql_lsp_lsp::completion::scopes::ScopeBuilder;
+    /// # use unified_sql_lsp_context::scope_builder::ScopeBuilder;
     /// # use tree_sitter::Parser;
     /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
     /// # let source = "SELECT id FROM users";
@@ -76,13 +88,13 @@ impl ScopeBuilder {
     pub fn build_from_select(
         select_node: &Node,
         source: &str,
-    ) -> Result<ScopeManager, CompletionError> {
+    ) -> Result<ScopeManager, ScopeBuildError> {
         let mut manager = ScopeManager::new();
         let scope_id = manager.create_scope(ScopeType::Query, None);
 
         // Find the FROM clause
         let from_clause =
-            Self::find_from_clause(select_node).ok_or(CompletionError::NoFromClause)?;
+            Self::find_from_clause(select_node).ok_or(ScopeBuildError::NoFromClause)?;
 
         // Extract table references
         let tables = Self::extract_table_references(&from_clause, source)?;
@@ -97,7 +109,7 @@ impl ScopeBuilder {
     }
 
     /// Find the FROM clause in a SELECT statement
-    fn find_from_clause<'a>(select_node: &'a Node) -> Option<Node<'a>> {
+    pub fn find_from_clause<'a>(select_node: &'a Node) -> Option<Node<'a>> {
         select_node
             .children(&mut select_node.walk())
             .find(|&child| child.kind() == "from_clause")
@@ -106,10 +118,10 @@ impl ScopeBuilder {
     /// Extract table references from a FROM clause
     ///
     /// Parses table_reference nodes and extracts table names and aliases.
-    fn extract_table_references(
+    pub fn extract_table_references(
         from_clause: &Node,
         source: &str,
-    ) -> Result<Vec<TableSymbol>, CompletionError> {
+    ) -> Result<Vec<TableSymbol>, ScopeBuildError> {
         let mut tables = Vec::new();
         let mut table_counts: HashMap<String, usize> = HashMap::new();
 
@@ -125,7 +137,7 @@ impl ScopeBuilder {
         source: &str,
         tables: &mut Vec<TableSymbol>,
         table_counts: &mut HashMap<String, usize>,
-    ) -> Result<(), CompletionError> {
+    ) -> Result<(), ScopeBuildError> {
         if node.kind() == "table_reference" {
             let table = Self::parse_table_reference(node, source)?;
             let display_name = table.display_name().to_string();
@@ -134,7 +146,7 @@ impl ScopeBuilder {
             if table_counts[&display_name] == 1 {
                 tables.push(table);
             } else {
-                return Err(CompletionError::ScopeBuild(format!(
+                return Err(ScopeBuildError::ScopeBuild(format!(
                     "Duplicate table reference: {}",
                     display_name
                 )));
@@ -157,7 +169,10 @@ impl ScopeBuilder {
     /// - `table_name AS alias`
     /// - `table_name alias` (implicit alias)
     /// - `schema.table_name`
-    fn parse_table_reference(node: &Node, source: &str) -> Result<TableSymbol, CompletionError> {
+    pub fn parse_table_reference(
+        node: &Node,
+        source: &str,
+    ) -> Result<TableSymbol, ScopeBuildError> {
         let mut table_name = None;
         let mut alias = None;
 
@@ -193,7 +208,7 @@ impl ScopeBuilder {
         }
 
         let table_name = table_name.ok_or_else(|| {
-            CompletionError::ScopeBuild("Table name not found in table_reference".to_string())
+            ScopeBuildError::ScopeBuild("Table name not found in table_reference".to_string())
         })?;
 
         let mut table = TableSymbol::new(&table_name);

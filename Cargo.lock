@@ -1855,6 +1855,7 @@ dependencies = [
  "tree-sitter",
  "unified-sql-grammar",
  "unified-sql-lsp-ir",
+ "unified-sql-lsp-semantic",
 ]
 
 [[package]]
@@ -1920,8 +1921,10 @@ dependencies = [
  "serde_json",
  "thiserror",
  "tokio",
+ "tracing",
  "unified-sql-lsp-catalog",
  "unified-sql-lsp-ir",
+ "unified-sql-lsp-test-utils",
 ]
 
 [[package]]

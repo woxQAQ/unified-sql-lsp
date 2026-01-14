@@ -9,7 +9,7 @@
 
 use tower_lsp::lsp_types::Position;
 use unified_sql_lsp_catalog::CatalogError;
-use unified_sql_lsp_semantic::SemanticError;
+use unified_sql_lsp_semantic::{AliasResolutionError, SemanticError};
 
 /// Errors that can occur during completion
 #[derive(Debug, thiserror::Error)]
@@ -37,6 +37,10 @@ pub enum CompletionError {
     /// Semantic analysis error
     #[error("Semantic error: {0}")]
     Semantic(#[from] SemanticError),
+
+    /// Alias resolution error
+    #[error("Alias resolution error: {0}")]
+    AliasResolution(#[from] AliasResolutionError),
 
     /// Context detection error
     #[error("Context detection error: {0}")]
