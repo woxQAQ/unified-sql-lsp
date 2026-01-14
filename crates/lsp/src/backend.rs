@@ -65,6 +65,8 @@ use tower_lsp::jsonrpc::Result;
 use tower_lsp::lsp_types::*;
 use tower_lsp::{Client, LanguageServer};
 use tracing::{debug, error, info, warn};
+use unified_sql_lsp_function_registry::HoverInfoProvider;
+use unified_sql_lsp_ir::Dialect;
 
 /// LSP backend implementation
 ///
@@ -354,101 +356,76 @@ impl LspBackend {
         chars[start..end].iter().collect()
     }
 
-    /// Helper: Get hover information for a column
+    /// Helper: Get hover information for a column, function, or table
     async fn get_column_hover_info(
         &self,
-        _catalog: &Arc<dyn unified_sql_lsp_catalog::Catalog>,
+        catalog: &Arc<dyn unified_sql_lsp_catalog::Catalog>,
         word: &str,
         source: &str,
     ) -> Option<String> {
-        use std::collections::HashMap;
+        use unified_sql_lsp_function_registry::hover::ColumnHoverInfo;
 
+        let hover_provider = HoverInfoProvider::new();
         let source_upper = source.to_uppercase();
 
+        // Check for function names first
+        let dialect = self.get_config().await
+            .map(|c| c.dialect)
+            .unwrap_or(Dialect::MySQL);
+
+        if let Some(info) = hover_provider.get_function_hover(word, &dialect) {
+            return Some(info);
+        }
+
         // Check for table aliases
-        // Common table aliases in tests
-        let table_aliases = ["u", "o", "p"];
-        if table_aliases.contains(&word.to_lowercase().as_str()) {
-            return Some(format!("```sql\n{}\n```\n\nTable alias", word));
-        }
-
-        // Check for function names
-        let functions = [
-            ("COUNT", "COUNT(*) - Returns the number of rows"),
-            ("SUM", "SUM(expr) - Returns the sum of values"),
-            ("AVG", "AVG(expr) - Returns the average value"),
-            ("MIN", "MIN(expr) - Returns the minimum value"),
-            ("MAX", "MAX(expr) - Returns the maximum value"),
-            ("CONCAT", "CONCAT(str1, str2, ...) - Concatenates strings"),
-        ];
-        for (func_name, func_desc) in functions.iter() {
-            if word.eq_ignore_ascii_case(func_name) {
-                return Some(format!("```sql\n{}\n```\n\n{}", word, func_desc));
+        // Simple heuristic: short single-letter words after FROM/JOIN
+        if word.len() <= 2 && word.chars().all(|c| c.is_alphabetic()) {
+            // Check if this looks like an alias (appears near FROM/JOIN)
+            if source_upper.contains(" FROM ") || source_upper.contains(" JOIN ") {
+                return Some(hover_provider.get_table_alias_hover(word));
             }
         }
 
-        // Check for logs table specifically (bigint id)
-        if word == "id" && source_upper.contains("FROM LOGS") {
-            return Some(format!(
-                "```sql\n{}\n```\n\nColumn type: {}",
-                word, "BIGINT"
-            ));
-        }
-
-        // Map of column names to their types (simplified for testing)
-        // In production, this would query the catalog
-        let column_types: HashMap<&str, &str> = [
-            // users table
-            ("id", "INT"),
-            ("username", "VARCHAR(50)"),
-            ("email", "VARCHAR(100)"),
-            ("bio", "TEXT"),
-            ("balance", "DECIMAL(10,2)"),
-            ("is_active", "BOOLEAN"),
-            ("created_at", "TIMESTAMP"),
-            // orders table
-            ("order_date", "DATETIME"),
-            ("total_amount", "DECIMAL(10,2)"),
-            ("user_id", "BIGINT"),
-            // products table
-            ("price", "DECIMAL(10,2)"),
-            ("name", "VARCHAR(255)"),
-            ("description", "TEXT"),
-            ("category_id", "INT"),
-        ]
-        .iter()
-        .cloned()
-        .collect();
-
-        // Check if the word is a known column
-        if let Some(type_str) = column_types.get(word) {
-            Some(format!(
-                "```sql\n{}\n```\n\nColumn type: {}",
-                word, type_str
-            ))
-        } else {
-            // Try to check if it's a table name or view
-            // Simple table name detection
-            let known_tables = [
-                "users",
-                "orders",
-                "products",
-                "order_items",
-                "posts",
-                "tags",
-                "logs",
-                "employees",
-                "categories",
-            ];
-            let known_views = ["v_active_users"];
-            if known_tables.contains(&word.to_lowercase().as_str()) {
-                Some(format!("```sql\n{}\n```\n\nTable", word))
-            } else if known_views.contains(&word.to_lowercase().as_str()) {
-                Some(format!("```sql\n{}\n```\n\nView", word))
-            } else {
-                None
+        // Check for table names by querying catalog
+        if let Ok(tables) = catalog.list_tables().await {
+            let word_lower = word.to_lowercase();
+            for table in tables {
+                if table.name.to_lowercase() == word_lower {
+                    return Some(hover_provider.get_table_hover(&table.name));
+                }
             }
         }
+
+        // Check for column names by querying catalog
+        // Try to extract table name FROM clause
+        if let Some(from_pos) = source_upper.find(" FROM ") {
+            let after_from = &source[from_pos + 6..];
+            let table_name = after_from
+                .split_whitespace()
+                .next()
+                .unwrap_or("")
+                .trim_end_matches(|c: char| !c.is_alphanumeric() && c != '_')
+                .to_lowercase();
+
+            if !table_name.is_empty() {
+                if let Ok(columns) = catalog.get_columns(&table_name).await {
+                    let word_lower = word.to_lowercase();
+                    for column in columns {
+                        if column.name.to_lowercase() == word_lower {
+                            let hover_info = ColumnHoverInfo {
+                                name: column.name.clone(),
+                                data_type: column.data_type.clone(),
+                                is_primary_key: column.is_primary_key,
+                                is_foreign_key: column.is_foreign_key,
+                            };
+                            return Some(hover_provider.get_column_hover(&hover_info));
+                        }
+                    }
+                }
+            }
+        }
+
+        None
     }
 }
 

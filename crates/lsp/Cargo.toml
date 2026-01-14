@@ -38,6 +38,7 @@ unified-sql-lsp-catalog = { path = "../catalog", features = [
   "mysql",
   "postgresql",
 ] }
+unified-sql-lsp-function-registry = { path = "../function-registry" }
 unified-sql-lsp-semantic = { path = "../semantic" }
 unified-sql-lsp-context = { path = "../context" }
 unified-sql-lsp-lowering = { path = "../lowering" }

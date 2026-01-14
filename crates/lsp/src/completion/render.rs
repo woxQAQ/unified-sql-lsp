@@ -9,7 +9,7 @@
 //! from semantic symbols.
 
 use tower_lsp::lsp_types::{CompletionItem, CompletionItemKind, Documentation};
-use unified_sql_lsp_catalog::{DataType, FunctionMetadata, FunctionType, TableMetadata, TableType};
+use unified_sql_lsp_catalog::{format_data_type, DataType, FunctionMetadata, FunctionType, TableMetadata, TableType};
 use unified_sql_lsp_semantic::{ColumnSymbol, TableSymbol};
 
 // Import keyword types from context crate
@@ -351,40 +351,7 @@ impl CompletionRenderer {
     ///
     /// Shows the data type and whether it's nullable
     fn format_column_detail(column: &ColumnSymbol) -> String {
-        Self::format_data_type(&column.data_type)
-    }
-
-    /// Format a DataType to a display string
-    fn format_data_type(data_type: &DataType) -> String {
-        match data_type {
-            DataType::Integer => "INTEGER".to_string(),
-            DataType::BigInt => "BIGINT".to_string(),
-            DataType::SmallInt => "SMALLINT".to_string(),
-            DataType::TinyInt => "TINYINT".to_string(),
-            DataType::Decimal => "DECIMAL".to_string(),
-            DataType::Float => "FLOAT".to_string(),
-            DataType::Double => "DOUBLE".to_string(),
-            DataType::Varchar(Some(len)) => format!("VARCHAR({})", len),
-            DataType::Varchar(None) => "VARCHAR".to_string(),
-            DataType::Char(Some(len)) => format!("CHAR({})", len),
-            DataType::Char(None) => "CHAR".to_string(),
-            DataType::Text => "TEXT".to_string(),
-            DataType::Binary => "BINARY".to_string(),
-            DataType::VarBinary(None) => "VARBINARY".to_string(),
-            DataType::VarBinary(Some(len)) => format!("VARBINARY({})", len),
-            DataType::Blob => "BLOB".to_string(),
-            DataType::Date => "DATE".to_string(),
-            DataType::Time => "TIME".to_string(),
-            DataType::DateTime => "DATETIME".to_string(),
-            DataType::Timestamp => "TIMESTAMP".to_string(),
-            DataType::Boolean => "BOOLEAN".to_string(),
-            DataType::Json => "JSON".to_string(),
-            DataType::Uuid => "UUID".to_string(),
-            DataType::Enum(values) => format!("ENUM({})", values.join(", ")),
-            DataType::Array(inner) => format!("{}[]", Self::format_data_type(inner)),
-            DataType::Other(name) => name.clone(),
-            _ => "UNKNOWN".to_string(), // Handle non-exhaustive enum
-        }
+        format_data_type(&column.data_type)
     }
 
     /// Generate sort text for a column
@@ -649,20 +616,20 @@ mod tests {
     #[test]
     fn test_format_data_type() {
         assert_eq!(
-            CompletionRenderer::format_data_type(&DataType::Integer),
-            "INTEGER"
+            format_data_type(&DataType::Integer),
+            "Integer"
         );
         assert_eq!(
-            CompletionRenderer::format_data_type(&DataType::Varchar(Some(255))),
-            "VARCHAR(255)"
+            format_data_type(&DataType::Varchar(Some(255))),
+            "VarChar(255)"
         );
         assert_eq!(
-            CompletionRenderer::format_data_type(&DataType::Text),
-            "TEXT"
+            format_data_type(&DataType::Text),
+            "Text"
         );
         assert_eq!(
-            CompletionRenderer::format_data_type(&DataType::Array(Box::new(DataType::Integer))),
-            "INTEGER[]"
+            format_data_type(&DataType::Array(Box::new(DataType::Integer))),
+            "Integer[]"
         );
     }
 

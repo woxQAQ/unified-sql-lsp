@@ -79,6 +79,6 @@ pub use live_mysql::LiveMySQLCatalog;
 pub use live_postgres::LivePostgreSQLCatalog;
 pub use metadata::{
     ColumnMetadata, DataType, FunctionMetadata, FunctionParameter, FunctionType, TableMetadata,
-    TableReference, TableType,
+    TableReference, TableType, format_data_type,
 };
 pub use r#trait::Catalog;

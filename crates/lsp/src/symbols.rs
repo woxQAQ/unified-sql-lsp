@@ -40,7 +40,7 @@ use std::sync::Arc;
 use tower_lsp::lsp_types::{DocumentSymbol, Position, Range, SymbolKind};
 use tracing::debug;
 use tree_sitter::Node;
-use unified_sql_lsp_catalog::{Catalog, CatalogError, DataType};
+use unified_sql_lsp_catalog::{format_data_type, Catalog, CatalogError, DataType};
 use unified_sql_lsp_semantic::{ColumnSymbol, TableSymbol};
 
 /// Symbol extraction error
@@ -471,7 +471,7 @@ impl SymbolRenderer {
 
     /// Format column detail with data type and PK/FK indicators
     fn format_column_detail(column: &ColumnSymbol) -> String {
-        let mut detail = Self::format_data_type(&column.data_type);
+        let mut detail = format_data_type(&column.data_type);
 
         if column.is_primary_key {
             detail.push_str(" PK");
@@ -482,77 +482,11 @@ impl SymbolRenderer {
 
         detail
     }
-
-    /// Format data type for display
-    fn format_data_type(data_type: &DataType) -> String {
-        match data_type {
-            DataType::Integer => "Integer".to_string(),
-            DataType::BigInt => "BigInt".to_string(),
-            DataType::SmallInt => "SmallInt".to_string(),
-            DataType::TinyInt => "TinyInt".to_string(),
-            DataType::Decimal => "Decimal".to_string(),
-            DataType::Float => "Float".to_string(),
-            DataType::Double => "Double".to_string(),
-            DataType::Text => "Text".to_string(),
-            DataType::Varchar(length) => {
-                if let Some(len) = length {
-                    format!("VarChar({})", len)
-                } else {
-                    "VarChar".to_string()
-                }
-            }
-            DataType::Char(length) => {
-                if let Some(len) = length {
-                    format!("Char({})", len)
-                } else {
-                    "Char".to_string()
-                }
-            }
-            DataType::Binary => "Binary".to_string(),
-            DataType::VarBinary(length) => {
-                if let Some(len) = length {
-                    format!("VarBinary({})", len)
-                } else {
-                    "VarBinary".to_string()
-                }
-            }
-            DataType::Blob => "Blob".to_string(),
-            DataType::Date => "Date".to_string(),
-            DataType::Time => "Time".to_string(),
-            DataType::DateTime => "DateTime".to_string(),
-            DataType::Timestamp => "Timestamp".to_string(),
-            DataType::Boolean => "Boolean".to_string(),
-            DataType::Json => "JSON".to_string(),
-            DataType::Uuid => "UUID".to_string(),
-            DataType::Enum(values) => format!("Enum({})", values.join(", ")),
-            DataType::Array(inner) => format!("{}[]", Self::format_data_type(inner)),
-            DataType::Other(name) => format!("Other({})", name),
-            // Handle any future variants added to the non-exhaustive enum
-            _ => "Unknown".to_string(),
-        }
-    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn test_format_data_type() {
-        assert_eq!(
-            SymbolRenderer::format_data_type(&DataType::Integer),
-            "Integer"
-        );
-        assert_eq!(SymbolRenderer::format_data_type(&DataType::Text), "Text");
-        assert_eq!(
-            SymbolRenderer::format_data_type(&DataType::Varchar(Some(255))),
-            "VarChar(255)"
-        );
-        assert_eq!(
-            SymbolRenderer::format_data_type(&DataType::Varchar(None)),
-            "VarChar"
-        );
-    }
 
     #[test]
     fn test_format_column_detail() {
