@@ -39,6 +39,9 @@ command-group = "5.0"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
+# Global test setup/teardown
+ctor = "0.2"
+
 # Test utilities
 tempfile = "3.8"
 

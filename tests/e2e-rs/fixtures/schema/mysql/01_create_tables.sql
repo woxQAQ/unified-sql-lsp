@@ -265,7 +265,7 @@ CREATE TABLE logs (
     INDEX idx_level (level),
     INDEX idx_created_at (created_at),
     INDEX idx_source (source)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 -- Partition by year (MySQL 8.0+)
 -- PARTITION BY RANGE (YEAR(created_at)) (
 --     PARTITION p2023 VALUES LESS THAN (2024),

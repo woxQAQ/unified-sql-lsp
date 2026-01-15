@@ -5,9 +5,9 @@ database:
   dialect: "mysql"
   connection_string: "mysql://test_user:test_password@127.0.0.1:3307/test_db"
   schemas:
-    - "../../../tests/e2e/fixtures/schema/mysql/01_create_tables.sql"
+    - "../../fixtures/schema/mysql/01_create_tables.sql"
   data:
-    - "../../../tests/e2e/fixtures/data/mysql/02_insert_basic_data.sql"
+    - "../../fixtures/data/mysql/02_insert_basic_data.sql"
 
 tests:
   # Syntax errors

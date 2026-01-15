@@ -30,8 +30,8 @@
 pub mod assertions;
 pub mod client;
 pub mod db;
+pub mod docker;
 pub mod runner;
-pub mod text_case_runner;
 pub mod utils;
 pub mod yaml_parser;
 
@@ -43,6 +43,7 @@ use tracing::info;
 
 use client::LspConnection;
 use db::{DatabaseAdapter, MySQLAdapter};
+use docker::DockerCompose;
 use yaml_parser::TestSuite;
 
 /// Global test database adapter (initialized once, thread-safe)
@@ -50,10 +51,15 @@ static DB_ADAPTER: LazyLock<Arc<RwLock<Option<Arc<dyn DatabaseAdapter>>>>> = Laz
     || Arc::new(RwLock::new(None))
 );
 
+/// Global Docker Compose manager (initialized once, thread-safe)
+static DOCKER_COMPOSE: LazyLock<Arc<RwLock<Option<DockerCompose>>>> = LazyLock::new(
+    || Arc::new(RwLock::new(None))
+);
+
 /// Initialize test database
 ///
 /// This function should be called once before running any tests.
-/// It sets up the global database adapter that will be used by all tests.
+/// It starts Docker Compose services and sets up the global database adapter.
 /// If the database is already initialized, it returns the existing adapter.
 pub async fn init_database() -> Result<Arc<dyn DatabaseAdapter>> {
     // Check if already initialized
@@ -63,6 +69,16 @@ pub async fn init_database() -> Result<Arc<dyn DatabaseAdapter>> {
             info!("Database adapter already initialized, reusing existing adapter");
             return Ok(adapter.clone());
         }
+    }
+
+    // Start Docker Compose services
+    info!("Starting Docker Compose services...");
+    let mut docker_compose = DockerCompose::from_default_config()?;
+    docker_compose.start().await?;
+
+    {
+        let mut compose_guard = DOCKER_COMPOSE.write().await;
+        *compose_guard = Some(docker_compose);
     }
 
     let adapter = Arc::new(MySQLAdapter::from_default_config()) as Arc<dyn DatabaseAdapter>;
@@ -78,10 +94,35 @@ pub async fn init_database() -> Result<Arc<dyn DatabaseAdapter>> {
     Ok(adapter)
 }
 
+/// Cleanup database resources
+///
+/// Stops Docker Compose services. Should be called after all tests complete.
+pub async fn cleanup_database() -> Result<()> {
+    info!("Cleaning up database resources...");
+
+    // Stop Docker Compose services
+    {
+        let mut compose_guard = DOCKER_COMPOSE.write().await;
+        if let Some(mut docker_compose) = compose_guard.take() {
+            docker_compose.stop().await?;
+        }
+    }
+
+    // Clear database adapter
+    {
+        let mut adapter_guard = DB_ADAPTER.write().await;
+        *adapter_guard = None;
+    }
+
+    info!("Database cleanup complete");
+    Ok(())
+}
+
 /// Run a single test case
 pub async fn run_test(
     suite: &TestSuite,
     test: &yaml_parser::TestCase,
+    suite_dir: &std::path::Path,
 ) -> Result<()> {
     info!("=== Running test: {} ===", test.name);
 
@@ -96,22 +137,32 @@ pub async fn run_test(
     info!("Database adapter obtained");
 
     for schema_path in &suite.database.schemas {
-        let full_path = std::path::PathBuf::from(schema_path);
-        info!("Loading schema from: {:?}", full_path);
+        let full_path = suite_dir.join(schema_path);
+        eprintln!("!!! Loading schema from: {:?}", full_path);
         if full_path.exists() {
-            adapter.load_schema(&full_path).await?;
+            eprintln!("!!! Schema file exists, loading...");
+            if let Err(e) = adapter.load_schema(&full_path).await {
+                eprintln!("!!! Failed to load schema: {}", e);
+            } else {
+                eprintln!("!!! Schema loaded successfully");
+            }
         } else {
-            tracing::warn!("Schema file not found: {:?}", full_path);
+            eprintln!("!!! WARNING: Schema file not found: {:?}", full_path);
         }
     }
 
     for data_path in &suite.database.data {
-        let full_path = std::path::PathBuf::from(data_path);
-        info!("Loading data from: {:?}", full_path);
+        let full_path = suite_dir.join(data_path);
+        eprintln!("!!! Loading data from: {:?}", full_path);
         if full_path.exists() {
-            adapter.load_data(&full_path).await?;
+            eprintln!("!!! Data file exists, loading...");
+            if let Err(e) = adapter.load_data(&full_path).await {
+                eprintln!("!!! Failed to load data: {}", e);
+            } else {
+                eprintln!("!!! Data loaded successfully");
+            }
         } else {
-            tracing::warn!("Data file not found: {:?}", full_path);
+            eprintln!("!!! WARNING: Data file not found: {:?}", full_path);
         }
     }
 
@@ -231,14 +282,19 @@ pub async fn run_test(
 /// Run all tests in a suite
 pub async fn run_suite(suite_path: impl AsRef<std::path::Path>) -> Result<()> {
     eprintln!("!!! Loading test suite from: {:?}", suite_path.as_ref());
-    let suite = TestSuite::from_file(suite_path)?;
+    let suite = TestSuite::from_file(&suite_path)?;
     eprintln!("!!! Test suite loaded: {} with {} tests", suite.name, suite.tests.len());
+
+    // Get the directory containing the YAML file for resolving relative paths
+    let suite_dir = suite_path.as_ref()
+        .parent()
+        .ok_or_else(|| anyhow::anyhow!("Cannot get parent directory of suite file"))?;
 
     let mut failed_tests = Vec::new();
 
     for test in &suite.tests {
         eprintln!("!!! About to run test: {}", test.name);
-        match run_test(&suite, test).await {
+        match run_test(&suite, test, suite_dir).await {
             Ok(_) => {
                 eprintln!("!!! Test completed: {}", test.name);
             }
@@ -261,5 +317,51 @@ pub async fn run_suite(suite_path: impl AsRef<std::path::Path>) -> Result<()> {
     }
 }
 
-// Re-export text-based test runner functions
-pub use text_case_runner::{init_database as init_database_text, run_test_file, run_test_directory};
+/// Global cleanup function called when test process exits
+///
+/// This uses the `ctor` crate to register a destructor that runs when
+/// the test binary exits, ensuring Docker Compose services are stopped.
+#[ctor::dtor]
+fn global_cleanup() {
+    // Check if we started Docker Compose services
+    let needs_cleanup = DOCKER_COMPOSE.try_read()
+        .map(|guard| guard.is_some())
+        .unwrap_or(false);
+
+    if needs_cleanup {
+        eprintln!("!!! Global cleanup: stopping Docker Compose services...");
+
+        // Get the compose file path from CARGO_MANIFEST_DIR or current directory
+        let compose_file = std::env::var("CARGO_MANIFEST_DIR")
+            .map(|p| format!("{}/docker-compose.yml", p))
+            .or_else(|_| std::env::current_dir().map(|p| p.join("docker-compose.yml").to_string_lossy().to_string()))
+            .unwrap_or_else(|_| "tests/e2e-rs/docker-compose.yml".to_string());
+
+        // Use std::process::Command for synchronous execution
+        let result = std::process::Command::new("docker")
+            .args([
+                "compose",
+                "-f",
+                &compose_file,
+                "-p",
+                "unified-sql-lsp-e2e",
+                "down",
+            ])
+            .output();
+
+        match result {
+            Ok(output) => {
+                if output.status.success() {
+                    eprintln!("!!! Docker Compose services stopped successfully");
+                } else {
+                    eprintln!("!!! Failed to stop Docker Compose: {}",
+                        String::from_utf8_lossy(&output.stderr));
+                }
+            }
+            Err(e) => {
+                eprintln!("!!! Failed to execute docker compose down: {}", e);
+            }
+        }
+    }
+}
+

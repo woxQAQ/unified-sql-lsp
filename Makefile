@@ -171,4 +171,4 @@ docs:
 
 ## @e2e: Run all E2E tests
 test-e2e:
-	cd tests/e2e-rs && $(CARGO) test
+	cd tests/e2e-rs && $(CARGO) test -- --test-threads=1
