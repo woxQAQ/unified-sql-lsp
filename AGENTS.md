@@ -168,20 +168,9 @@ E2E Test Structure
 - `tests/e2e-rs/tests/diagnostics.rs` - Diagnostics E2E tests
 - `tests/e2e-rs/tests/hover.rs` - Hover E2E tests
 
-Requirements
-
-- Docker and Docker Compose for database containers
-- MySQL and PostgreSQL Docker images
-- Sufficient system resources for running databases
-
 Test Workflow
 
-1. Initialize test database using init_database()
-2. Spawn LSP server process using LspRunner
-3. Create LSP client connection
-4. Load test cases from YAML files
-5. Execute test scenarios and assert results
-6. Clean up database connections
+the e2e test support one-click running the tests. the makefile command `make test-e2e` supports a quick entry and not need to run `cargo test` manually.
 
 Writing E2E Tests
 
