@@ -942,7 +942,7 @@ impl PostgreSQLLowering {
 
         // Dollar-quoted string: $$text$$ or $tag$text$tag$
         if text.starts_with('$') && text.ends_with('$') && text.len() >= 4 {
-            return self.lower_dollar_quoted_string::<N>(ctx, text);
+            return self.lower_dollar_quoted_string(ctx, text);
         }
 
         // Standard single-quoted string
@@ -986,14 +986,11 @@ impl PostgreSQLLowering {
     /// Forms:
     /// - $$text$$
     /// - $tag$text$tag$
-    fn lower_dollar_quoted_string<N>(
+    fn lower_dollar_quoted_string(
         &self,
         ctx: &mut LoweringContext,
         text: &str,
-    ) -> LoweringResult<Expr>
-    where
-        N: CstNode,
-    {
+    ) -> LoweringResult<Expr> {
         // Must start and end with $
         if !text.starts_with('$') || !text.ends_with('$') || text.len() < 4 {
             ctx.add_error(LoweringError::InvalidLiteral {
@@ -1370,7 +1367,6 @@ impl PostgreSQLLowering {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::cst::MockCstNode;
 
     #[test]
     fn test_normalize_identifier_with_quotes() {
@@ -1402,8 +1398,7 @@ mod tests {
         let mut ctx = LoweringContext::new(Dialect::PostgreSQL);
 
         // Basic dollar-quoted string: $$text$$
-        let result =
-            lowering.lower_dollar_quoted_string::<MockCstNode>(&mut ctx, "$$Hello, World!$$");
+        let result = lowering.lower_dollar_quoted_string(&mut ctx, "$$Hello, World!$$");
         assert!(result.is_ok());
         if let Ok(Expr::Literal(Literal::String(s))) = result {
             assert_eq!(s, "Hello, World!");
@@ -1418,8 +1413,7 @@ mod tests {
         let mut ctx = LoweringContext::new(Dialect::PostgreSQL);
 
         // Tagged dollar-quoted string: $tag$text$tag$
-        let result = lowering
-            .lower_dollar_quoted_string::<MockCstNode>(&mut ctx, "$tag$PostgreSQL String$tag$");
+        let result = lowering.lower_dollar_quoted_string(&mut ctx, "$tag$PostgreSQL String$tag$");
         assert!(result.is_ok());
         if let Ok(Expr::Literal(Literal::String(s))) = result {
             assert_eq!(s, "PostgreSQL String");

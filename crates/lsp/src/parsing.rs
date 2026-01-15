@@ -235,6 +235,7 @@ impl ParserManager {
     }
 
     /// Recursively find ERROR nodes in tree
+    #[allow(clippy::only_used_in_recursion)]
     fn find_error_nodes(&self, node: &tree_sitter::Node, errors: &mut Vec<ParseError>, text: &str) {
         if node.kind() == "ERROR" {
             // Get error location

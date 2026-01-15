@@ -303,6 +303,7 @@ impl SemanticAnalyzer {
     // -------------------------------------------------------------------------
 
     /// Extract all table names from a query
+    #[allow(clippy::only_used_in_recursion)]
     fn extract_table_names(&self, query: &Query) -> SemanticResult<Vec<String>> {
         let mut table_names = Vec::new();
 
@@ -1187,6 +1188,7 @@ impl SemanticAnalyzer {
     }
 
     /// Check if a query references a specific CTE by name
+    #[allow(clippy::only_used_in_recursion)]
     fn query_references_cte(&self, query: &Query, cte_name: &str) -> bool {
         match &query.body {
             SetOp::Select(select) => {

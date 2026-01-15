@@ -211,9 +211,11 @@ impl SymbolBuilder {
                 }
                 _ => {
                     // Check for identifier that might be an implicit alias
-                    if table_name.is_some() && alias.is_none() && child.kind() == "identifier" {
+                    if alias.is_none() && child.kind() == "identifier" {
                         let text = extract_node_text(&child, source);
-                        if &text != table_name.as_ref().unwrap() {
+                        if let Some(ref name) = table_name
+                            && &text != name
+                        {
                             alias = Some(text);
                         }
                     }
@@ -294,7 +296,7 @@ impl SymbolCatalogFetcher {
     /// Ok if at least one table was populated, Err if all failed
     pub async fn populate_columns(
         &self,
-        tables: &mut Vec<TableSymbolWithRange>,
+        tables: &mut [TableSymbolWithRange],
     ) -> Result<(), CatalogError> {
         let mut any_success = false;
         let mut errors = Vec::new();

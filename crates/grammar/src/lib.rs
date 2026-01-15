@@ -131,7 +131,7 @@ pub fn language_for_dialect(dialect: Dialect) -> Option<&'static tree_sitter::La
                 // Safety: tree_sitter_unified_sql_mysql_5_7() returns a pointer to the
                 // language object compiled by tree-sitter from src/grammar/dialect/mysql-5.7.js
                 // MySQL 5.7 is the base dialect for the MySQL family
-                Some(std::mem::transmute::<_, tree_sitter::Language>(
+                Some(std::mem::transmute::<*const (), tree_sitter::Language>(
                     tree_sitter_unified_sql_mysql_5_7(),
                 ))
             })
@@ -141,7 +141,7 @@ pub fn language_for_dialect(dialect: Dialect) -> Option<&'static tree_sitter::La
                 // Safety: tree_sitter_unified_sql_postgresql_12() returns a pointer to the
                 // language object compiled by tree-sitter from src/grammar/dialect/postgresql-12.js
                 // PostgreSQL 12 is the base dialect for the PostgreSQL family
-                Some(std::mem::transmute::<_, tree_sitter::Language>(
+                Some(std::mem::transmute::<*const (), tree_sitter::Language>(
                     tree_sitter_unified_sql_postgresql_12(),
                 ))
             })
@@ -235,7 +235,7 @@ pub fn language_for_dialect_with_version(
             static MYSQL_57_LANG: OnceLock<Option<tree_sitter::Language>> = OnceLock::new();
             MYSQL_57_LANG
                 .get_or_init(|| unsafe {
-                    Some(std::mem::transmute::<_, tree_sitter::Language>(
+                    Some(std::mem::transmute::<*const (), tree_sitter::Language>(
                         tree_sitter_unified_sql_mysql_5_7(),
                     ))
                 })
@@ -245,7 +245,7 @@ pub fn language_for_dialect_with_version(
             static MYSQL_80_LANG: OnceLock<Option<tree_sitter::Language>> = OnceLock::new();
             MYSQL_80_LANG
                 .get_or_init(|| unsafe {
-                    Some(std::mem::transmute::<_, tree_sitter::Language>(
+                    Some(std::mem::transmute::<*const (), tree_sitter::Language>(
                         tree_sitter_unified_sql_mysql_8_0(),
                     ))
                 })
@@ -255,7 +255,7 @@ pub fn language_for_dialect_with_version(
             static POSTGRESQL_12_LANG: OnceLock<Option<tree_sitter::Language>> = OnceLock::new();
             POSTGRESQL_12_LANG
                 .get_or_init(|| unsafe {
-                    Some(std::mem::transmute::<_, tree_sitter::Language>(
+                    Some(std::mem::transmute::<*const (), tree_sitter::Language>(
                         tree_sitter_unified_sql_postgresql_12(),
                     ))
                 })
@@ -265,7 +265,7 @@ pub fn language_for_dialect_with_version(
             static POSTGRESQL_14_LANG: OnceLock<Option<tree_sitter::Language>> = OnceLock::new();
             POSTGRESQL_14_LANG
                 .get_or_init(|| unsafe {
-                    Some(std::mem::transmute::<_, tree_sitter::Language>(
+                    Some(std::mem::transmute::<*const (), tree_sitter::Language>(
                         tree_sitter_unified_sql_postgresql_14(),
                     ))
                 })

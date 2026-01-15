@@ -110,7 +110,7 @@ impl DocumentSync {
                 debug!("Resolved dialect as PostgreSQL from language_id");
                 Dialect::PostgreSQL
             }
-            "sql" | _ => {
+            _ => {
                 // Default to MySQL for generic SQL
                 warn!(
                     "Language_id '{}' is generic SQL or unknown, defaulting to MySQL dialect",

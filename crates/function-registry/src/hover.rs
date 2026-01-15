@@ -119,6 +119,7 @@ impl HoverInfoProvider {
     }
 
     /// Format a data type for display
+    #[allow(clippy::only_used_in_recursion)]
     fn format_data_type(&self, data_type: &DataType) -> String {
         match data_type {
             DataType::Integer => "Integer".to_string(),

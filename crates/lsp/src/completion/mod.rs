@@ -215,7 +215,7 @@ impl CompletionEngine {
                 let table_names: Vec<_> = left_table
                     .iter()
                     .chain(right_table.iter())
-                    .filter_map(|t| Some(t.clone()))
+                    .cloned()
                     .collect();
 
                 debug!(?table_names, "Resolving table aliases for JOIN");
@@ -313,10 +313,8 @@ impl CompletionEngine {
                             let keywords = provider.update_keywords().keywords;
 
                             // Get table names for UPDATE statement
-                            let tables = match self.catalog_fetcher.list_tables().await {
-                                Ok(t) => t,
-                                Err(_) => vec![],
-                            };
+                            let tables =
+                                self.catalog_fetcher.list_tables().await.unwrap_or_default();
                             let table_items = CompletionRenderer::render_tables(&tables, false);
 
                             // Render keywords
@@ -334,10 +332,8 @@ impl CompletionEngine {
                             let keywords = provider.delete_keywords().keywords;
 
                             // Get table names for DELETE statement
-                            let tables = match self.catalog_fetcher.list_tables().await {
-                                Ok(t) => t,
-                                Err(_) => vec![],
-                            };
+                            let tables =
+                                self.catalog_fetcher.list_tables().await.unwrap_or_default();
                             let table_items = CompletionRenderer::render_tables(&tables, false);
 
                             // Render keywords
@@ -794,7 +790,7 @@ impl CompletionEngine {
         debug!("Starting ORDER BY clause completion");
 
         // Get columns using the shared scope completion logic
-        let mut items = match self
+        let mut items: Vec<CompletionItem> = self
             .complete_with_scope(
                 scope_manager,
                 tables,
@@ -803,10 +799,7 @@ impl CompletionEngine {
                 None, // function_filter (show all)
             )
             .await?
-        {
-            Some(items) => items,
-            None => vec![],
-        };
+            .unwrap_or_default();
 
         // Add sort direction keywords (ASC, DESC)
         let dialect = self.dialect;
@@ -829,7 +822,7 @@ impl CompletionEngine {
         debug!("Starting GROUP BY clause completion");
 
         // Get columns using the shared scope completion logic
-        let mut items = match self
+        let mut items: Vec<CompletionItem> = self
             .complete_with_scope(
                 scope_manager,
                 tables,
@@ -838,10 +831,7 @@ impl CompletionEngine {
                 None, // function_filter (show all)
             )
             .await?
-        {
-            Some(items) => items,
-            None => vec![],
-        };
+            .unwrap_or_default();
 
         // Add HAVING keyword
         let dialect = self.dialect;
@@ -878,7 +868,7 @@ impl CompletionEngine {
         debug!("Starting HAVING clause completion");
 
         // Get columns using the shared scope completion logic
-        let items = match self
+        let items: Vec<CompletionItem> = self
             .complete_with_scope(
                 scope_manager,
                 tables,
@@ -887,10 +877,7 @@ impl CompletionEngine {
                 None, // function_filter (show all)
             )
             .await?
-        {
-            Some(items) => items,
-            None => vec![],
-        };
+            .unwrap_or_default();
 
         Ok(Some(items))
     }

@@ -196,10 +196,12 @@ impl ScopeBuilder {
                 }
                 _ => {
                     // Check for identifier that might be an implicit alias
-                    if table_name.is_some() && alias.is_none() && child.kind() == "identifier" {
+                    if alias.is_none() && child.kind() == "identifier" {
                         // This might be an implicit alias
                         let text = Self::extract_node_text(&child, source);
-                        if &text != table_name.as_ref().unwrap() {
+                        if let Some(ref name) = table_name
+                            && &text != name
+                        {
                             alias = Some(text);
                         }
                     }
