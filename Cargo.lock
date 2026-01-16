@@ -1840,6 +1840,8 @@ dependencies = [
  "sqlx",
  "thiserror",
  "tokio",
+ "tracing",
+ "tracing-subscriber",
  "unified-sql-lsp-function-registry",
  "unified-sql-lsp-ir",
 ]

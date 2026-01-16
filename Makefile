@@ -50,6 +50,12 @@ commit:
 docs:
 	$(CARGO) doc --workspace --no-deps --open
 
-## @e2e: Run all E2E tests
+## @e2e: Run all E2E tests with nextest (single thread, avoids Docker conflicts)
 test-e2e:
-	cd tests/e2e-rs && $(CARGO) test -- --test-threads=1
+	@cargo nextest --version >/dev/null 2>&1 || (echo "cargo-nextest not found. Install with: cargo install cargo-nextest --locked" && exit 1)
+	cd tests/e2e-rs && cargo nextest run --no-fail-fast --test-threads=1 --failure-output=immediate-final --status-level all
+
+
+## @e2e: Run E2E tests with cargo test (fallback)
+test-e2e-legacy:
+	cd tests/e2e-rs && $(CARGO) test

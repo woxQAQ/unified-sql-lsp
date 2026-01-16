@@ -1,0 +1,29 @@
+name: "Cross-Dialect Basic SELECT"
+description: "Test basic SELECT completion - works across all SQL dialects"
+
+database:
+  dialect: "postgresql"
+  schemas:
+    - "../../../fixtures/schema/postgresql/01_create_tables.sql"
+  data:
+    - "../../../fixtures/data/postgresql/02_insert_basic_data.sql"
+
+tests:
+  - name: "basic SELECT completion"
+    description: "Should complete basic columns in SELECT - works in MySQL and PostgreSQL"
+    sql: "SELECT | FROM users"
+    expect_completion:
+      contains:
+        - "id"
+        - "username"
+        - "email"
+        - "*"
+      min_count: 5
+
+  - name: "table name completion"
+    description: "Should complete table names - works across dialects"
+    sql: "SELECT * FROM |"
+    expect_completion:
+      contains:
+        - "users"
+      min_count: 2

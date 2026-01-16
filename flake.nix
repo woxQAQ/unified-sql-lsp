@@ -29,6 +29,7 @@
             playwright-driver.browsers
             pkg-config
             openssl
+            cargo-nextest
           ];
           shellHook =
             #sh

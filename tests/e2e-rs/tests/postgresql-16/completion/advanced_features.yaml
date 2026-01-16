@@ -1,0 +1,40 @@
+name: "PostgreSQL 16 Advanced Features"
+description: "Test completion for PostgreSQL 16 specific advanced features"
+
+database:
+  dialect: "postgresql"
+  schemas:
+    - "../../../fixtures/schema/postgresql/01_create_tables.sql"
+  data:
+    - "../../../fixtures/data/postgresql/02_insert_basic_data.sql"
+
+tests:
+  - name: "PostgreSQL JSON functions"
+    description: "Should complete JSON functions in PostgreSQL 16"
+    sql: "SELECT | FROM users"
+    expect_completion:
+      contains:
+        - "JSONB_BUILD_OBJECT"
+        - "JSON_AGG"
+        - "JSON_BUILD_ARRAY"
+      min_count: 5
+
+  - name: "PostgreSQL array subscripting"
+    description: "Should complete array operations"
+    sql: "SELECT | FROM users"
+    expect_completion:
+      contains:
+        - "UNNEST"
+        - "ARRAY_APPEND"
+        - "ARRAY_PREPEND"
+      min_count: 5
+
+  - name: "PostgreSQL 16 SQL/JSON constructors"
+    description: "Should complete SQL/JSON constructors"
+    sql: "SELECT | FROM users"
+    expect_completion:
+      contains:
+        - "JSON_QUERY"
+        - "JSON_VALUE"
+        - "JSON_TABLE"
+      min_count: 5

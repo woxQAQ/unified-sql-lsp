@@ -62,7 +62,7 @@ pub mod keywords;
 pub mod scope_builder;
 
 // Re-export commonly used types
-pub use completion::{CompletionContext, detect_completion_context};
+pub use completion::{CompletionContext, WindowFunctionPart, detect_completion_context};
 pub use cst_utils::{
     ChildIter, NodeExt, Position, Range, byte_to_position, extract_alias, extract_column_info,
     extract_identifier_name, extract_node_text, extract_table_name, find_from_clause,

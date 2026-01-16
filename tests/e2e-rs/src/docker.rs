@@ -52,10 +52,7 @@ impl DockerCompose {
             ));
         }
 
-        Ok(Self::new(
-            compose_file,
-            "unified-sql-lsp-e2e".to_string(),
-        ))
+        Ok(Self::new(compose_file, "unified-sql-lsp-e2e".to_string()))
     }
 
     /// Check if services are already running
@@ -233,9 +230,7 @@ impl Drop for DockerCompose {
         // Note: Drop is synchronous, so we can't await async operations here
         // Users should call stop() explicitly or use cleanup_database()
         if self.started {
-            warn!(
-                "DockerCompose dropped without stopping. Consider calling stop() explicitly."
-            );
+            warn!("DockerCompose dropped without stopping. Consider calling stop() explicitly.");
         }
     }
 }

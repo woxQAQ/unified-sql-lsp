@@ -102,23 +102,36 @@ impl LivePostgreSQLCatalog {
     /// ```
     pub async fn new(connection_string: impl Into<String>) -> CatalogResult<Self> {
         let conn_str = connection_string.into();
+        tracing::info!("!!! LivePostgreSQLCatalog::new() called with: {}", conn_str);
+        eprintln!("!!! LivePostgreSQLCatalog::new() called with: {}", conn_str);
         Self::validate_connection_string(&conn_str)?;
 
         #[cfg(feature = "postgresql")]
         {
-            let pool = Some(Pool::<Postgres>::connect(&conn_str).await.map_err(|e| {
+            tracing::debug!("!!! Creating PostgreSQL connection pool...");
+            eprintln!("!!! Creating PostgreSQL connection pool...");
+            let pool = Pool::<Postgres>::connect(&conn_str).await.map_err(|e| {
+                let err_msg = format!("!!! Failed to connect to PostgreSQL: {}", e);
+                eprintln!("{}", err_msg);
+                tracing::error!("{}", err_msg);
                 CatalogError::ConnectionFailed(format!("Failed to connect to PostgreSQL: {}", e))
-            })?);
+            })?;
+            let success_msg = "!!! PostgreSQL connection pool created successfully";
+            eprintln!("{}", success_msg);
+            tracing::info!("{}", success_msg);
             Ok(Self {
                 connection_string: conn_str,
                 pool_size: DEFAULT_POOL_SIZE,
                 timeout_secs: DEFAULT_TIMEOUT_SECS,
-                pool,
+                pool: Some(pool),
             })
         }
 
         #[cfg(not(feature = "postgresql"))]
         {
+            let warn_msg = "!!! postgresql feature NOT enabled, returning stub";
+            eprintln!("{}", warn_msg);
+            tracing::warn!("{}", warn_msg);
             Ok(Self {
                 connection_string: conn_str,
                 pool_size: DEFAULT_POOL_SIZE,
@@ -346,57 +359,95 @@ impl Catalog for LivePostgreSQLCatalog {
     ///
     /// Queries information_schema.tables to get all tables, views, and materialized views.
     async fn list_tables(&self) -> CatalogResult<Vec<TableMetadata>> {
+        eprintln!("!!! LivePostgreSQLCatalog::list_tables() called");
+        tracing::debug!("!!! LivePostgreSQLCatalog::list_tables() called");
+
         #[cfg(feature = "postgresql")]
-        if let Some(pool) = &self.pool {
-            let query = r#"
-                SELECT
-                    t.table_name,
-                    t.table_schema,
-                    CASE
-                        WHEN t.table_type = 'BASE TABLE' THEN 'table'
-                        WHEN t.table_type = 'VIEW' THEN 'view'
-                        WHEN t.table_type = 'MATERIALIZED VIEW' THEN 'materialized'
-                        ELSE 'other'
-                    END as table_type,
-                    obj_description((t.table_schema||'.'||t.table_name)::regclass, 'pg_class') as table_comment
-                FROM information_schema.tables t
-                WHERE t.table_schema NOT IN ('pg_catalog', 'information_schema')
-                  AND t.table_type IN ('BASE TABLE', 'VIEW', 'MATERIALIZED VIEW')
-                ORDER BY t.table_schema, t.table_name
-            "#;
+        {
+            eprintln!("!!! postgresql feature is enabled");
+            tracing::debug!("!!! postgresql feature is enabled");
 
-            let rows = sqlx::query_as::<_, (String, String, String, Option<String>)>(query)
-                .fetch_all(pool)
-                .await
-                .map_err(|e| CatalogError::QueryFailed(format!("Failed to list tables: {}", e)))?;
+            if let Some(pool) = &self.pool {
+                eprintln!("!!! Pool is available, executing query");
+                tracing::debug!("!!! Pool is available, executing query");
+                let query = r#"
+                    SELECT
+                        t.table_name,
+                        t.table_schema,
+                        CASE
+                            WHEN t.table_type = 'BASE TABLE' THEN 'table'
+                            WHEN t.table_type = 'VIEW' THEN 'view'
+                            WHEN t.table_type = 'MATERIALIZED VIEW' THEN 'materialized'
+                            ELSE 'other'
+                        END as table_type,
+                        obj_description((t.table_schema||'.'||t.table_name)::regclass, 'pg_class') as table_comment
+                    FROM information_schema.tables t
+                    WHERE t.table_schema NOT IN ('pg_catalog', 'information_schema')
+                      AND t.table_type IN ('BASE TABLE', 'VIEW', 'MATERIALIZED VIEW')
+                    ORDER BY t.table_schema, t.table_name
+                "#;
 
-            let tables = rows
-                .into_iter()
-                .map(|(name, schema, db_table_type, comment)| {
-                    let table_type = match db_table_type.as_str() {
-                        "table" => TableType::Table,
-                        "view" => TableType::View,
-                        "materialized" => TableType::MaterializedView,
-                        _ => TableType::Other(db_table_type),
-                    };
+                let rows = sqlx::query_as::<_, (String, String, String, Option<String>)>(query)
+                    .fetch_all(pool)
+                    .await
+                    .map_err(|e| {
+                        let err_msg = format!("!!! Failed to list tables: {}", e);
+                        eprintln!("{}", err_msg);
+                        tracing::error!("{}", err_msg);
+                        CatalogError::QueryFailed(format!("Failed to list tables: {}", e))
+                    })?;
 
-                    TableMetadata::new(&name, &schema)
-                        .with_type(table_type)
-                        .with_comment(comment.unwrap_or_default())
-                })
-                .collect();
+                eprintln!("!!! Query returned {} rows", rows.len());
+                tracing::debug!("!!! Query returned {} rows", rows.len());
 
-            return Ok(tables);
-        } else {
-            return Err(CatalogError::ConnectionFailed(
-                "Database pool not initialized".to_string(),
-            ));
+                let tables: Vec<TableMetadata> = rows
+                    .into_iter()
+                    .map(|(name, schema, db_table_type, comment)| {
+                        eprintln!(
+                            "!!! Found table: {}.{} (type: {})",
+                            schema, name, db_table_type
+                        );
+                        tracing::debug!(
+                            "!!! Found table: {}.{} (type: {})",
+                            schema,
+                            name,
+                            db_table_type
+                        );
+                        let table_type = match db_table_type.as_str() {
+                            "table" => TableType::Table,
+                            "view" => TableType::View,
+                            "materialized" => TableType::MaterializedView,
+                            _ => TableType::Other(db_table_type),
+                        };
+
+                        TableMetadata::new(&name, &schema)
+                            .with_type(table_type)
+                            .with_comment(comment.unwrap_or_default())
+                    })
+                    .collect();
+
+                eprintln!("!!! list_tables() returning {} tables", tables.len());
+                tracing::info!("!!! list_tables() returning {} tables", tables.len());
+                Ok(tables)
+            } else {
+                let err_msg = "!!! Pool is None - database not connected!";
+                eprintln!("{}", err_msg);
+                tracing::error!("{}", err_msg);
+                Err(CatalogError::ConnectionFailed(
+                    "Database pool not initialized".to_string(),
+                ))
+            }
         }
 
         #[cfg(not(feature = "postgresql"))]
-        return Err(CatalogError::NotSupported(
-            "list_tables requires 'postgresql' feature enabled".to_string(),
-        ));
+        {
+            let err_msg = "!!! postgresql feature is NOT enabled!";
+            eprintln!("{}", err_msg);
+            tracing::error!("{}", err_msg);
+            Err(CatalogError::NotSupported(
+                "list_tables requires 'postgresql' feature enabled".to_string(),
+            ))
+        }
 
         #[cfg(all(feature = "postgresql", not(feature = "postgresql")))]
         unreachable!()
@@ -406,8 +457,14 @@ impl Catalog for LivePostgreSQLCatalog {
     ///
     /// Queries information_schema.columns and pg_catalog to get column information.
     async fn get_columns(&self, table: &str) -> CatalogResult<Vec<ColumnMetadata>> {
+        tracing::debug!(
+            "!!! LivePostgreSQLCatalog::get_columns() called for table: {}",
+            table
+        );
+
         #[cfg(feature = "postgresql")]
         if let Some(pool) = &self.pool {
+            tracing::debug!("!!! Pool is available, executing get_columns query");
             let query = r#"
                 SELECT
                     c.column_name,
@@ -429,8 +486,8 @@ impl Catalog for LivePostgreSQLCatalog {
                     JOIN information_schema.key_column_usage ku
                         ON tc.constraint_name = ku.constraint_name
                     WHERE tc.constraint_type = 'PRIMARY KEY'
-                        AND tc.table_schema = c.table_schema
-                        AND tc.table_name = c.table_name
+                        AND tc.table_schema = 'public'
+                        AND tc.table_name = $1
                 ) pk ON pk.column_name = c.column_name
                 WHERE c.table_schema NOT IN ('pg_catalog', 'information_schema')
                   AND c.table_name = $1
@@ -452,15 +509,19 @@ impl Catalog for LivePostgreSQLCatalog {
             .fetch_all(pool)
             .await
             .map_err(|e| {
+                tracing::error!("!!! Failed to get columns: {}", e);
                 CatalogError::QueryFailed(format!(
                     "Failed to get columns for table '{}': {}",
                     table, e
                 ))
             })?;
 
+            tracing::debug!("!!! get_columns query returned {} rows", rows.len());
+
             let columns = rows
                 .into_iter()
                 .map(|(name, data_type, is_nullable, _default, comment, is_pk)| {
+                    tracing::debug!("!!! Found column: {} ({})", name, data_type);
                     let dt = Self::parse_postgres_type(&data_type);
                     let nullable = is_nullable == "YES";
                     let is_pk = is_pk == "YES";

@@ -9,9 +9,9 @@
 
 use anyhow::Result;
 use std::sync::Arc;
-use tokio::sync::RwLock;
 use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
 use tokio::process::{ChildStdin, ChildStdout};
+use tokio::sync::RwLock;
 use tower_lsp::lsp_types::*;
 
 /// Mock LSP client that captures responses
@@ -159,13 +159,15 @@ impl LspConnection {
                 }
 
                 if trimmed.to_lowercase().starts_with("content-length:") {
-                    content_length = trimmed.split(':')
+                    content_length = trimmed
+                        .split(':')
                         .nth(1)
                         .and_then(|s| s.trim().parse::<usize>().ok());
                 }
             }
 
-            let content_length = content_length.ok_or_else(|| anyhow::anyhow!("Invalid Content-Length header"))?;
+            let content_length =
+                content_length.ok_or_else(|| anyhow::anyhow!("Invalid Content-Length header"))?;
             eprintln!("!!! CLIENT: Content length: {}", content_length);
 
             // Read the content
@@ -187,12 +189,19 @@ impl LspConnection {
                         eprintln!("!!! CLIENT: Received publish_diagnostics notification");
                         if let Some(params) = json.get("params") {
                             if let Some(uri) = params.get("uri").and_then(|u| u.as_str()) {
-                                if let Some(diags) = params.get("diagnostics").and_then(|d| d.as_array()) {
+                                if let Some(diags) =
+                                    params.get("diagnostics").and_then(|d| d.as_array())
+                                {
                                     let url = Url::parse(uri)?;
-                                    let diagnostics: Vec<Diagnostic> = serde_json::from_value(serde_json::Value::Array(diags.to_vec()))?;
+                                    let diagnostics: Vec<Diagnostic> = serde_json::from_value(
+                                        serde_json::Value::Array(diags.to_vec()),
+                                    )?;
                                     let diag_count = diagnostics.len();
                                     self.client.record_diagnostics(url, diagnostics).await;
-                                    eprintln!("!!! CLIENT: Recorded {} diagnostics for {}", diag_count, uri);
+                                    eprintln!(
+                                        "!!! CLIENT: Recorded {} diagnostics for {}",
+                                        diag_count, uri
+                                    );
                                 }
                             }
                         }
@@ -214,16 +223,12 @@ impl LspConnection {
         let params = InitializeParams {
             process_id: Some(std::process::id()),
             root_uri: Some(Url::parse("file:///test")?),
-            capabilities: ClientCapabilities::default(),
-            trace: None,
-            workspace_folders: None,
-            client_info: None,
-            locale: None,
-            root_path: None,
-            initialization_options: None,
+            ..Default::default()
         };
 
-        let id = self.next_id.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        let id = self
+            .next_id
+            .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
 
         // Build JSON-RPC request
         let json_request = serde_json::json!({
@@ -233,7 +238,8 @@ impl LspConnection {
             "params": params,
         });
 
-        self.send_message(&serde_json::to_string(&json_request)?).await?;
+        self.send_message(&serde_json::to_string(&json_request)?)
+            .await?;
 
         // Read response
         let response_str = self.read_message().await?;
@@ -245,13 +251,15 @@ impl LspConnection {
         }
 
         // Parse result
-        let result = json_response.get("result")
+        let result = json_response
+            .get("result")
             .ok_or_else(|| anyhow::anyhow!("No result in initialize response"))?;
 
         let init_result: InitializeResult = serde_json::from_value(result.clone())?;
 
         // Send initialized notification
-        self.notify("initialized".to_string(), serde_json::json!({})).await?;
+        self.notify("initialized".to_string(), serde_json::json!({}))
+            .await?;
 
         Ok(init_result)
     }
@@ -267,12 +275,20 @@ impl LspConnection {
             },
         };
 
-        self.notify("textDocument/didOpen".to_string(), params).await
+        self.notify("textDocument/didOpen".to_string(), params)
+            .await
     }
 
     /// Send workspace/didChangeConfiguration notification to set engine config
-    pub async fn did_change_configuration(&mut self, dialect: &str, connection_string: &str) -> Result<()> {
-        eprintln!("!!! CLIENT: Sending did_change_configuration: dialect={}, connection={}", dialect, connection_string);
+    pub async fn did_change_configuration(
+        &mut self,
+        dialect: &str,
+        connection_string: &str,
+    ) -> Result<()> {
+        eprintln!(
+            "!!! CLIENT: Sending did_change_configuration: dialect={}, connection={}",
+            dialect, connection_string
+        );
 
         let params = DidChangeConfigurationParams {
             settings: serde_json::json!({
@@ -284,15 +300,26 @@ impl LspConnection {
         };
 
         eprintln!("!!! CLIENT: Calling notify for workspace/didChangeConfiguration");
-        let result = self.notify("workspace/didChangeConfiguration".to_string(), params).await;
-        eprintln!("!!! CLIENT: did_change_configuration notification sent: {:?}", result);
+        let result = self
+            .notify("workspace/didChangeConfiguration".to_string(), params)
+            .await;
+        eprintln!(
+            "!!! CLIENT: did_change_configuration notification sent: {:?}",
+            result
+        );
         result
     }
 
     /// Request completion
-    pub async fn completion(&mut self, uri: Url, position: Position) -> Result<Option<Vec<CompletionItem>>> {
-        eprintln!("!!! CLIENT: Requesting completion for uri={}, line={}, col={}",
-            uri, position.line, position.character);
+    pub async fn completion(
+        &mut self,
+        uri: Url,
+        position: Position,
+    ) -> Result<Option<Vec<CompletionItem>>> {
+        eprintln!(
+            "!!! CLIENT: Requesting completion for uri={}, line={}, col={}",
+            uri, position.line, position.character
+        );
 
         let params = CompletionParams {
             text_document_position: TextDocumentPositionParams {
@@ -304,7 +331,9 @@ impl LspConnection {
             context: None,
         };
 
-        let id = self.next_id.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        let id = self
+            .next_id
+            .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
 
         let json_request = serde_json::json!({
             "jsonrpc": "2.0",
@@ -313,10 +342,13 @@ impl LspConnection {
             "params": params,
         });
 
-        eprintln!("!!! CLIENT: Sending completion request: {}",
-            serde_json::to_string(&json_request)?);
+        eprintln!(
+            "!!! CLIENT: Sending completion request: {}",
+            serde_json::to_string(&json_request)?
+        );
 
-        self.send_message(&serde_json::to_string(&json_request)?).await?;
+        self.send_message(&serde_json::to_string(&json_request)?)
+            .await?;
 
         eprintln!("!!! CLIENT: Request sent, reading response...");
         // Read response
@@ -354,10 +386,12 @@ impl LspConnection {
                     };
                     Ok(Some(items))
                 } else {
-                    eprintln!("!!! CLIENT: Failed to parse as CompletionResponse, trying direct array");
+                    eprintln!(
+                        "!!! CLIENT: Failed to parse as CompletionResponse, trying direct array"
+                    );
                     // Try direct array parse
-                    let items: Vec<CompletionItem> = serde_json::from_value(result.clone())
-                        .unwrap_or_default();
+                    let items: Vec<CompletionItem> =
+                        serde_json::from_value(result.clone()).unwrap_or_default();
                     eprintln!("!!! CLIENT: Direct array parse got {} items", items.len());
                     Ok(Some(items))
                 }
@@ -379,7 +413,9 @@ impl LspConnection {
             work_done_progress_params: WorkDoneProgressParams::default(),
         };
 
-        let id = self.next_id.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        let id = self
+            .next_id
+            .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
 
         let json_request = serde_json::json!({
             "jsonrpc": "2.0",
@@ -388,7 +424,8 @@ impl LspConnection {
             "params": params,
         });
 
-        self.send_message(&serde_json::to_string(&json_request)?).await?;
+        self.send_message(&serde_json::to_string(&json_request)?)
+            .await?;
 
         let response_str = self.read_message().await?;
         let json_response: serde_json::Value = serde_json::from_str(&response_str)?;
@@ -401,11 +438,9 @@ impl LspConnection {
 
         match result {
             Some(serde_json::Value::Null) => Ok(None),
-            Some(result) => {
-                serde_json::from_value(result.clone())
-                    .map(Some)
-                    .map_err(|e| anyhow::anyhow!("Failed to parse hover response: {}", e))
-            }
+            Some(result) => serde_json::from_value(result.clone())
+                .map(Some)
+                .map_err(|e| anyhow::anyhow!("Failed to parse hover response: {}", e)),
             None => Ok(None),
         }
     }
@@ -418,10 +453,8 @@ impl LspConnection {
     /// Read all pending notifications (with timeout)
     pub async fn read_pending_notifications(&mut self) -> Result<()> {
         // Try to read with a small timeout to collect any pending notifications
-        match tokio::time::timeout(
-            std::time::Duration::from_millis(100),
-            self.read_message()
-        ).await {
+        match tokio::time::timeout(std::time::Duration::from_millis(100), self.read_message()).await
+        {
             Ok(_) => Ok(()),
             Err(_) => Ok(()), // Timeout is expected if no messages
         }

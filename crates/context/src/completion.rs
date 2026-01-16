@@ -16,6 +16,19 @@ use crate::cst_utils::{
 };
 use tree_sitter::Node;
 
+/// Parts of a window function specification (OVER clause)
+#[derive(Debug, Clone, PartialEq)]
+pub enum WindowFunctionPart {
+    /// Inside OVER ( at the beginning
+    OverStart,
+    /// Inside PARTITION BY
+    PartitionBy,
+    /// Inside ORDER BY (within OVER clause)
+    OrderBy,
+    /// Inside window frame specification
+    WindowFrame,
+}
+
 /// Completion context types
 ///
 /// Represents different SQL contexts where completion can be triggered.
@@ -94,6 +107,26 @@ pub enum CompletionContext {
         tables: Vec<String>,
         /// Optional table qualifier (e.g., "users." if cursor is after "users.")
         qualifier: Option<String>,
+    },
+
+    /// CTE (Common Table Expression) definition
+    ///
+    /// User is typing in a WITH clause, defining a CTE
+    CteDefinition {
+        /// Tables that can be used to create CTEs from
+        available_tables: Vec<String>,
+        /// CTEs that have already been defined in this WITH clause
+        defined_ctes: Vec<String>,
+    },
+
+    /// Window function specification (OVER clause)
+    ///
+    /// User is typing in an OVER clause, e.g., `SELECT ROW_NUMBER() OVER (|`
+    WindowFunctionClause {
+        /// Tables visible in this scope
+        tables: Vec<String>,
+        /// Which part of the OVER clause we're in
+        window_part: WindowFunctionPart,
     },
 
     /// Keyword completion
@@ -180,15 +213,26 @@ pub fn detect_completion_context(
     let node = match find_node_at_position(root, position, source) {
         Some(n) => n,
         None => {
+            eprintln!("!!! No node found at position, using text-based detection");
             return detect_context_from_text(source, position);
         }
     };
 
+    eprintln!(
+        "!!! Found node '{}' at position {:?}",
+        node.kind(),
+        position
+    );
+    eprintln!("!!! Node byte range: {:?}", node.byte_range());
+
     // Walk up the parent chain to find the context
     let mut current = Some(node);
     let mut qualifier = None;
+    let mut depth = 0;
 
     while let Some(n) = current {
+        eprintln!("!!! Parent[{}]: '{}'", depth, n.kind());
+        depth += 1;
         match n.kind() {
             // Check if we're after a table qualifier (e.g., "users.")
             "table_reference" => {
@@ -200,8 +244,10 @@ pub fn detect_completion_context(
 
             // SELECT clause
             "select_statement" => {
+                eprintln!("!!! Found select_statement node");
                 // Check if we're in the projection list
                 if is_in_projection(&n, position) {
+                    eprintln!("!!! is_in_projection returned TRUE");
                     // Extract table names from FROM clause
                     let mut tables = extract_tables_from_from_clause(&n, source);
 
@@ -211,6 +257,67 @@ pub fn detect_completion_context(
                             "!!! LSP: CST extraction returned empty tables, using text-based extraction"
                         );
                         tables = extract_tables_from_source(source);
+                    }
+
+                    // Filter out SQL keywords that might have been incorrectly extracted
+                    tables.retain(|t| {
+                        !matches!(
+                            t.as_str(),
+                            "SELECT" | "FROM" | "WHERE" | "JOIN" | "ON" | "AND" | "OR" | "*"
+                        )
+                    });
+
+                    // Check if we're inside an OVER clause (window function)
+                    // This should be checked before returning SelectProjection
+                    let byte_offset = position_to_byte_offset(source, position);
+                    let text_before = &source[..byte_offset.min(source.len())];
+                    let text_upper = text_before.to_uppercase();
+
+                    // Check for OVER clause patterns
+                    let over_pos = text_upper
+                        .rfind("OVER (")
+                        .or_else(|| text_upper.rfind("OVER("));
+                    if let Some(over_pos) = over_pos {
+                        // We're inside an OVER clause
+                        let after_over = &text_upper[over_pos..];
+
+                        // Count parentheses to check if we're inside the OVER clause
+                        let open_parens = after_over.matches('(').count();
+                        let close_parens = after_over.matches(')').count();
+
+                        if open_parens > close_parens {
+                            // We're inside the OVER clause
+                            // Check which part we're in
+                            if after_over.to_uppercase().contains("PARTITION BY") {
+                                // Check if cursor is after ORDER BY
+                                if let Some(order_pos) = after_over.to_uppercase().rfind("ORDER BY")
+                                {
+                                    let after_order = &after_over[order_pos + 8..];
+                                    if !after_order.contains(')') {
+                                        return CompletionContext::WindowFunctionClause {
+                                            tables,
+                                            window_part: WindowFunctionPart::OrderBy,
+                                        };
+                                    }
+                                }
+                                // We're in PARTITION BY
+                                return CompletionContext::WindowFunctionClause {
+                                    tables,
+                                    window_part: WindowFunctionPart::PartitionBy,
+                                };
+                            } else if after_over.to_uppercase().contains("ORDER BY") {
+                                return CompletionContext::WindowFunctionClause {
+                                    tables,
+                                    window_part: WindowFunctionPart::OrderBy,
+                                };
+                            }
+
+                            // Just after OVER (
+                            return CompletionContext::WindowFunctionClause {
+                                tables,
+                                window_part: WindowFunctionPart::OverStart,
+                            };
+                        }
                     }
 
                     // If qualifier is still None, try text-based extraction
@@ -226,7 +333,9 @@ pub fn detect_completion_context(
                 // Additional check: if we're right after SELECT keyword (even with no projection node),
                 // treat it as projection context
                 // This handles cases like "SELECT | FROM table" where the projection list is empty
+                eprintln!("!!! select_statement: checking is_right_after_select_keyword");
                 if is_right_after_select_keyword(&n, source, position) {
+                    eprintln!("!!! select_statement: is_right_after_select_keyword returned TRUE");
                     // For subqueries, use text-based extraction to get the table name
                     // because CST parsing might be incomplete for nested queries
                     let text_before =
@@ -252,6 +361,14 @@ pub fn detect_completion_context(
                             tables = extract_tables_from_source(source);
                         }
 
+                        // Filter out SQL keywords that might have been incorrectly extracted
+                        tables.retain(|t| {
+                            !matches!(
+                                t.as_str(),
+                                "SELECT" | "FROM" | "WHERE" | "JOIN" | "ON" | "AND" | "OR" | "*"
+                            )
+                        });
+
                         tables
                     };
 
@@ -268,6 +385,61 @@ pub fn detect_completion_context(
 
             // FROM clause
             "from_clause" => {
+                // Check if we're actually inside an OVER clause (window function)
+                // tree-sitter may incorrectly parse incomplete OVER clauses as from_clause
+                let byte_offset = position_to_byte_offset(source, position);
+                let text_before = &source[..byte_offset.min(source.len())];
+                let text_upper = text_before.to_uppercase();
+
+                // Check for OVER clause patterns before returning FromClause
+                let over_pos = text_upper
+                    .rfind("OVER (")
+                    .or_else(|| text_upper.rfind("OVER("));
+                if let Some(over_pos) = over_pos {
+                    // We're inside an OVER clause, which takes precedence
+                    let after_over = &text_upper[over_pos..];
+
+                    // Count parentheses to check if we're inside the OVER clause
+                    let open_parens = after_over.matches('(').count();
+                    let close_parens = after_over.matches(')').count();
+
+                    if open_parens > close_parens {
+                        // We're inside the OVER clause
+                        // Extract tables from source
+                        let tables = extract_tables_from_source(source);
+
+                        // Check which part we're in
+                        if after_over.to_uppercase().contains("PARTITION BY") {
+                            // Check if cursor is after ORDER BY
+                            if let Some(order_pos) = after_over.to_uppercase().rfind("ORDER BY") {
+                                let after_order = &after_over[order_pos + 8..];
+                                if !after_order.contains(')') {
+                                    return CompletionContext::WindowFunctionClause {
+                                        tables,
+                                        window_part: WindowFunctionPart::OrderBy,
+                                    };
+                                }
+                            }
+                            // We're in PARTITION BY
+                            return CompletionContext::WindowFunctionClause {
+                                tables,
+                                window_part: WindowFunctionPart::PartitionBy,
+                            };
+                        } else if after_over.to_uppercase().contains("ORDER BY") {
+                            return CompletionContext::WindowFunctionClause {
+                                tables,
+                                window_part: WindowFunctionPart::OrderBy,
+                            };
+                        }
+
+                        // Just after OVER (
+                        return CompletionContext::WindowFunctionClause {
+                            tables,
+                            window_part: WindowFunctionPart::OverStart,
+                        };
+                    }
+                }
+
                 // Check if the cursor is actually within this from_clause's range
                 // tree-sitter may incorrectly mark subquery content as from_clause
                 // when parsing incomplete SQL
@@ -296,6 +468,91 @@ pub fn detect_completion_context(
             "where_clause" => {
                 let tables = extract_tables_from_source(source);
                 return CompletionContext::WhereClause { tables, qualifier };
+            }
+
+            // CTE (Common Table Expression)
+            "common_table_expression" | "cte" => {
+                // Check if cursor is in CTE name position (after WITH, before AS)
+                let byte_offset = position_to_byte_offset(source, position);
+                let text_before = &source[..byte_offset.min(source.len())];
+                let text_upper = text_before.to_uppercase();
+
+                // Pattern: "WITH cte_name | AS" or "WITH | AS"
+                if text_upper.ends_with("WITH ")
+                    || text_upper.ends_with("WITH,")
+                    || text_upper.ends_with("WITH\t")
+                {
+                    // At CTE name position, suggest available tables
+                    let available_tables = extract_tables_from_source(source);
+                    return CompletionContext::CteDefinition {
+                        available_tables,
+                        defined_ctes: vec![],
+                    };
+                }
+
+                // Pattern: "WITH cte_name AS (SELECT |" or inside CTE subquery
+                if text_upper.contains(" AS (") {
+                    // Check if cursor is after SELECT
+                    if let Some(select_pos) = text_upper.rfind("SELECT ") {
+                        let after_select = &text_upper[select_pos + 7..];
+                        // Count parentheses to check if we're inside CTE definition
+                        let open_parens = text_before.matches('(').count();
+                        let close_parens = text_before.matches(')').count();
+
+                        if open_parens > close_parens && !after_select.contains("FROM ") {
+                            // We're inside CTE subquery projection
+                            let tables = extract_tables_from_source(source);
+                            return CompletionContext::SelectProjection { tables, qualifier };
+                        }
+                    }
+                }
+
+                // Fall back to text-based detection
+                return detect_context_from_text(source, position);
+            }
+
+            // Window function (OVER clause)
+            "window_specification" | "window_definition" => {
+                debug!("!!! LSP CST: Found window_specification/window_definition node");
+                let tables = extract_tables_from_source(source);
+
+                // Check which part of the OVER clause we're in
+                let byte_offset = position_to_byte_offset(source, position);
+                let text_before = &source[..byte_offset.min(source.len())];
+                let text_upper = text_before.to_uppercase();
+
+                debug!("!!! LSP CST: text_before='{}'", text_before);
+                debug!("!!! LSP CST: tables={:?}", tables);
+
+                if text_upper.ends_with("OVER (") || text_upper.ends_with("OVER( ") {
+                    debug!("!!! LSP CST: Detected OVER clause start");
+                    return CompletionContext::WindowFunctionClause {
+                        tables,
+                        window_part: WindowFunctionPart::OverStart,
+                    };
+                }
+
+                if text_upper.ends_with("PARTITION BY ") || text_upper.ends_with("PARTITION BY") {
+                    debug!("!!! LSP CST: Detected PARTITION BY");
+                    return CompletionContext::WindowFunctionClause {
+                        tables,
+                        window_part: WindowFunctionPart::PartitionBy,
+                    };
+                }
+
+                if text_upper.ends_with("ORDER BY ") || text_upper.ends_with("ORDER BY") {
+                    debug!("!!! LSP CST: Detected ORDER BY in window function");
+                    return CompletionContext::WindowFunctionClause {
+                        tables,
+                        window_part: WindowFunctionPart::OrderBy,
+                    };
+                }
+
+                debug!(
+                    "!!! LSP CST: No specific pattern matched, falling back to text-based detection"
+                );
+                // Default to text-based detection for more complex cases
+                return detect_context_from_text(source, position);
             }
 
             // JOIN clause
@@ -396,6 +653,8 @@ pub fn detect_completion_context(
 /// what kind of completion would be appropriate.
 fn detect_context_from_text(source: &str, position: Position) -> CompletionContext {
     debug!("!!! LSP: >>>>> detect_context_from_text called");
+    debug!("!!! LSP: position = {:?}", position);
+    debug!("!!! LSP: source.len() = {}", source.len());
 
     // Get the byte position of the cursor
     let byte_offset = position_to_byte_offset(source, position);
@@ -408,7 +667,8 @@ fn detect_context_from_text(source: &str, position: Position) -> CompletionConte
         source
     };
 
-    debug!("!!! LSP: Text before cursor: {:?}", text_before);
+    debug!("!!! LSP: Text before cursor: '{}'", text_before);
+    debug!("!!! LSP: Text before cursor length: {}", text_before.len());
     debug!("!!! LSP: XXXXX About to call detect_from_or_join_context");
 
     // Check for specific patterns
@@ -455,6 +715,20 @@ fn detect_context_from_text(source: &str, position: Position) -> CompletionConte
             statement_type: Some("UNION".to_string()),
             existing_clauses: vec![],
         };
+    }
+
+    // Pattern 0.6: CTE (WITH clause) - check before other patterns
+    debug!("!!! LSP: Pattern 0.6: Checking for CTE/WITH clause");
+    if let Some(ctx) = detect_cte_context(source, text_before) {
+        debug!("!!! LSP: detect_cte_context returned Some(ctx)");
+        return ctx;
+    }
+
+    // Pattern 0.7: Window function (OVER clause) - check before other patterns
+    debug!("!!! LSP: Pattern 0.7: Checking for window function OVER clause");
+    if let Some(ctx) = detect_window_function_context(source, text_before) {
+        debug!("!!! LSP: detect_window_function_context returned Some(ctx)");
+        return ctx;
     }
 
     // Pattern 1: "SELECT ... FROM |" or "SELECT ... FROM ... JOIN |"
@@ -1073,17 +1347,42 @@ fn extract_tables_from_source(source: &str) -> Vec<String> {
             if word == "AS" {
                 i += 1;
                 if i < words.len() {
-                    tables.push(words[i].to_string());
+                    // Clean up the alias by removing trailing special characters
+                    let alias =
+                        words[i].trim_end_matches(|c: char| !c.is_alphanumeric() && c != '_');
+                    tables.push(alias.to_string());
                 }
                 i += 1;
                 continue;
             }
 
-            // Skip other keywords
+            // Skip other SQL keywords that shouldn't be treated as table names
             if matches!(
                 word.as_str(),
-                "ON" | "AND" | "OR" | "WHERE" | "GROUP" | "ORDER" | "LIMIT"
+                "ON" | "AND"
+                    | "OR"
+                    | "WHERE"
+                    | "GROUP"
+                    | "ORDER"
+                    | "LIMIT"
+                    | "SELECT"
+                    | "FROM"
+                    | "*"
+                    | "INSERT"
+                    | "UPDATE"
+                    | "DELETE"
+                    | "CREATE"
+                    | "WITH"
+                    | "SET"
+                    | "VALUES"
+                    | "INTO"
             ) {
+                i += 1;
+                continue;
+            }
+
+            // Skip words that are purely special characters or numbers
+            if words[i].chars().all(|c| !c.is_alphabetic()) {
                 i += 1;
                 continue;
             }
@@ -1115,11 +1414,17 @@ fn extract_tables_from_source(source: &str) -> Vec<String> {
 
             if has_alias {
                 // Use the alias instead of the table name
-                tables.push(words[i + 1].to_string());
+                // Clean up the alias by removing trailing special characters
+                let alias =
+                    words[i + 1].trim_end_matches(|c: char| !c.is_alphanumeric() && c != '_');
+                tables.push(alias.to_string());
                 i += 2;
             } else {
                 // No alias, use the table name
-                tables.push(words[i].to_string());
+                // Clean up the table name by removing trailing special characters
+                let table_name =
+                    words[i].trim_end_matches(|c: char| !c.is_alphanumeric() && c != '_');
+                tables.push(table_name.to_string());
                 i += 1;
             }
         }
@@ -1509,20 +1814,31 @@ fn is_right_after_select_keyword(select_node: &Node, source: &str, position: Pos
 
     // Check if the text ends with "SELECT" (possibly with whitespace)
     let text_upper = text_before.trim_end().to_uppercase();
+    eprintln!(
+        "!!! is_right_after_select_keyword: text_upper='{}'",
+        text_upper
+    );
     if text_upper.ends_with("SELECT")
         || text_upper.ends_with("SELECT ")
         || text_upper.ends_with("SELECT\t")
     {
+        eprintln!("!!! is_right_after_select_keyword: text ends with SELECT");
         // Additional check: make sure we're after the SELECT keyword within this select_statement
         // Find the SELECT keyword position in the source
         let node_start = select_node.byte_range().start;
         let node_end = select_node.byte_range().end;
 
         // Look for SELECT keyword within this node
+        // Use rfind to get the LAST SELECT before the cursor (handles CTEs with nested SELECT)
         let node_text = &source[node_start..node_end.min(source.len())];
-        let node_text_upper = node_text.to_uppercase();
+        let node_text_before_cursor = if byte_offset <= node_end {
+            &node_text[..byte_offset - node_start]
+        } else {
+            node_text
+        };
+        let node_text_before_cursor_upper = node_text_before_cursor.to_uppercase();
 
-        if let Some(select_pos) = node_text_upper.find("SELECT") {
+        if let Some(select_pos) = node_text_before_cursor_upper.rfind("SELECT") {
             let absolute_select_pos = node_start + select_pos + 6; // +6 for "SELECT"
             // Check if cursor is after SELECT and within reasonable distance (e.g., within 10 chars)
             if byte_offset >= absolute_select_pos && byte_offset - absolute_select_pos <= 10 {
@@ -1642,22 +1958,49 @@ fn extract_tables_from_subquery_text(source: &str, position: Position) -> Vec<St
 fn extract_tables_from_from_clause(select_node: &Node, source: &str) -> Vec<String> {
     let mut tables = Vec::new();
 
+    eprintln!(
+        "!!! extract_tables_from_from_clause: select_node.kind()={}",
+        select_node.kind()
+    );
+    eprintln!(
+        "!!! extract_tables_from_from_clause: select_node byte range={:?}",
+        select_node.byte_range()
+    );
+
     for child in select_node.children(&mut select_node.walk()) {
+        eprintln!(
+            "!!! extract_tables_from_from_clause: child.kind()={}",
+            child.kind()
+        );
         if child.kind() == "from_clause" {
             // Find table_reference nodes
+            eprintln!("!!! extract_tables_from_from_clause: found from_clause");
             extract_table_names_recursive(&child, source, &mut tables);
             break;
         }
     }
 
+    eprintln!(
+        "!!! extract_tables_from_from_clause: extracted tables={:?}",
+        tables
+    );
     tables
 }
 
 /// Recursively extract table names from table_reference nodes
 fn extract_table_names_recursive(node: &Node, source: &str, tables: &mut Vec<String>) {
+    eprintln!(
+        "!!! extract_table_names_recursive: node.kind()='{}', text='{}'",
+        node.kind(),
+        &source[node.byte_range()]
+    );
     match node.kind() {
         "table_reference" | "table_name" => {
             if let Some(name) = extract_identifier_name(node, source) {
+                eprintln!(
+                    "!!! extract_table_names_recursive: extracting table name='{}'",
+                    name
+                );
                 tables.push(name);
             }
         }
@@ -1766,6 +2109,320 @@ fn extract_join_tables(join_node: &Node, source: &str) -> (Option<String>, Optio
     }
 
     (left_table, right_table)
+}
+
+/// Detect CTE (Common Table Expression) context
+///
+/// Detects if the cursor is in a WITH clause where we're defining or referencing CTEs
+fn detect_cte_context(source: &str, text_before: &str) -> Option<CompletionContext> {
+    let upper = text_before.to_uppercase();
+    let source_upper = source.to_uppercase();
+
+    debug!(
+        "!!! LSP: detect_cte_context called, text_before='{}'",
+        text_before
+    );
+
+    // Check if we're in a WITH clause at all
+    if !upper.contains("WITH") {
+        return None;
+    }
+
+    // Pattern 1: "WITH | AS" or "WITH | AS (" - defining first CTE, suggest all tables
+    // Check: cursor is right after "WITH "
+    if upper == "WITH " || upper.ends_with("WITH ") || upper.ends_with("WITH\t") {
+        debug!("!!! LSP: Detected CTE definition start (Pattern 1)");
+        // For CTE name completion, we want to show ALL tables from catalog
+        // So we pass empty available_tables - the completion handler will fetch all tables
+        return Some(CompletionContext::CteDefinition {
+            available_tables: vec![], // Empty = show all tables from catalog
+            defined_ctes: vec![],
+        });
+    }
+
+    // Pattern 2: "WITH cte1 AS (...), | AS" - defining another CTE after comma
+    // Check: cursor is after ", "
+    if let Some(comma_pos) = upper.rfind(", ") {
+        let after_comma = &upper[comma_pos + 2..];
+        // Check if next non-whitespace would be AS
+        let trimmed = after_comma.trim_start();
+        if trimmed.starts_with("AS") || trimmed.is_empty() {
+            debug!("!!! LSP: Detected additional CTE definition (Pattern 2)");
+            let defined_ctes = extract_defined_ctes_before_cursor(source, text_before);
+            // For CTE name completion, we want to show ALL tables from catalog
+            return Some(CompletionContext::CteDefinition {
+                available_tables: vec![], // Empty = show all tables from catalog
+                defined_ctes,
+            });
+        }
+    }
+
+    // Pattern 3: "WITH cte AS (SELECT | FROM" - inside CTE subquery projection
+    // Check if we're inside parentheses after "AS ("
+    if let Some(as_pos) = upper.find(" AS (") {
+        let after_as = &upper[as_pos + 5..]; // Skip " AS ("
+        let before_as = &upper[..as_pos];
+
+        // Count parentheses to check if we're still inside CTE definition
+        let open_parens = before_as.matches('(').count();
+        let close_parens = before_as.matches(')').count();
+
+        if open_parens > close_parens {
+            // We're inside the CTE definition
+            // Check if cursor is after SELECT and before FROM
+            if let Some(select_pos) = after_as.rfind("SELECT ") {
+                let after_select = &after_as[select_pos + 7..];
+                if !after_select.contains("FROM ") {
+                    debug!("!!! LSP: Detected column completion in CTE subquery (Pattern 3)");
+                    // Treat as SELECT projection for columns
+                    return detect_projection_context(source, text_before);
+                }
+            }
+        }
+    }
+
+    // Pattern 4: "WITH cte AS (...) SELECT | FROM cte" - in main query after CTE definition
+    // Check if cursor is after CTE definition closes
+    if let Some(with_pos) = source_upper.find("WITH ") {
+        let after_with = &source_upper[with_pos + 5..];
+
+        // Count parentheses to find where CTE definition ends
+        let mut paren_count = 0;
+        let mut cte_def_end = 0;
+
+        for (i, ch) in after_with.chars().enumerate() {
+            if ch == '(' {
+                paren_count += 1;
+            } else if ch == ')' {
+                paren_count -= 1;
+                if paren_count == 0 {
+                    cte_def_end = with_pos + 5 + i + 1;
+                    break;
+                }
+            }
+        }
+
+        if cte_def_end > 0 && text_before.len() > cte_def_end {
+            let after_cte = &text_before[cte_def_end..].trim_start();
+            // Check if cursor is in the main SELECT
+            if after_cte.starts_with("SELECT") || after_cte.contains(" SELECT") {
+                debug!("!!! LSP: Detected main query after CTE definition (Pattern 4)");
+                // Check if cursor is after FROM to reference CTE
+                if after_cte.contains("FROM ") {
+                    // Suggest columns from the CTE
+                    let cte_names = extract_defined_ctes(source);
+                    let tables = cte_names;
+                    let qualifier = None;
+                    return detect_projection_context_with_tables(
+                        source,
+                        text_before,
+                        tables,
+                        qualifier,
+                    );
+                } else {
+                    // Before FROM, suggest CTE names and columns
+                    let cte_names = extract_defined_ctes(source);
+                    let mut tables = cte_names.clone();
+                    tables.extend(extract_tables_from_source(source));
+                    let qualifier = None;
+                    return detect_projection_context_with_tables(
+                        source,
+                        text_before,
+                        tables,
+                        qualifier,
+                    );
+                }
+            }
+        }
+    }
+
+    debug!("!!! LSP: No CTE pattern matched");
+    None
+}
+
+/// Detect window function (OVER clause) context
+///
+/// Detects if the cursor is in an OVER clause for window functions
+fn detect_window_function_context(source: &str, text_before: &str) -> Option<CompletionContext> {
+    let upper = text_before.to_uppercase();
+
+    debug!(
+        "!!! LSP: detect_window_function_context called, text_before='{}'",
+        text_before
+    );
+
+    // Check if we have an OVER clause (handle variations in spacing)
+    let has_over = upper.contains("OVER(") || upper.contains("OVER (") || upper.ends_with("OVER");
+
+    if !has_over {
+        debug!("!!! LSP: No OVER clause found, returning None");
+        return None;
+    }
+
+    // Pattern 1: "OVER (|" - just opened OVER clause
+    if upper.ends_with("OVER (") || upper.ends_with("OVER( ") {
+        debug!("!!! LSP: Detected OVER clause start");
+        return Some(CompletionContext::WindowFunctionClause {
+            tables: extract_tables_from_source(source),
+            window_part: WindowFunctionPart::OverStart,
+        });
+    }
+
+    // Pattern 2: "OVER (PARTITION BY |" - inside PARTITION BY
+    if upper.ends_with("PARTITION BY ") || upper.ends_with("PARTITION BY") {
+        debug!("!!! LSP: Detected PARTITION BY clause");
+        return Some(CompletionContext::WindowFunctionClause {
+            tables: extract_tables_from_source(source),
+            window_part: WindowFunctionPart::PartitionBy,
+        });
+    }
+
+    // Pattern 3: "OVER (ORDER BY |" - inside ORDER BY
+    if upper.ends_with("ORDER BY ") || upper.ends_with("ORDER BY") {
+        debug!("!!! LSP: Detected ORDER BY in window function");
+        return Some(CompletionContext::WindowFunctionClause {
+            tables: extract_tables_from_source(source),
+            window_part: WindowFunctionPart::OrderBy,
+        });
+    }
+
+    // Pattern 4: Check if we're inside OVER clause
+    // Handle both "OVER (" and "OVER(" variants
+    let over_pos = upper.rfind("OVER (").or_else(|| upper.rfind("OVER("));
+
+    if let Some(over_pos) = over_pos {
+        // Calculate skip length based on which variant we found
+        let skip_len = if upper[over_pos..].starts_with("OVER (") {
+            6 // "OVER ("
+        } else {
+            5 // "OVER("
+        };
+
+        let after_over = &upper[over_pos + skip_len..];
+        let open_parens = after_over.matches('(').count();
+        let close_parens = after_over.matches(')').count();
+
+        // More opens than closes means we're still inside the OVER clause
+        if open_parens > close_parens {
+            debug!("!!! LSP: Detected inside OVER clause");
+
+            // Check which part we're in
+            if after_over.to_uppercase().contains("PARTITION BY") {
+                // Check if cursor is after ORDER BY
+                if let Some(order_pos) = after_over.to_uppercase().rfind("ORDER BY") {
+                    let after_order = &after_over[order_pos + 8..];
+                    if !after_order.contains(')') {
+                        return Some(CompletionContext::WindowFunctionClause {
+                            tables: extract_tables_from_source(source),
+                            window_part: WindowFunctionPart::OrderBy,
+                        });
+                    }
+                }
+                // We're in PARTITION BY
+                return Some(CompletionContext::WindowFunctionClause {
+                    tables: extract_tables_from_source(source),
+                    window_part: WindowFunctionPart::PartitionBy,
+                });
+            } else if after_over.to_uppercase().contains("ORDER BY") {
+                return Some(CompletionContext::WindowFunctionClause {
+                    tables: extract_tables_from_source(source),
+                    window_part: WindowFunctionPart::OrderBy,
+                });
+            }
+
+            // Just after OVER (
+            return Some(CompletionContext::WindowFunctionClause {
+                tables: extract_tables_from_source(source),
+                window_part: WindowFunctionPart::OverStart,
+            });
+        }
+    }
+
+    debug!("!!! LSP: No window function pattern matched");
+    None
+}
+
+/// Extract CTE names that have already been defined in the current WITH clause
+fn extract_defined_ctes(source: &str) -> Vec<String> {
+    let mut ctes = Vec::new();
+    let upper = source.to_uppercase();
+
+    // Find WITH clause
+    if let Some(with_pos) = upper.find("WITH ") {
+        let after_with = &source[with_pos + 5..]; // Skip "WITH "
+
+        // Split by comma to find individual CTE definitions
+        // Pattern: "cte_name AS (SELECT ...)"
+        for part in after_with.split(',') {
+            let trimmed = part.trim();
+            if let Some(as_pos) = trimmed.to_uppercase().find(" AS ") {
+                let cte_name = trimmed[..as_pos].trim();
+                if !cte_name.is_empty() {
+                    ctes.push(cte_name.to_string());
+                }
+            }
+        }
+    }
+
+    ctes
+}
+
+/// Extract CTE names that have been defined before the cursor position
+fn extract_defined_ctes_before_cursor(_source: &str, text_before: &str) -> Vec<String> {
+    let mut ctes = Vec::new();
+    let upper = text_before.to_uppercase();
+
+    // Find WITH clause in text before cursor
+    if let Some(with_pos) = upper.find("WITH ") {
+        let after_with = &text_before[with_pos + 5..]; // Skip "WITH "
+
+        // Split by comma to find individual CTE definitions
+        // Pattern: "cte_name AS (SELECT ...)"
+        for part in after_with.split(',') {
+            let trimmed = part.trim();
+            if let Some(as_pos) = trimmed.to_uppercase().find(" AS ") {
+                let cte_name = trimmed[..as_pos].trim();
+                if !cte_name.is_empty() {
+                    ctes.push(cte_name.to_string());
+                }
+            }
+        }
+    }
+
+    ctes
+}
+
+/// Detect projection context with provided tables and qualifier
+/// This is a variant of detect_projection_context that accepts pre-computed values
+fn detect_projection_context_with_tables(
+    source: &str,
+    text_before: &str,
+    tables: Vec<String>,
+    qualifier: Option<String>,
+) -> Option<CompletionContext> {
+    let source_upper = source.to_uppercase();
+    let text_before_upper = text_before.to_uppercase();
+
+    // Check if cursor is inside a subquery
+    let open_parens = text_before.matches('(').count();
+    let close_parens = text_before.matches(')').count();
+    let in_subquery = open_parens > close_parens;
+
+    debug!(
+        "!!! LSP: detect_projection_context_with_tables: in_subquery={}, tables={:?}, qualifier={:?}",
+        in_subquery, tables, qualifier
+    );
+
+    // If we're in SELECT context (at start or in subquery)
+    if source_upper.starts_with("SELECT") || in_subquery {
+        // If we haven't reached FROM yet, it's in projection
+        if !text_before_upper.contains("FROM") {
+            debug!("!!! LSP: Detected SELECT projection context (no FROM yet)");
+            return Some(CompletionContext::SelectProjection { tables, qualifier });
+        }
+    }
+
+    None
 }
 
 #[cfg(test)]

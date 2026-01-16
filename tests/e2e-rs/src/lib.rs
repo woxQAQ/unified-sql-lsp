@@ -31,9 +31,12 @@ pub mod assertions;
 pub mod client;
 pub mod db;
 pub mod docker;
+pub mod engine_manager;
 pub mod runner;
 pub mod utils;
 pub mod yaml_parser;
+
+pub use engine_manager::{Engine, ensure_engine_ready};
 
 use anyhow::Result;
 use std::sync::Arc;
@@ -42,36 +45,30 @@ use tokio::sync::RwLock;
 use tracing::info;
 
 use client::LspConnection;
-use db::{DatabaseAdapter, MySQLAdapter};
+use db::adapter_from_test_path;
 use docker::DockerCompose;
 use yaml_parser::TestSuite;
 
-/// Global test database adapter (initialized once, thread-safe)
-static DB_ADAPTER: LazyLock<Arc<RwLock<Option<Arc<dyn DatabaseAdapter>>>>> = LazyLock::new(
-    || Arc::new(RwLock::new(None))
-);
-
 /// Global Docker Compose manager (initialized once, thread-safe)
-static DOCKER_COMPOSE: LazyLock<Arc<RwLock<Option<DockerCompose>>>> = LazyLock::new(
-    || Arc::new(RwLock::new(None))
-);
+static DOCKER_COMPOSE: LazyLock<Arc<RwLock<Option<DockerCompose>>>> =
+    LazyLock::new(|| Arc::new(RwLock::new(None)));
 
 /// Initialize test database
 ///
 /// This function should be called once before running any tests.
-/// It starts Docker Compose services and sets up the global database adapter.
-/// If the database is already initialized, it returns the existing adapter.
-pub async fn init_database() -> Result<Arc<dyn DatabaseAdapter>> {
+/// It starts Docker Compose services (all database engines).
+/// If already initialized, it returns early.
+pub async fn init_database() -> Result<()> {
     // Check if already initialized
     {
-        let adapter_guard = DB_ADAPTER.read().await;
-        if let Some(adapter) = adapter_guard.as_ref() {
-            info!("Database adapter already initialized, reusing existing adapter");
-            return Ok(adapter.clone());
+        let guard = DOCKER_COMPOSE.read().await;
+        if guard.is_some() {
+            info!("Docker Compose already initialized");
+            return Ok(());
         }
     }
 
-    // Start Docker Compose services
+    // Start ALL Docker Compose services
     info!("Starting Docker Compose services...");
     let mut docker_compose = DockerCompose::from_default_config()?;
     docker_compose.start().await?;
@@ -81,17 +78,8 @@ pub async fn init_database() -> Result<Arc<dyn DatabaseAdapter>> {
         *compose_guard = Some(docker_compose);
     }
 
-    let adapter = Arc::new(MySQLAdapter::from_default_config()) as Arc<dyn DatabaseAdapter>;
-
-    info!("Initializing test database adapter...");
-
-    {
-        let mut adapter_guard = DB_ADAPTER.write().await;
-        *adapter_guard = Some(adapter.clone());
-    }
-
-    info!("Database adapter initialized successfully");
-    Ok(adapter)
+    info!("All Docker services started successfully");
+    Ok(())
 }
 
 /// Cleanup database resources
@@ -108,12 +96,6 @@ pub async fn cleanup_database() -> Result<()> {
         }
     }
 
-    // Clear database adapter
-    {
-        let mut adapter_guard = DB_ADAPTER.write().await;
-        *adapter_guard = None;
-    }
-
     info!("Database cleanup complete");
     Ok(())
 }
@@ -122,19 +104,20 @@ pub async fn cleanup_database() -> Result<()> {
 pub async fn run_test(
     suite: &TestSuite,
     test: &yaml_parser::TestCase,
-    suite_dir: &std::path::Path,
+    suite_path: &std::path::Path,
 ) -> Result<()> {
     info!("=== Running test: {} ===", test.name);
 
-    // 1. Setup database (load schema/data if needed)
-    info!("Getting database adapter...");
-    let adapter = {
-        let adapter_guard = DB_ADAPTER.read().await;
-        adapter_guard.as_ref()
-            .ok_or_else(|| anyhow::anyhow!("Database not initialized. Call init_database() first."))?
-            .clone()
-    };
-    info!("Database adapter obtained");
+    let adapter = adapter_from_test_path(suite_path)?;
+    info!("Database adapter determined from path: {:?}", suite_path);
+
+    if let Err(e) = adapter.truncate_tables().await {
+        tracing::warn!("Failed to truncate tables (non-fatal): {}", e);
+    }
+
+    let suite_dir = suite_path
+        .parent()
+        .ok_or_else(|| anyhow::anyhow!("Cannot get parent directory of suite file"))?;
 
     for schema_path in &suite.database.schemas {
         let full_path = suite_dir.join(schema_path);
@@ -185,13 +168,17 @@ pub async fn run_test(
     info!("LSP server initialized");
 
     // 4.5. Set engine configuration through did_change_configuration
-    // Use connection string from YAML if provided, otherwise use default
-    let connection_string = suite.database.connection_string.clone().unwrap_or_default();
+    // Use connection string from adapter (determined by test path)
+    let connection_string = adapter.connection_string().to_string();
     let dialect = suite.database.dialect.clone();
-    info!("Setting engine configuration: dialect={}, connection={}", dialect, connection_string);
+    info!(
+        "Setting engine configuration: dialect={}, connection={}",
+        dialect, connection_string
+    );
 
     // Send the configuration notification
-    conn.did_change_configuration(&dialect, &connection_string).await?;
+    conn.did_change_configuration(&dialect, &connection_string)
+        .await?;
     info!("Engine configuration set");
 
     // Give server time to process the configuration
@@ -216,7 +203,9 @@ pub async fn run_test(
 
     // 7. Run assertions based on test expectations
     if let Some(completion_expect) = &test.expect_completion {
-        let completion_items = conn.completion(uri.clone(), position).await?
+        let completion_items = conn
+            .completion(uri.clone(), position)
+            .await?
             .unwrap_or_default();
 
         if !completion_expect.contains.is_empty() {
@@ -224,7 +213,10 @@ pub async fn run_test(
         }
 
         if !completion_expect.not_contains.is_empty() {
-            assertions::assert_completion_not_contains(&completion_items, &completion_expect.not_contains)?;
+            assertions::assert_completion_not_contains(
+                &completion_items,
+                &completion_expect.not_contains,
+            )?;
         }
 
         if let Some(count) = completion_expect.count {
@@ -244,16 +236,17 @@ pub async fn run_test(
         // Read any pending notifications (like publish_diagnostics)
         conn.read_pending_notifications().await?;
 
-        let diagnostics = conn.get_diagnostics(&uri).await
-            .unwrap_or_default();
+        let diagnostics = conn.get_diagnostics(&uri).await.unwrap_or_default();
 
-        assertions::assert_diagnostics(&diagnostics, diag_expect.error_count, diag_expect.warning_count)?;
+        assertions::assert_diagnostics(
+            &diagnostics,
+            diag_expect.error_count,
+            diag_expect.warning_count,
+        )?;
 
         if !diag_expect.error_messages.is_empty() {
             for expected_msg in &diag_expect.error_messages {
-                let found = diagnostics.iter().any(|d| {
-                    d.message.contains(expected_msg)
-                });
+                let found = diagnostics.iter().any(|d| d.message.contains(expected_msg));
                 if !found {
                     return Err(anyhow::anyhow!(
                         "Expected diagnostics to contain error message '{}', but it was not found. Diagnostics: {:?}",
@@ -270,10 +263,8 @@ pub async fn run_test(
         assertions::assert_hover_contains(hover_result.as_ref(), &hover_expect.contains)?;
     }
 
-    // 8. Cleanup
     drop(conn);
     lsp_runner.kill().await?;
-    adapter.cleanup().await?;
 
     info!("Test passed: {}", test.name);
     Ok(())
@@ -283,18 +274,17 @@ pub async fn run_test(
 pub async fn run_suite(suite_path: impl AsRef<std::path::Path>) -> Result<()> {
     eprintln!("!!! Loading test suite from: {:?}", suite_path.as_ref());
     let suite = TestSuite::from_file(&suite_path)?;
-    eprintln!("!!! Test suite loaded: {} with {} tests", suite.name, suite.tests.len());
-
-    // Get the directory containing the YAML file for resolving relative paths
-    let suite_dir = suite_path.as_ref()
-        .parent()
-        .ok_or_else(|| anyhow::anyhow!("Cannot get parent directory of suite file"))?;
+    eprintln!(
+        "!!! Test suite loaded: {} with {} tests",
+        suite.name,
+        suite.tests.len()
+    );
 
     let mut failed_tests = Vec::new();
 
     for test in &suite.tests {
         eprintln!("!!! About to run test: {}", test.name);
-        match run_test(&suite, test, suite_dir).await {
+        match run_test(&suite, test, suite_path.as_ref()).await {
             Ok(_) => {
                 eprintln!("!!! Test completed: {}", test.name);
             }
@@ -324,7 +314,8 @@ pub async fn run_suite(suite_path: impl AsRef<std::path::Path>) -> Result<()> {
 #[ctor::dtor]
 fn global_cleanup() {
     // Check if we started Docker Compose services
-    let needs_cleanup = DOCKER_COMPOSE.try_read()
+    let needs_cleanup = DOCKER_COMPOSE
+        .try_read()
         .map(|guard| guard.is_some())
         .unwrap_or(false);
 
@@ -334,7 +325,10 @@ fn global_cleanup() {
         // Get the compose file path from CARGO_MANIFEST_DIR or current directory
         let compose_file = std::env::var("CARGO_MANIFEST_DIR")
             .map(|p| format!("{}/docker-compose.yml", p))
-            .or_else(|_| std::env::current_dir().map(|p| p.join("docker-compose.yml").to_string_lossy().to_string()))
+            .or_else(|_| {
+                std::env::current_dir()
+                    .map(|p| p.join("docker-compose.yml").to_string_lossy().to_string())
+            })
             .unwrap_or_else(|_| "tests/e2e-rs/docker-compose.yml".to_string());
 
         // Use std::process::Command for synchronous execution
@@ -354,8 +348,10 @@ fn global_cleanup() {
                 if output.status.success() {
                     eprintln!("!!! Docker Compose services stopped successfully");
                 } else {
-                    eprintln!("!!! Failed to stop Docker Compose: {}",
-                        String::from_utf8_lossy(&output.stderr));
+                    eprintln!(
+                        "!!! Failed to stop Docker Compose: {}",
+                        String::from_utf8_lossy(&output.stderr)
+                    );
                 }
             }
             Err(e) => {
@@ -364,4 +360,3 @@ fn global_cleanup() {
         }
     }
 }
-

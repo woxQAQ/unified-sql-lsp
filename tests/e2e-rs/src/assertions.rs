@@ -7,15 +7,12 @@
 //!
 //! Provides assertions for completion, diagnostics, and hover.
 
-use anyhow::{bail, Result};
-use tower_lsp::lsp_types::*;
+use anyhow::{Result, bail};
 use std::collections::HashSet;
+use tower_lsp::lsp_types::*;
 
 /// Assert completion contains specific items
-pub fn assert_completion_contains(
-    items: &[CompletionItem],
-    expected: &[String],
-) -> Result<()> {
+pub fn assert_completion_contains(items: &[CompletionItem], expected: &[String]) -> Result<()> {
     let item_labels: HashSet<&str> = items.iter().map(|i| i.label.as_str()).collect();
 
     for expected_item in expected {
@@ -185,9 +182,7 @@ pub fn assert_completion_item_exact(
     detail: &str,
 ) -> Result<()> {
     let found = items.iter().find(|item| {
-        item.label == label
-            && item.kind == Some(kind)
-            && item.detail.as_deref() == Some(detail)
+        item.label == label && item.kind == Some(kind) && item.detail.as_deref() == Some(detail)
     });
 
     if found.is_none() {
@@ -196,7 +191,10 @@ pub fn assert_completion_item_exact(
             label,
             kind,
             detail,
-            items.iter().map(|i| (&i.label, i.kind, &i.detail)).collect::<Vec<_>>()
+            items
+                .iter()
+                .map(|i| (&i.label, i.kind, &i.detail))
+                .collect::<Vec<_>>()
         );
     }
 
@@ -206,9 +204,7 @@ pub fn assert_completion_item_exact(
 /// Assert text edit range and insert text
 /// Note: This is a simplified version that checks if text_edit exists
 /// Full implementation requires understanding CompletionTextEdit structure
-pub fn assert_completion_has_text_edit(
-    item: &CompletionItem,
-) -> Result<()> {
+pub fn assert_completion_has_text_edit(item: &CompletionItem) -> Result<()> {
     if item.text_edit.is_none() {
         bail!("Expected text_edit to be present, but it was None");
     }
@@ -220,9 +216,7 @@ pub fn assert_completion_sort_order(
     items: &[CompletionItem],
     expected_order: &[&str],
 ) -> Result<()> {
-    let actual_labels: Vec<&str> = items.iter()
-        .map(|i| i.label.as_str())
-        .collect();
+    let actual_labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
 
     for (i, expected) in expected_order.iter().enumerate() {
         if i >= actual_labels.len() {
@@ -252,13 +246,13 @@ pub fn assert_completion_kind(
     label: &str,
     expected_kind: CompletionItemKind,
 ) -> Result<()> {
-    let item = items.iter()
-        .find(|i| i.label == label)
-        .ok_or_else(|| anyhow::anyhow!(
+    let item = items.iter().find(|i| i.label == label).ok_or_else(|| {
+        anyhow::anyhow!(
             "Expected to find item '{}' in completion, but it was not found. Available: {:?}",
             label,
             items.iter().map(|i| &i.label).collect::<Vec<_>>()
-        ))?;
+        )
+    })?;
 
     if item.kind != Some(expected_kind) {
         bail!(

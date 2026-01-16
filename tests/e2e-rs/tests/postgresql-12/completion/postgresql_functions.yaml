@@ -1,0 +1,39 @@
+name: "PostgreSQL 12 Function Tests"
+description: "Test completion for PostgreSQL 12 specific functions and syntax"
+
+database:
+  dialect: "postgresql"
+  schemas:
+    - "../../../fixtures/schema/postgresql/01_create_tables.sql"
+  data:
+    - "../../../fixtures/data/postgresql/02_insert_basic_data.sql"
+
+tests:
+  - name: "PostgreSQL string functions"
+    description: "Should suggest PostgreSQL-specific string functions"
+    sql: "SELECT | FROM users"
+    expect_completion:
+      contains:
+        - "COUNT"
+        - "SUM"
+        - "AVG"
+      min_count: 5
+
+  - name: "PostgreSQL date functions"
+    description: "Should complete PostgreSQL date/time functions"
+    sql: "SELECT | FROM users"
+    expect_completion:
+      contains:
+        - "NOW"
+        - "CURRENT_DATE"
+        - "CURRENT_TIMESTAMP"
+      min_count: 5
+
+  - name: "PostgreSQL array functions"
+    description: "Should suggest array functions for PostgreSQL"
+    sql: "SELECT | FROM users"
+    expect_completion:
+      contains:
+        - "ARRAY_AGG"
+        - "UNNEST"
+      min_count: 5

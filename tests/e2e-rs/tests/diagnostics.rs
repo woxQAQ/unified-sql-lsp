@@ -13,5 +13,5 @@ use unified_sql_lsp_e2e::{init_database, run_suite};
 #[ignore = "DIAG-001 through DIAG-005 not implemented yet"]
 async fn test_basic_diagnostics() -> anyhow::Result<()> {
     init_database().await?;
-    run_suite("tests/diagnostics/basic_diagnostics.yaml").await
+    run_suite("tests/mysql-5.7/diagnostics/basic_diagnostics.yaml").await
 }

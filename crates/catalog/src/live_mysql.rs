@@ -281,6 +281,9 @@ impl LiveMySQLCatalog {
             // JSON
             "json" => DataType::Json,
 
+            // ENUM types (MySQL specific)
+            "enum" => DataType::Text, // Treat ENUM as Text for completion purposes
+
             // Unknown/Other types
             _ => DataType::Other(mysql_type.to_string()),
         }
@@ -309,10 +312,10 @@ impl Catalog for LiveMySQLCatalog {
         if let Some(pool) = &self.pool {
             let query = r#"
                 SELECT
-                    TABLE_NAME as table_name,
-                    TABLE_SCHEMA as table_schema,
-                    TABLE_TYPE as table_type,
-                    TABLE_COMMENT as table_comment
+                    CAST(TABLE_NAME AS CHAR) as table_name,
+                    CAST(TABLE_SCHEMA AS CHAR) as table_schema,
+                    CAST(TABLE_TYPE AS CHAR) as table_type,
+                    CAST(TABLE_COMMENT AS CHAR) as table_comment
                 FROM information_schema.TABLES
                 WHERE TABLE_SCHEMA = DATABASE()
                   AND TABLE_TYPE IN ('BASE TABLE', 'VIEW')
@@ -363,12 +366,12 @@ impl Catalog for LiveMySQLCatalog {
         if let Some(pool) = &self.pool {
             let query = r#"
                 SELECT
-                    COLUMN_NAME as column_name,
-                    DATA_TYPE as data_type,
-                    IS_NULLABLE as is_nullable,
-                    COLUMN_DEFAULT as column_default,
-                    COLUMN_COMMENT as column_comment,
-                    COLUMN_KEY as column_key
+                    CAST(COLUMN_NAME AS CHAR) as column_name,
+                    CAST(DATA_TYPE AS CHAR) as data_type,
+                    CAST(IS_NULLABLE AS CHAR) as is_nullable,
+                    CAST(COLUMN_DEFAULT AS CHAR) as column_default,
+                    CAST(COLUMN_COMMENT AS CHAR) as column_comment,
+                    CAST(COLUMN_KEY AS CHAR) as column_key
                 FROM information_schema.COLUMNS
                 WHERE TABLE_SCHEMA = DATABASE()
                   AND TABLE_NAME = ?
@@ -396,7 +399,7 @@ impl Catalog for LiveMySQLCatalog {
                 ))
             })?;
 
-            let columns = rows
+            let columns: Vec<ColumnMetadata> = rows
                 .into_iter()
                 .map(
                     |(name, data_type, is_nullable, _default, comment, column_key)| {

@@ -1,0 +1,41 @@
+name: "MySQL 8.0 Window Functions"
+description: "Test completion for MySQL 8.0 specific window functions"
+
+database:
+  dialect: "mysql"
+  schemas:
+    - "../../../fixtures/schema/mysql/01_create_tables.sql"
+  data:
+    - "../../../fixtures/data/mysql/02_insert_basic_data.sql"
+
+tests:
+  - name: "window function completion"
+    description: "Should suggest ROW_NUMBER, RANK, DENSE_RANK in OVER clause"
+    sql: "SELECT | OVER () FROM users"
+    expect_completion:
+      contains:
+        - "ROW_NUMBER"
+        - "RANK"
+        - "DENSE_RANK"
+        - "COUNT"
+      min_count: 5
+
+  - name: "window function with PARTITION BY"
+    description: "Should complete window functions after PARTITION BY"
+    sql: "SELECT ROW_NUMBER() OVER (PARTITION BY |) FROM users"
+    expect_completion:
+      contains:
+        - "id"
+        - "username"
+        - "email"
+      min_count: 5
+
+  - name: "window function with ORDER BY"
+    description: "Should complete columns in ORDER BY clause"
+    sql: "SELECT ROW_NUMBER() OVER (ORDER BY |) FROM users"
+    expect_completion:
+      contains:
+        - "id"
+        - "username"
+        - "created_at"
+      min_count: 5

@@ -401,6 +401,38 @@ impl KeywordProvider {
 
         KeywordSet::new(keywords)
     }
+
+    /// Get window function keywords (for OVER clause start)
+    pub fn window_function_keywords(&self) -> KeywordSet {
+        let keywords = vec![
+            SqlKeyword::new("PARTITION BY", Some("Group rows into partitions"), 1),
+            SqlKeyword::new("ORDER BY", Some("Order rows within partitions"), 2),
+            SqlKeyword::new("ROWS", Some("Window frame: rows"), 3),
+            SqlKeyword::new("RANGE", Some("Window frame: range"), 4),
+            SqlKeyword::new("BETWEEN", Some("Window frame bounds"), 5),
+            SqlKeyword::new("UNBOUNDED", Some("Window frame: no bounds"), 6),
+            SqlKeyword::new("CURRENT ROW", Some("Window frame: current row"), 7),
+            SqlKeyword::new("PRECEDING", Some("Window frame: rows before"), 8),
+            SqlKeyword::new("FOLLOWING", Some("Window frame: rows after"), 9),
+        ];
+
+        KeywordSet::new(keywords)
+    }
+
+    /// Get window frame specification keywords
+    pub fn window_frame_keywords(&self) -> KeywordSet {
+        let keywords = vec![
+            SqlKeyword::new("ROWS", Some("Window frame: rows"), 1),
+            SqlKeyword::new("RANGE", Some("Window frame: range"), 2),
+            SqlKeyword::new("BETWEEN", Some("Window frame bounds"), 3),
+            SqlKeyword::new("UNBOUNDED", Some("No bounds"), 4),
+            SqlKeyword::new("CURRENT ROW", Some("Current row"), 5),
+            SqlKeyword::new("PRECEDING", Some("Rows before"), 6),
+            SqlKeyword::new("FOLLOWING", Some("Rows after"), 7),
+        ];
+
+        KeywordSet::new(keywords)
+    }
 }
 
 #[cfg(test)]

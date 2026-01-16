@@ -1,14 +1,26 @@
 -- ============================================================================
+-- ============================================================================
+-- Unified SQL LSP - E2E Test Fixtures
 -- Unified SQL LSP - E2E Test Fixtures
 -- PostgreSQL Schema Definition
+-- PostgreSQL Schema Definition
+-- ============================================================================
 -- ============================================================================
 -- This file defines the complete database schema for end-to-end testing.
+-- This file defines the complete database schema for end-to-end testing.
+-- It covers:
 -- It covers:
 --   - Basic tables (users, orders, products, order_items)
+--   - Basic tables (users, orders, products, order_items)
+--   - Advanced scenarios (self-referencing, many-to-many, partitioning)
 --   - Advanced scenarios (self-referencing, many-to-many, partitioning)
 --   - PostgreSQL-specific types (ARRAY, JSONB, custom ENUMs)
+--   - PostgreSQL-specific types (ARRAY, JSONB, custom ENUMs)
+--   - Indexes and constraints for testing completion and diagnostics
 --   - Indexes and constraints for testing completion and diagnostics
 -- ============================================================================
+-- ============================================================================
+
 
 -- Drop existing tables if they exist (in correct dependency order)
 DROP TABLE IF EXISTS order_items CASCADE;
@@ -65,13 +77,7 @@ CREATE TABLE users (
     profile_image VARCHAR(255),
     phone VARCHAR(20),
     tags TEXT[],  -- PostgreSQL ARRAY type
-    preferences JSONB,  -- PostgreSQL JSONB type
-    -- Indexes for testing completion
-    INDEX idx_username (username),
-    INDEX idx_email (email),
-    INDEX idx_created_at (created_at),
-    INDEX idx_is_active (is_active),
-    INDEX idx_status (status)
+    preferences JSONB  -- PostgreSQL JSONB type
 );
 
 -- Auto-update updated_at timestamp
@@ -110,15 +116,7 @@ CREATE TABLE products (
     -- Constraints
     CONSTRAINT chk_price_positive CHECK (price >= 0),
     CONSTRAINT chk_quantity_non_negative CHECK (quantity_in_stock >= 0),
-    CONSTRAINT chk_cost_not_greater_than_price CHECK (cost IS NULL OR cost <= price),
-    -- Indexes
-    INDEX idx_name (name),
-    INDEX idx_category (category),
-    INDEX idx_price (price),
-    INDEX idx_is_available (is_available),
-    INDEX idx_sku (sku),
-    -- GIN index for JSONB (PostgreSQL-specific)
-    INDEX idx_attributes_gin USING GIN (attributes)
+    CONSTRAINT chk_cost_not_greater_than_price CHECK (cost IS NULL OR cost <= price)
 );
 
 CREATE TRIGGER update_products_updated_at
@@ -151,15 +149,7 @@ CREATE TABLE orders (
     -- Constraints
     CONSTRAINT chk_total_amount_positive CHECK (total_amount >= 0),
     CONSTRAINT chk_delivered_after_shipped
-        CHECK (delivered_at IS NULL OR shipped_at IS NOT NULL),
-    -- Indexes
-    INDEX idx_user_id (user_id),
-    INDEX idx_order_date (order_date),
-    INDEX idx_status (status),
-    INDEX idx_total_amount (total_amount),
-    -- Composite index for testing multi-column completion
-    INDEX idx_user_status (user_id, status),
-    INDEX idx_date_status (order_date, status)
+        CHECK (delivered_at IS NULL OR shipped_at IS NOT NULL)
 );
 
 -- ----------------------------------------------------------------------------
@@ -189,9 +179,6 @@ CREATE TABLE order_items (
     CONSTRAINT chk_quantity_positive CHECK (quantity > 0),
     CONSTRAINT chk_unit_price_positive CHECK (unit_price >= 0),
     CONSTRAINT chk_discount_valid CHECK (discount_percent >= 0 AND discount_percent <= 100),
-    -- Indexes
-    INDEX idx_order_id (order_id),
-    INDEX idx_product_id (product_id),
     -- Unique constraint to prevent duplicate products in same order
     UNIQUE (order_id, product_id)
 );
@@ -223,12 +210,7 @@ CREATE TABLE employees (
         ON DELETE SET NULL
         ON UPDATE CASCADE,
     -- Constraints
-    CONSTRAINT chk_salary_positive CHECK (salary IS NULL OR salary > 0),
-    -- Indexes
-    INDEX idx_manager_id (manager_id),
-    INDEX idx_department (department),
-    INDEX idx_email (email),
-    INDEX idx_name (last_name, first_name)
+    CONSTRAINT chk_salary_positive CHECK (salary IS NULL OR salary > 0)
 );
 
 -- ----------------------------------------------------------------------------
@@ -253,15 +235,7 @@ CREATE TABLE posts (
     CONSTRAINT fk_posts_author_id
         FOREIGN KEY (author_id) REFERENCES users(id)
         ON DELETE CASCADE
-        ON UPDATE CASCADE,
-    -- Indexes
-    INDEX idx_slug (slug),
-    INDEX idx_author_id (author_id),
-    INDEX idx_status (status),
-    INDEX idx_published_at (published_at),
-    INDEX idx_view_count (view_count),
-    -- GIN index for tags array
-    INDEX idx_tags_gin USING GIN (tags)
+        ON UPDATE CASCADE
 );
 
 CREATE TRIGGER update_posts_updated_at
@@ -280,10 +254,7 @@ CREATE TABLE tags (
     description TEXT,
     color VARCHAR(7),  -- Hex color code
     metadata JSONB,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    -- Indexes
-    INDEX idx_name (name),
-    INDEX idx_slug (slug)
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
 -- ----------------------------------------------------------------------------
@@ -305,9 +276,7 @@ CREATE TABLE post_tags (
     CONSTRAINT fk_post_tags_tag_id
         FOREIGN KEY (tag_id) REFERENCES tags(id)
         ON DELETE CASCADE
-        ON UPDATE CASCADE,
-    -- Index for reverse lookup
-    INDEX idx_tag_id (tag_id)
+        ON UPDATE CASCADE
 );
 
 -- ----------------------------------------------------------------------------
@@ -320,11 +289,7 @@ CREATE TABLE logs (
     message TEXT NOT NULL,
     context JSONB,
     source VARCHAR(100),
-    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    -- Indexes
-    INDEX idx_level (level),
-    INDEX idx_created_at (created_at),
-    INDEX idx_source (source)
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
 ) PARTITION BY RANGE (created_at);
 
 -- Create partitions for different years
@@ -342,6 +307,146 @@ CREATE TABLE logs_2025 PARTITION OF logs
 -- ============================================================================
 
 -- View for active users
+CREATE VIEW v_active_users AS
+SELECT
+    id,
+    username,
+    email,
+    full_name,
+    created_at
+FROM users
+WHERE is_active = TRUE;
+
+-- View for order summaries
+CREATE VIEW v_order_summaries AS
+SELECT
+    o.id,
+    o.user_id,
+    u.username,
+    o.order_date,
+    o.total_amount,
+    o.status,
+    COUNT(oi.id) AS item_count,
+    SUM(oi.quantity) AS total_items
+FROM orders o
+JOIN users u ON o.user_id = u.id
+LEFT JOIN order_items oi ON o.id = oi.order_id
+GROUP BY o.id, o.user_id, u.username, o.order_date, o.total_amount, o.status;
+
+-- ============================================================================
+-- STORED PROCEDURES FOR TESTING
+-- ============================================================================
+
+-- Simple function for testing procedural code completion
+CREATE OR REPLACE FUNCTION get_user_orders(p_user_id INTEGER)
+RETURNS TABLE (
+    id INTEGER,
+    order_date TIMESTAMP WITH TIME ZONE,
+    total_amount NUMERIC,
+    status order_status,
+    item_count BIGINT
+) AS $$
+BEGIN
+    RETURN QUERY
+    SELECT
+        o.id,
+        o.order_date,
+        o.total_amount,
+        o.status,
+        COUNT(oi.id)
+    FROM orders o
+    LEFT JOIN order_items oi ON o.id = oi.order_id
+    WHERE o.user_id = p_user_id
+    GROUP BY o.id, o.order_date, o.total_amount, o.status
+    ORDER BY o.order_date DESC;
+END;
+$$ LANGUAGE plpgsql;
+
+-- ============================================================================
+-- POSTGRESQL-SPECIFIC FEATURES FOR TESTING
+-- ============================================================================
+
+-- Materialized view (refreshable)
+CREATE MATERIALIZED VIEW mv_product_stats AS
+SELECT
+    category,
+    COUNT(*) AS product_count,
+    AVG(price) AS avg_price,
+    SUM(quantity_in_stock) AS total_stock
+FROM products
+GROUP BY category;
+
+-- Unique index with partial condition (PostgreSQL-specific)
+CREATE UNIQUE INDEX uniq_users_username_active
+    ON users(username)
+    WHERE is_active = TRUE;
+
+-- Trigger function example
+CREATE OR REPLACE FUNCTION log_order_creation()
+RETURNS TRIGGER AS $$
+BEGIN
+    INSERT INTO logs (level, message, context, source)
+    VALUES ('info', 'Order created', jsonb_build_object('order_id', NEW.id, 'user_id', NEW.user_id), 'order-service');
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trg_log_order_creation
+    AFTER INSERT ON orders
+    FOR EACH ROW
+    EXECUTE FUNCTION log_order_creation();
+
+-- ============================================================================
+-- END OF SCHEMA DEFINITION
+-- ============================================================================
+
+-- ============================================================================
+-- INDEXES
+-- ============================================================================
+CREATE INDEX idx_username ON users(username);
+CREATE INDEX idx_email ON users(email);
+CREATE INDEX idx_created_at ON users(created_at);
+CREATE INDEX idx_is_active ON users(is_active);
+CREATE INDEX idx_status ON users(status);
+CREATE UNIQUE INDEX uniq_users_username_active ON users(username) WHERE is_active = TRUE;
+
+CREATE INDEX idx_name ON products(name);
+CREATE INDEX idx_category ON products(category);
+CREATE INDEX idx_price ON products(price);
+CREATE INDEX idx_is_available ON products(is_active);
+CREATE INDEX idx_sku ON products(sku);
+CREATE INDEX idx_attributes_gin ON products USING GIN (attributes);
+
+CREATE INDEX idx_user_id ON orders(user_id);
+CREATE INDEX idx_order_date ON orders(order_date);
+CREATE INDEX idx_status ON orders(status);
+CREATE INDEX idx_total_amount ON orders(total_amount);
+CREATE INDEX idx_user_status ON orders(user_id, status);
+CREATE INDEX idx_date_status ON orders(order_date, status);
+
+CREATE INDEX idx_order_id ON order_items(order_id);
+CREATE INDEX idx_product_id ON order_items(product_id);
+
+CREATE INDEX idx_manager_id ON employees(manager_id);
+CREATE INDEX idx_department ON employees(department);
+CREATE INDEX idx_email ON employees(email);
+CREATE INDEX idx_name_emp ON employees(last_name, first_name);
+
+CREATE INDEX idx_slug ON posts(slug);
+CREATE INDEX idx_author_id ON posts(author_id);
+CREATE INDEX idx_status_posts ON posts(status);
+CREATE INDEX idx_published_at ON posts(published_at);
+CREATE INDEX idx_view_count ON posts(view_count);
+CREATE INDEX idx_tags_gin ON posts USING GIN (tags);
+
+CREATE INDEX idx_name_tags ON tags(name);
+CREATE INDEX idx_slug_tags ON tags(slug);
+CREATE INDEX idx_tag_id ON post_tags(tag_id);
+
+CREATE INDEX idx_level ON logs(level);
+CREATE INDEX idx_created_at_logs ON logs(created_at);
+CREATE INDEX idx_source ON logs(source);
+
 CREATE VIEW v_active_users AS
 SELECT
     id,

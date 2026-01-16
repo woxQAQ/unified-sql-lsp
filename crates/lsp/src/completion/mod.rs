@@ -41,7 +41,7 @@ pub mod render;
 
 use std::collections::HashSet;
 use std::sync::Arc;
-use tower_lsp::lsp_types::{CompletionItem, Position};
+use tower_lsp::lsp_types::{CompletionItem, CompletionItemKind, InsertTextFormat, Position};
 use tracing::{debug, instrument};
 use unified_sql_lsp_catalog::{Catalog, FunctionType};
 use unified_sql_lsp_ir::Dialect;
@@ -179,6 +179,10 @@ impl CompletionEngine {
         // Now handle async operations with only owned data
         match ctx {
             CompletionContext::SelectProjection { tables, qualifier } => {
+                eprintln!(
+                    "!!! LSP: SelectProjection with tables={:?}, qualifier={:?}",
+                    tables, qualifier
+                );
                 debug!(?tables, ?qualifier, "Matched SelectProjection context");
                 self.complete_select_projection(
                     &scope_manager,
@@ -390,6 +394,26 @@ impl CompletionEngine {
                 self.complete_having_clause(&scope_manager, tables, qualifier)
                     .await
             }
+            CompletionContext::CteDefinition {
+                available_tables,
+                defined_ctes,
+            } => {
+                self.complete_cte_definition(
+                    &scope_manager,
+                    document,
+                    position,
+                    available_tables,
+                    defined_ctes,
+                )
+                .await
+            }
+            CompletionContext::WindowFunctionClause {
+                tables,
+                window_part,
+            } => {
+                self.complete_window_function_clause(&scope_manager, tables, window_part)
+                    .await
+            }
             CompletionContext::Unknown => Ok(None),
         }
     }
@@ -586,6 +610,10 @@ impl CompletionEngine {
         );
 
         // Check if we should use context_tables instead of CST-based scope
+        eprintln!(
+            "!!! LSP: complete_with_scope: context_tables={:?}",
+            context_tables
+        );
         let use_context_tables = if !context_tables.is_empty() {
             // Check if the CST-based scope exists and has tables
             if let Some(manager) = scope_manager {
@@ -615,6 +643,9 @@ impl CompletionEngine {
         // fetch tables directly from catalog using the context table names
         if use_context_tables {
             debug!(?context_tables, "Using context tables for completion");
+
+            // Store a copy of CTE names for later use
+            let context_tables_copy = context_tables.clone();
 
             // Use AliasResolver to resolve all context tables
             let resolver = AliasResolver::new(self.catalog_fetcher.catalog());
@@ -675,6 +706,22 @@ impl CompletionEngine {
             let mut items = CompletionRenderer::render_columns(&tables_to_render, force_qualifier);
 
             debug!(item_count = items.len(), "Rendered column items");
+
+            // If no tables were resolved (CTEs are not in catalog), render CTE names as table items
+            if tables_to_render.is_empty() && !context_tables_copy.is_empty() {
+                debug!("No tables resolved from catalog, rendering CTE names as table items");
+                for cte_name in &context_tables_copy {
+                    // Create a simple completion item for the CTE
+                    items.push(CompletionItem {
+                        label: cte_name.clone(),
+                        kind: Some(CompletionItemKind::CLASS),
+                        detail: Some(format!("CTE: {}", cte_name)),
+                        insert_text: Some(format!("{}.*", cte_name)),
+                        insert_text_format: Some(InsertTextFormat::PLAIN_TEXT),
+                        ..Default::default()
+                    });
+                }
+            }
 
             // Filter out wildcard if needed
             if exclude_wildcard {
@@ -880,6 +927,172 @@ impl CompletionEngine {
             .unwrap_or_default();
 
         Ok(Some(items))
+    }
+
+    /// Complete CTE (Common Table Expression) definition
+    ///
+    /// Suggests table names that can be used as sources for CTEs
+    #[instrument(skip(self, _scope_manager))]
+    async fn complete_cte_definition(
+        &self,
+        _scope_manager: &Option<unified_sql_lsp_semantic::ScopeManager>,
+        _document: &Document,
+        _position: Position,
+        available_tables: Vec<String>,
+        defined_ctes: Vec<String>,
+    ) -> Result<Option<Vec<CompletionItem>>, CompletionError> {
+        debug!(
+            "Starting CTE definition completion: available_tables={:?}, defined_ctes={:?}",
+            available_tables, defined_ctes
+        );
+
+        let mut items = Vec::new();
+
+        // If available_tables is empty, fetch all tables from catalog
+        if available_tables.is_empty() {
+            debug!("available_tables is empty, fetching from catalog");
+            // Fetch all tables directly from catalog
+            let catalog_tables = self.catalog_fetcher.list_tables().await?;
+            debug!("catalog returned {} tables", catalog_tables.len());
+
+            // Filter out already defined CTEs
+            let exclude_lower: Vec<String> =
+                defined_ctes.iter().map(|n| n.to_lowercase()).collect();
+
+            for table in catalog_tables {
+                // Skip if table name matches a defined CTE
+                if exclude_lower.contains(&table.name.to_lowercase()) {
+                    continue;
+                }
+
+                items.push(CompletionItem {
+                    label: table.name.clone(),
+                    kind: Some(CompletionItemKind::CLASS),
+                    detail: Some(format!("Table: {}", table.name)),
+                    documentation: None,
+                    deprecated: None,
+                    preselect: None,
+                    sort_text: Some(format!("0_{}", table.name)),
+                    filter_text: Some(table.name.clone()),
+                    insert_text: Some(table.name.clone()),
+                    insert_text_format: Some(InsertTextFormat::PLAIN_TEXT),
+                    insert_text_mode: None,
+                    text_edit: None,
+                    additional_text_edits: None,
+                    command: None,
+                    commit_characters: None,
+                    data: None,
+                    tags: None,
+                    label_details: None,
+                });
+            }
+        } else {
+            // Use the provided tables
+            debug!("!!! LSP: using {} provided tables", available_tables.len());
+            for table_name in available_tables {
+                // Skip already defined CTEs
+                if defined_ctes.contains(&table_name) {
+                    continue;
+                }
+
+                items.push(CompletionItem {
+                    label: table_name.clone(),
+                    kind: Some(CompletionItemKind::CLASS),
+                    detail: Some(format!("Table: {}", table_name)),
+                    documentation: None,
+                    deprecated: None,
+                    preselect: None,
+                    sort_text: Some(format!("0_{}", table_name)),
+                    filter_text: Some(table_name.clone()),
+                    insert_text: Some(table_name.clone()),
+                    insert_text_format: Some(InsertTextFormat::PLAIN_TEXT),
+                    insert_text_mode: None,
+                    text_edit: None,
+                    additional_text_edits: None,
+                    command: None,
+                    commit_characters: None,
+                    data: None,
+                    tags: None,
+                    label_details: None,
+                });
+            }
+        }
+
+        // Add already defined CTEs
+        for cte_name in &defined_ctes {
+            items.push(CompletionItem {
+                label: cte_name.clone(),
+                kind: Some(CompletionItemKind::VARIABLE),
+                detail: Some(format!("CTE: {}", cte_name)),
+                documentation: None,
+                deprecated: None,
+                preselect: None,
+                sort_text: Some(format!("1_{}", cte_name)),
+                filter_text: Some(cte_name.clone()),
+                insert_text: Some(cte_name.clone()),
+                insert_text_format: Some(InsertTextFormat::PLAIN_TEXT),
+                insert_text_mode: None,
+                text_edit: None,
+                additional_text_edits: None,
+                command: None,
+                commit_characters: None,
+                data: None,
+                tags: None,
+                label_details: None,
+            });
+        }
+
+        Ok(Some(items))
+    }
+
+    /// Complete window function (OVER clause) specifications
+    ///
+    /// Provides column completion for PARTITION BY and ORDER BY within OVER clauses,
+    /// and window function keywords at OVER clause start
+    #[instrument(skip(self, scope_manager))]
+    async fn complete_window_function_clause(
+        &self,
+        scope_manager: &Option<unified_sql_lsp_semantic::ScopeManager>,
+        tables: Vec<String>,
+        window_part: unified_sql_lsp_context::WindowFunctionPart,
+    ) -> Result<Option<Vec<CompletionItem>>, CompletionError> {
+        debug!(
+            "Starting window function clause completion: tables={:?}, window_part={:?}",
+            tables, window_part
+        );
+
+        match window_part {
+            unified_sql_lsp_context::WindowFunctionPart::OverStart => {
+                // At OVER (|), suggest window function keywords
+                let provider = KeywordProvider::new(self.dialect);
+                let keywords = provider.window_function_keywords().keywords;
+                let items = CompletionRenderer::render_keywords(&keywords);
+                Ok(Some(items))
+            }
+            unified_sql_lsp_context::WindowFunctionPart::PartitionBy
+            | unified_sql_lsp_context::WindowFunctionPart::OrderBy => {
+                // In PARTITION BY or ORDER BY, suggest columns
+                let items: Vec<CompletionItem> = self
+                    .complete_with_scope(
+                        scope_manager,
+                        tables,
+                        None, // qualifier (no table prefix expected in OVER clauses)
+                        true, // exclude_wildcard
+                        None, // function_filter (show all)
+                    )
+                    .await?
+                    .unwrap_or_default();
+
+                Ok(Some(items))
+            }
+            unified_sql_lsp_context::WindowFunctionPart::WindowFrame => {
+                // Window frame specification - suggest frame keywords
+                let provider = KeywordProvider::new(self.dialect);
+                let keywords = provider.window_frame_keywords().keywords;
+                let items = CompletionRenderer::render_keywords(&keywords);
+                Ok(Some(items))
+            }
+        }
     }
 
     /// Complete FROM clause with table names

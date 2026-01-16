@@ -7,4 +7,4 @@
 
 pub mod adapter;
 
-pub use adapter::{DatabaseAdapter, MySQLAdapter};
+pub use adapter::{DatabaseAdapter, MySQLAdapter, PostgreSQLAdapter, adapter_from_test_path};

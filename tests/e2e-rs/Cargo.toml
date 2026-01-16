@@ -10,7 +10,7 @@ publish = false
 [dependencies]
 # Internal dependencies
 unified-sql-lsp-lsp = { path = "../../crates/lsp" }
-unified-sql-lsp-catalog = { path = "../../crates/catalog" }
+unified-sql-lsp-catalog = { path = "../../crates/catalog", features = ["mysql", "postgresql"] }
 unified-sql-lsp-ir = { path = "../../crates/ir" }
 unified-sql-lsp-test-utils = { path = "../../crates/test-utils" }
 
@@ -46,4 +46,5 @@ ctor = "0.2"
 tempfile = "3.8"
 
 [dev-dependencies]
+serial_test = "3.3.1"
 tokio-test = "0.4"

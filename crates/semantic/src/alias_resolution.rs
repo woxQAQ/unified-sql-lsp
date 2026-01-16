@@ -193,12 +193,18 @@ impl AliasResolver {
     }
 
     /// Strategy 2: Find tables that start with the alias
+    ///
+    /// Prefers exact word matches and shorter table names:
+    /// - Exact match (table name equals alias) - highest priority
+    /// - Word boundary match (ends with alias or followed by _) - high priority
+    /// - Shortest table name (for same prefix) - fallback priority
     async fn try_starts_with(&self, alias: &str) -> Result<ResolutionResult, AliasResolutionError> {
         let all_tables = self.catalog.list_tables().await?;
 
-        for table in all_tables {
-            if table.name.to_lowercase().starts_with(&alias.to_lowercase()) {
-                debug!(found_table = %table.name, "Found table starting with alias");
+        // First pass: exact match (table name equals alias)
+        for table in &all_tables {
+            if table.name.eq_ignore_ascii_case(alias) {
+                debug!(found_table = %table.name, "Found exact match for alias");
                 match self.catalog.get_columns(&table.name).await {
                     Ok(columns) => {
                         let mut table_symbol = TableSymbol::new(&table.name);
@@ -221,6 +227,97 @@ impl AliasResolver {
                     }
                     Err(_) => continue,
                 }
+            }
+        }
+
+        // Second pass: word boundary match (e.g., "ord" -> "orders" not "order_items")
+        let alias_lower = alias.to_lowercase();
+        let mut best_match: Option<(String, usize)> = None; // (table_name, length)
+
+        for table in &all_tables {
+            if table.name.to_lowercase().starts_with(&alias_lower) {
+                let next_char = table.name[alias.len()..].chars().next();
+                // Check if we're at a word boundary (end of string or followed by _)
+                if next_char.is_none() || next_char == Some('_') {
+                    debug!(found_table = %table.name, "Found table with word boundary match");
+                    let table_len = table.name.len();
+                    match &best_match {
+                        None => {
+                            best_match = Some((table.name.clone(), table_len));
+                        }
+                        Some((_, current_len)) => {
+                            // Prefer shorter table names (closer match)
+                            if table_len < *current_len {
+                                best_match = Some((table.name.clone(), table_len));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        if let Some((table_name, _)) = best_match {
+            if let Ok(columns) = self.catalog.get_columns(&table_name).await {
+                let mut table_symbol = TableSymbol::new(&table_name);
+                table_symbol = table_symbol.with_alias(alias);
+                table_symbol = table_symbol.with_columns(
+                    columns
+                        .into_iter()
+                        .map(|c| {
+                            crate::ColumnSymbol::new(
+                                c.name.clone(),
+                                c.data_type.clone(),
+                                table_name.clone(),
+                            )
+                            .with_primary_key_if(c.is_primary_key)
+                            .with_foreign_key_if(c.is_foreign_key)
+                        })
+                        .collect(),
+                );
+                return Ok(ResolutionResult::Found(table_symbol));
+            }
+        }
+
+        // Third pass: any match, prefer shorter table names
+        let mut best_match: Option<(String, usize)> = None;
+
+        for table in &all_tables {
+            if table.name.to_lowercase().starts_with(&alias_lower) {
+                let table_len = table.name.len();
+                match &best_match {
+                    None => {
+                        best_match = Some((table.name.clone(), table_len));
+                    }
+                    Some((_, current_len)) => {
+                        // Prefer shorter table names (closer match)
+                        if table_len < *current_len {
+                            best_match = Some((table.name.clone(), table_len));
+                        }
+                    }
+                }
+            }
+        }
+
+        if let Some((table_name, _)) = best_match {
+            debug!(found_table = %table_name, "Found shortest table starting with alias");
+            if let Ok(columns) = self.catalog.get_columns(&table_name).await {
+                let mut table_symbol = TableSymbol::new(&table_name);
+                table_symbol = table_symbol.with_alias(alias);
+                table_symbol = table_symbol.with_columns(
+                    columns
+                        .into_iter()
+                        .map(|c| {
+                            crate::ColumnSymbol::new(
+                                c.name.clone(),
+                                c.data_type.clone(),
+                                table_name.clone(),
+                            )
+                            .with_primary_key_if(c.is_primary_key)
+                            .with_foreign_key_if(c.is_foreign_key)
+                        })
+                        .collect(),
+                );
+                return Ok(ResolutionResult::Found(table_symbol));
             }
         }
 

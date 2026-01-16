@@ -1,0 +1,45 @@
+name: "MySQL 8.0 CTE Tests"
+description: "Test completion for MySQL 8.0 Common Table Expressions (CTEs)"
+
+database:
+  dialect: "mysql"
+  schemas:
+    - "../../../fixtures/schema/mysql/01_create_tables.sql"
+  data:
+    - "../../../fixtures/data/mysql/02_insert_basic_data.sql"
+
+tests:
+  - name: "CTE name completion after WITH"
+    description: "Should suggest table names and allow new CTE names"
+    sql: "WITH | AS (SELECT * FROM users)"
+    expect_completion:
+      contains:
+        - "users"
+      min_count: 3
+
+  - name: "CTE column completion in subquery"
+    description: "Should complete columns within CTE definition"
+    sql: "WITH user_cte AS (SELECT | FROM users)"
+    expect_completion:
+      contains:
+        - "id"
+        - "username"
+        - "email"
+      min_count: 5
+
+  - name: "CTE reference in main query"
+    description: "Should complete CTE name when referenced from main query"
+    sql: "WITH user_cte AS (SELECT * FROM users) SELECT | FROM user_cte"
+    expect_completion:
+      contains:
+        - "user_cte"
+        - "*"
+      min_count: 5
+
+  - name: "multiple CTEs"
+    description: "Should handle multiple CTEs in WITH clause"
+    sql: "WITH user_cte AS (SELECT * FROM users), | AS (SELECT * FROM orders)"
+    expect_completion:
+      contains:
+        - "orders"
+      min_count: 3

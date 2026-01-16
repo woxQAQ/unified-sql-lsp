@@ -7,9 +7,9 @@
 //!
 //! Parses test case definitions from YAML files into structured Rust types.
 
+use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use tower_lsp::lsp_types::Position;
-use anyhow::Result;
 
 /// Test suite definition from YAML
 #[derive(Debug, Deserialize, Serialize, Clone)]

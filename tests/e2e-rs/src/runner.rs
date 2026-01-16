@@ -52,8 +52,12 @@ impl LspRunner {
             .unwrap_or(&manifest_dir);
 
         let possible_paths = vec![
-            workspace_root.join("target/debug").join(format!("{}{}", binary_name, extension)),
-            workspace_root.join("target/release").join(format!("{}{}", binary_name, extension)),
+            workspace_root
+                .join("target/debug")
+                .join(format!("{}{}", binary_name, extension)),
+            workspace_root
+                .join("target/release")
+                .join(format!("{}{}", binary_name, extension)),
         ];
 
         for path in &possible_paths {
@@ -74,7 +78,9 @@ impl LspRunner {
             }
         }
 
-        Err(anyhow::anyhow!("Failed to locate or build LSP server binary"))
+        Err(anyhow::anyhow!(
+            "Failed to locate or build LSP server binary"
+        ))
     }
 
     /// Build LSP server binary
@@ -109,7 +115,8 @@ impl LspRunner {
         cmd.env("RUST_BACKTRACE", "0");
 
         // Spawn the process
-        let mut child = cmd.spawn()
+        let mut child = cmd
+            .spawn()
             .map_err(|e| anyhow::anyhow!("Failed to spawn LSP server: {}", e))?;
 
         let pid = child.id();
@@ -178,6 +185,9 @@ impl Drop for LspRunner {
         if let Some(mut child) = self.process.take() {
             debug!("Drop: killing LSP server process");
             let _ = child.start_kill();
+            // Note: We can't wait here since Drop is synchronous,
+            // but start_kill should terminate the process quickly
+            // The next test spawn will fail if the process is still running
         }
     }
 }

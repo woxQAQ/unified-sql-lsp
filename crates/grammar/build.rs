@@ -86,6 +86,11 @@ fn main() {
     let mut cc_build = cc::Build::new();
     cc_build.include(grammar_dir.join("gen"));
 
+    // Suppress warnings from system headers (especially _FORTIFY_SOURCE on Nix)
+    if cfg!(target_os = "linux") {
+        cc_build.warnings(false);
+    }
+
     for (dialect, parser_path) in &parser_files {
         let src_path = Path::new(parser_path);
         if src_path.exists() {
