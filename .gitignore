@@ -64,3 +64,6 @@ test/fixtures/local/
 
 # direnv
 .direnv
+
+# Git worktrees (isolated workspaces)
+.worktrees/
