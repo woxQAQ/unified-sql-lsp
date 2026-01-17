@@ -169,6 +169,9 @@ pub mod parsing;
 pub mod symbols;
 pub mod sync;
 
+#[cfg(feature = "profiling")]
+pub mod profiling;
+
 // Re-exports for convenience
 pub use backend::{LspBackend, LspError};
 pub use catalog_manager::CatalogManager;
