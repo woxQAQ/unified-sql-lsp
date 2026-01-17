@@ -59,3 +59,18 @@ test-e2e:
 ## @e2e: Run E2E tests with cargo test (fallback)
 test-e2e-legacy:
 	cd tests/e2e-rs && $(CARGO) test
+
+# Benchmarking
+.PHONY: benchmark profile-all flamegraph
+
+benchmark:
+	@echo "Running quick benchmark suite..."
+	@cargo bench --benches completion,parsing,semantic
+
+profile-all:
+	@echo "Running complete profiling suite..."
+	@./scripts/profiling/run_all.sh
+
+flamegraph:
+	@echo "Generating flamegraph..."
+	@./scripts/profiling/flamegraph.sh
