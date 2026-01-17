@@ -164,6 +164,7 @@ pub mod config;
 pub mod definition;
 pub mod diagnostic;
 pub mod document;
+pub mod hover;
 pub mod parsing;
 pub mod symbols;
 pub mod sync;

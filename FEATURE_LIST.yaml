@@ -808,6 +808,7 @@ features:
       - 显示表的元数据（行数、注释）
       - 显示函数签名
     priority: P2
+    status: done
     dependencies:
       - "LSP-003"
       - "SEMANTIC-004"
@@ -815,6 +816,15 @@ features:
     deliverables:
       - crates/lsp/src/hover.rs
       - 测试
+    notes: >-
+      Implemented CST-based hover with:
+      - HoverEngine using ScopeBuilder and AliasResolver
+      - Function hover via HoverInfoProvider
+      - Column hover with type information
+      - Table and table alias hover
+      - Qualified column support (table.column)
+      - Fallback to simple FROM clause parsing when CST scope building fails
+      - 13/16 E2E tests passing (3 flaky tests due to DB state issues)
 
   - id: FORMAT-001
     name: "SQL 格式化"

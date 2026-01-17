@@ -65,8 +65,6 @@ use tower_lsp::jsonrpc::Result;
 use tower_lsp::lsp_types::*;
 use tower_lsp::{Client, LanguageServer};
 use tracing::{debug, error, info, warn};
-use unified_sql_lsp_function_registry::HoverInfoProvider;
-use unified_sql_lsp_ir::Dialect;
 
 /// LSP backend implementation
 ///
@@ -312,124 +310,6 @@ impl LspBackend {
                 )
             }
         }
-    }
-
-    /// Helper: Convert LSP position to byte offset in source text
-    fn position_to_byte_offset(&self, source: &str, position: Position) -> Option<usize> {
-        use ropey::Rope;
-        let rope = Rope::from_str(source);
-
-        let line_idx = position.line as usize;
-        let col_idx = position.character as usize;
-
-        if line_idx >= rope.len_lines() {
-            return None;
-        }
-
-        let line_start = rope.line_to_char(line_idx);
-        let char_offset = line_start + col_idx;
-
-        // Convert char offset to byte offset
-        let byte_offset = rope.char_to_byte(char_offset);
-
-        Some(byte_offset)
-    }
-
-    /// Helper: Extract word at byte offset
-    fn extract_word_at(&self, source: &str, byte_offset: usize) -> String {
-        if byte_offset >= source.len() {
-            return String::new();
-        }
-
-        let chars: Vec<char> = source.chars().collect();
-        let mut start = byte_offset;
-        let mut end = byte_offset;
-
-        // Find word start (go backwards while alphanumeric or underscore)
-        while start > 0 && (chars[start - 1].is_alphanumeric() || chars[start - 1] == '_') {
-            start -= 1;
-        }
-
-        // Find word end (go forwards while alphanumeric or underscore)
-        while end < chars.len() && (chars[end].is_alphanumeric() || chars[end] == '_') {
-            end += 1;
-        }
-
-        chars[start..end].iter().collect()
-    }
-
-    /// Helper: Get hover information for a column, function, or table
-    async fn get_column_hover_info(
-        &self,
-        catalog: &Arc<dyn unified_sql_lsp_catalog::Catalog>,
-        word: &str,
-        source: &str,
-    ) -> Option<String> {
-        use unified_sql_lsp_function_registry::hover::ColumnHoverInfo;
-
-        let hover_provider = HoverInfoProvider::new();
-        let source_upper = source.to_uppercase();
-
-        // Check for function names first
-        let dialect = self
-            .get_config()
-            .await
-            .map(|c| c.dialect)
-            .unwrap_or(Dialect::MySQL);
-
-        if let Some(info) = hover_provider.get_function_hover(word, &dialect) {
-            return Some(info);
-        }
-
-        // Check for column names by querying catalog
-        // Try to extract table name FROM clause
-        if let Some(from_pos) = source_upper.find(" FROM ") {
-            let after_from = &source[from_pos + 6..];
-            let table_name = after_from
-                .split_whitespace()
-                .next()
-                .unwrap_or("")
-                .trim_end_matches(|c: char| !c.is_alphanumeric() && c != '_')
-                .to_lowercase();
-
-            if !table_name.is_empty()
-                && let Ok(columns) = catalog.get_columns(&table_name).await
-            {
-                let word_lower = word.to_lowercase();
-                for column in columns {
-                    if column.name.to_lowercase() == word_lower {
-                        let hover_info = ColumnHoverInfo {
-                            name: column.name.clone(),
-                            data_type: column.data_type.clone(),
-                            is_primary_key: column.is_primary_key,
-                            is_foreign_key: column.is_foreign_key,
-                        };
-                        return Some(hover_provider.get_column_hover(&hover_info));
-                    }
-                }
-            }
-        }
-
-        // Check for table names by querying catalog
-        if let Ok(tables) = catalog.list_tables().await {
-            let word_lower = word.to_lowercase();
-            for table in tables {
-                if table.name.to_lowercase() == word_lower {
-                    return Some(hover_provider.get_table_hover(&table.name));
-                }
-            }
-        }
-
-        // Check for table aliases (only single-letter aliases)
-        // Simple heuristic: single-letter words after FROM/JOIN
-        if word.len() == 1 && word.chars().all(|c| c.is_alphabetic()) {
-            // Check if this looks like an alias (appears near FROM/JOIN)
-            if source_upper.contains(" FROM ") || source_upper.contains(" JOIN ") {
-                return Some(hover_provider.get_table_alias_hover(word));
-            }
-        }
-
-        None
     }
 }
 
@@ -759,7 +639,7 @@ impl LanguageServer for LspBackend {
     /// Hover request
     ///
     /// Called when the user hovers over a symbol.
-    /// This is a stub implementation - full implementation will be in HOVER-001.
+    /// Uses HoverEngine for CST-based hover information.
     async fn hover(&self, params: HoverParams) -> Result<Option<Hover>> {
         let uri = params.text_document_position_params.text_document.uri;
         let position = params.text_document_position_params.position;
@@ -798,31 +678,11 @@ impl LanguageServer for LspBackend {
             }
         };
 
-        // Get source text
-        let source = document.get_content();
+        // Use HoverEngine for CST-based hover
+        use crate::hover::HoverEngine;
+        let engine = HoverEngine::new(catalog, config.dialect);
 
-        // Try to find the word at the cursor position
-        let byte_offset = match self.position_to_byte_offset(&source, position) {
-            Some(offset) => offset,
-            None => {
-                debug!("!!! LSP: Failed to convert position to byte offset");
-                return Ok(None);
-            }
-        };
-
-        // Extract the word at cursor
-        let word = self.extract_word_at(&source, byte_offset);
-        if word.is_empty() {
-            debug!("!!! LSP: No word found at cursor position");
-            return Ok(None);
-        }
-
-        debug!("!!! LSP: Word at cursor: '{}'", word);
-
-        // Try to get column type information from catalog
-        let hover_text = self.get_column_hover_info(&catalog, &word, &source).await;
-
-        if let Some(text) = hover_text {
+        if let Some(text) = engine.get_hover(&document, position).await {
             debug!("!!! LSP: Returning hover info: {}", text);
             Ok(Some(Hover {
                 contents: HoverContents::Markup(MarkupContent {
@@ -832,7 +692,7 @@ impl LanguageServer for LspBackend {
                 range: None,
             }))
         } else {
-            debug!("!!! LSP: No hover info found for word: {}", word);
+            debug!("!!! LSP: No hover info found");
             Ok(None)
         }
     }
