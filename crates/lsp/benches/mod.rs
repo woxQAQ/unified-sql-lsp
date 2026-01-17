@@ -18,10 +18,10 @@
 //! cargo bench -- --baseline main
 //! ```
 
-// Uncomment as benchmarks are implemented
-// mod completion_pipeline;
+// All benchmarks implemented
+mod completion_pipeline;
 mod parsing;
 mod semantic;
-// mod catalog;
-// mod concurrency;
-// mod memory;
+mod catalog;
+mod concurrency;
+mod memory;

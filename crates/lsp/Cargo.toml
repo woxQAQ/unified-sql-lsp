@@ -56,10 +56,10 @@ tokio-test = "0.4"
 unified-sql-lsp-test-utils = { path = "../test-utils" }
 criterion = "0.5"
 
-# Benchmark harnesses - will be uncommented as benchmarks are created
-# [[bench]]
-# name = "completion_pipeline"
-# harness = false
+# Benchmark harnesses
+[[bench]]
+name = "completion_pipeline"
+harness = false
 
 [[bench]]
 name = "parsing"
@@ -68,18 +68,18 @@ harness = false
 [[bench]]
 name = "semantic"
 harness = false
-#
-# [[bench]]
-# name = "catalog"
-# harness = false
-#
-# [[bench]]
-# name = "concurrency"
-# harness = false
-#
-# [[bench]]
-# name = "memory"
-# harness = false
+
+[[bench]]
+name = "catalog"
+harness = false
+
+[[bench]]
+name = "concurrency"
+harness = false
+
+[[bench]]
+name = "memory"
+harness = false
 
 [features]
 default = []
