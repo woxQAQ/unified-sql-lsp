@@ -336,7 +336,7 @@ impl CompletionRenderer {
     }
 
     /// Create a wildcard (*) completion item
-    fn wildcard_item() -> CompletionItem {
+    pub fn wildcard_item() -> CompletionItem {
         CompletionItem {
             label: "*".to_string(),
             kind: Some(CompletionItemKind::FIELD),

@@ -174,12 +174,30 @@ pub fn all_functions() -> Vec<FunctionMetadata> {
         FunctionMetadata::new("TO_JSONB", DataType::Json)
             .with_type(FunctionType::Scalar)
             .with_description("Convert to JSONB"),
+        FunctionMetadata::new("JSON_BUILD_ARRAY", DataType::Json)
+            .with_type(FunctionType::Scalar)
+            .with_description("Build JSON array from values"),
         FunctionMetadata::new("JSON_BUILD_OBJECT", DataType::Json)
             .with_type(FunctionType::Scalar)
-            .with_description("Build JSON object"),
+            .with_description("Build JSON object from key-value pairs"),
+        FunctionMetadata::new("JSONB_BUILD_ARRAY", DataType::Json)
+            .with_type(FunctionType::Scalar)
+            .with_description("Build JSONB array from values"),
         FunctionMetadata::new("JSONB_BUILD_OBJECT", DataType::Json)
             .with_type(FunctionType::Scalar)
-            .with_description("Build JSONB object"),
+            .with_description("Build JSONB object from key-value pairs"),
+        FunctionMetadata::new("JSON_QUERY", DataType::Json)
+            .with_type(FunctionType::Scalar)
+            .with_description("Query JSON value using JSON path (PostgreSQL 16+)"),
+        FunctionMetadata::new("JSON_VALUE", DataType::Text)
+            .with_type(FunctionType::Scalar)
+            .with_description("Extract SQL value from JSON (PostgreSQL 16+)"),
+        FunctionMetadata::new("JSONB_QUERY", DataType::Json)
+            .with_type(FunctionType::Scalar)
+            .with_description("Query JSONB value using JSON path (PostgreSQL 16+)"),
+        FunctionMetadata::new("JSON_TABLE", DataType::Json)
+            .with_type(FunctionType::Scalar)
+            .with_description("Convert JSON to table (PostgreSQL 16+)"),
         FunctionMetadata::new("JSON_ARRAY_ELEMENTS", DataType::Json)
             .with_type(FunctionType::Scalar)
             .with_description("Expand JSON array"),

@@ -579,7 +579,7 @@ impl DatabaseAdapter for PostgreSQLAdapter {
 /// # Examples
 ///
 /// ```
-/// # use unified_sql_lsp_e2e::db::adapter_from_test_path;
+/// # use unified_sql_lsp_e2e_core::db::adapter_from_test_path;
 /// # use std::path::Path;
 /// let adapter = adapter_from_test_path(Path::new("tests/mysql-5.7/completion/test.yaml")).unwrap();
 /// // Returns MySQL 5.7 adapter

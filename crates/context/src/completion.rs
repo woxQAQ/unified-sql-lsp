@@ -129,6 +129,16 @@ pub enum CompletionContext {
         window_part: WindowFunctionPart,
     },
 
+    /// RETURNING clause (PostgreSQL, MySQL)
+    ///
+    /// User is typing in a RETURNING clause, e.g., `INSERT INTO users ... RETURNING |`
+    ReturningClause {
+        /// Tables visible in this scope
+        tables: Vec<String>,
+        /// Optional table qualifier
+        qualifier: Option<String>,
+    },
+
     /// Keyword completion
     ///
     /// User is typing at a position where SQL keywords are appropriate
@@ -169,6 +179,11 @@ impl CompletionContext {
     /// Check if this is a keyword completion context
     pub fn is_keywords(&self) -> bool {
         matches!(self, CompletionContext::Keywords { .. })
+    }
+
+    /// Check if this is a RETURNING clause context
+    pub fn is_returning_clause(&self) -> bool {
+        matches!(self, CompletionContext::ReturningClause { .. })
     }
 }
 
@@ -785,6 +800,12 @@ fn detect_context_from_text(source: &str, position: Position) -> CompletionConte
         return ctx;
     }
 
+    // Pattern 8.5: "INSERT/UPDATE/DELETE ... RETURNING |"
+    // Suggest columns for RETURNING clause (PostgreSQL, MySQL)
+    if let Some(ctx) = detect_returning_context(source, text_before) {
+        return ctx;
+    }
+
     // Pattern 9: DDL statements (CREATE, ALTER, DROP)
     debug!("!!! LSP: About to check DDL context");
     if let Some(ctx) = detect_ddl_context(text_before) {
@@ -1281,7 +1302,87 @@ fn extract_tables_from_source(source: &str) -> Vec<String> {
     let mut tables = Vec::new();
     let source_upper = source.to_uppercase();
 
-    // Find FROM clause
+    // Handle INSERT INTO statement
+    if let Some(insert_pos) = source_upper.find("INSERT") {
+        // Look for INTO keyword after INSERT
+        let after_insert = &source[insert_pos + 6..]; // +6 to skip "INSERT"
+        if let Some(into_pos) = after_insert.to_uppercase().find("INTO") {
+            let after_into = &after_insert[into_pos + 4..]; // +4 to skip "INTO"
+
+            // Extract table name from INTO clause
+            // Pattern: INSERT INTO table_name ...
+            let words: Vec<&str> = after_into
+                .split([' ', '\n', '\t', '(', ')', ','])
+                .map(|s| s.trim())
+                .filter(|s| !s.is_empty())
+                .collect();
+
+            if !words.is_empty() {
+                // First word after INTO is the table name
+                let table_name = words[0].trim_end_matches(|c: char| !c.is_alphanumeric() && c != '_');
+                tables.push(table_name.to_string());
+                debug!(
+                    "!!! LSP: extract_tables_from_source: INSERT extracted table={:?}",
+                    tables
+                );
+                return tables;
+            }
+        }
+    }
+
+    // Handle UPDATE statement
+    if let Some(update_pos) = source_upper.find("UPDATE") {
+        let after_update = &source[update_pos + 6..]; // +6 to skip "UPDATE"
+
+        // Extract table name from UPDATE clause
+        // Pattern: UPDATE table_name SET ...
+        let words: Vec<&str> = after_update
+            .split([' ', '\n', '\t', ',', ';'])
+            .map(|s| s.trim())
+            .filter(|s| !s.is_empty())
+            .collect();
+
+        if !words.is_empty() {
+            // First word after UPDATE is the table name
+            let table_name = words[0].trim_end_matches(|c: char| !c.is_alphanumeric() && c != '_');
+            tables.push(table_name.to_string());
+            debug!(
+                "!!! LSP: extract_tables_from_source: UPDATE extracted table={:?}",
+                tables
+            );
+            return tables;
+        }
+    }
+
+    // Handle DELETE FROM statement
+    if let Some(delete_pos) = source_upper.find("DELETE") {
+        // Look for FROM keyword after DELETE
+        let after_delete = &source[delete_pos + 6..]; // +6 to skip "DELETE"
+        if let Some(from_pos) = after_delete.to_uppercase().find("FROM") {
+            let after_from = &after_delete[from_pos + 4..]; // +4 to skip "FROM"
+
+            // Extract table name from FROM clause
+            // Pattern: DELETE FROM table_name ...
+            let words: Vec<&str> = after_from
+                .split([' ', '\n', '\t', ',', ';'])
+                .map(|s| s.trim())
+                .filter(|s| !s.is_empty())
+                .collect();
+
+            if !words.is_empty() {
+                // First word after FROM is the table name
+                let table_name = words[0].trim_end_matches(|c: char| !c.is_alphanumeric() && c != '_');
+                tables.push(table_name.to_string());
+                debug!(
+                    "!!! LSP: extract_tables_from_source: DELETE extracted table={:?}",
+                    tables
+                );
+                return tables;
+            }
+        }
+    }
+
+    // Find FROM clause (for SELECT statements)
     if let Some(from_pos) = source_upper.find("FROM") {
         // Get text after FROM
         let after_from = &source[from_pos + 4..]; // +4 to skip "FROM"
@@ -1665,6 +1766,23 @@ fn detect_having_context(source: &str, text_before: &str) -> Option<CompletionCo
         // Check for table qualifier
         let qualifier = extract_table_qualifier(text_before);
         return Some(CompletionContext::HavingClause { tables, qualifier });
+    }
+
+    None
+}
+
+/// Detect if cursor is in RETURNING clause (PostgreSQL, MySQL)
+fn detect_returning_context(source: &str, text_before: &str) -> Option<CompletionContext> {
+    let text_upper = text_before.to_uppercase();
+
+    // Check if we're after RETURNING keyword
+    if is_after_keyword(&text_upper, "RETURNING") {
+        debug!("!!! LSP: Detected RETURNING context");
+        // Extract tables from source - look for INSERT/UPDATE/DELETE statement
+        let tables = extract_tables_from_source(source);
+        // Check for table qualifier
+        let qualifier = extract_table_qualifier(text_before);
+        return Some(CompletionContext::ReturningClause { tables, qualifier });
     }
 
     None

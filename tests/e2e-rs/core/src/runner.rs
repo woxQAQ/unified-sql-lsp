@@ -14,6 +14,36 @@ use tokio::io::AsyncBufReadExt;
 use tokio::process::Command as TokioCommand;
 use tracing::{debug, info};
 
+/// Find workspace root by searching upward for a Cargo.toml with [workspace] section
+pub fn find_workspace_root(start_dir: &Path) -> Result<std::path::PathBuf> {
+    let mut current = start_dir;
+
+    loop {
+        let cargo_toml = current.join("Cargo.toml");
+        if cargo_toml.exists() {
+            // Check if it has [workspace] section
+            if let Ok(content) = std::fs::read_to_string(&cargo_toml) {
+                if content.contains("[workspace]") || content.contains("[workspace]") {
+                    return Ok(current.to_path_buf());
+                }
+            }
+        }
+
+        // Move to parent directory
+        match current.parent() {
+            Some(parent) if !parent.as_os_str().is_empty() => {
+                current = parent;
+            }
+            _ => {
+                return Err(anyhow::anyhow!(
+                    "Workspace root not found when searching upward from {:?}",
+                    start_dir
+                ));
+            }
+        }
+    }
+}
+
 /// LSP server runner
 ///
 /// Manages spawning, communication, and cleanup of LSP server process.
@@ -44,12 +74,9 @@ impl LspRunner {
         let binary_name = "unified-sql-lsp";
         let extension = if cfg!(windows) { ".exe" } else { "" };
 
-        // Get workspace root by going up from CARGO_MANIFEST_DIR
+        // Get workspace root by searching upward for Cargo.toml with [workspace] section
         let manifest_dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-        let workspace_root = manifest_dir
-            .parent()
-            .and_then(|p| p.parent())
-            .unwrap_or(&manifest_dir);
+        let workspace_root = find_workspace_root(&manifest_dir)?;
 
         let possible_paths = vec![
             workspace_root

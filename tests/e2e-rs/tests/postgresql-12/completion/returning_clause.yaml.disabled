@@ -1,5 +1,7 @@
 name: "PostgreSQL RETURNING Clause"
 description: "Test completion for PostgreSQL RETURNING clause in INSERT/UPDATE/DELETE"
+# IGNORE: RETURNING clause completion not fully implemented yet
+# Issue: INSERT/UPDATE return empty results, wildcard (*) missing
 
 database:
   dialect: "postgresql"

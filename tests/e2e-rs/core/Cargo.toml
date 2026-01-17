@@ -1,0 +1,51 @@
+[package]
+name = "unified-sql-lsp-e2e-core"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+# Internal dependencies
+unified-sql-lsp-e2e-core-macros = { path = "../core-macros" }
+unified-sql-lsp-lsp = { workspace = true }
+unified-sql-lsp-catalog = { workspace = true }
+unified-sql-lsp-ir = { workspace = true }
+unified-sql-lsp-test-utils = { workspace = true }
+
+# Async runtime
+tokio = { workspace = true }
+tokio-util = { workspace = true }
+async-trait = { workspace = true }
+
+# LSP framework
+tower-lsp = { workspace = true }
+lsp-types = { workspace = true }
+
+# Serialization
+serde = { workspace = true }
+serde_yaml = { workspace = true }
+serde_json = { workspace = true }
+
+# Error handling
+thiserror = { workspace = true }
+anyhow = { workspace = true }
+
+# Database
+sqlx = { workspace = true }
+
+# Process spawning
+command-group = { workspace = true }
+
+# Logging
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+
+# Test utilities
+serial_test = { workspace = true }
+ctor = { workspace = true }
+tempfile = { workspace = true }
+
+# Procedural macros
+proc-macro2 = { workspace = true }
+quote = { workspace = true }
+syn = { workspace = true }
+glob = { workspace = true }

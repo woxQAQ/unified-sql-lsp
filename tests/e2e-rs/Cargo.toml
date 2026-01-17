@@ -1,27 +1,38 @@
+[workspace]
+resolver = "2"
+members = ["core", "core-macros", "mysql-5.7", "mysql-8.0", "postgresql-12", "postgresql-16", "."]
+
 [package]
 name = "unified-sql-lsp-e2e"
 version = "0.1.0"
 edition = "2024"
-publish = false
-
-[workspace]
-# This is a separate workspace for E2E tests
 
 [dependencies]
+unified-sql-lsp-e2e-core = { path = "core" }
+unified-sql-lsp-e2e-core-macros = { path = "core-macros" }
+# Test dependencies needed for integration tests
+tokio = { workspace = true }
+anyhow = { workspace = true }
+tower-lsp = { workspace = true }
+serial_test = { workspace = true }
+sqlx = { workspace = true }
+ctor = { workspace = true }
+
+[workspace.dependencies]
 # Internal dependencies
 unified-sql-lsp-lsp = { path = "../../crates/lsp" }
 unified-sql-lsp-catalog = { path = "../../crates/catalog", features = ["mysql", "postgresql"] }
 unified-sql-lsp-ir = { path = "../../crates/ir" }
 unified-sql-lsp-test-utils = { path = "../../crates/test-utils" }
 
+# Async runtime
+tokio = { version = "1.40", features = ["full", "rt-multi-thread", "test-util"] }
+tokio-util = { version = "0.7", features = ["io"] }
+async-trait = "0.1"
+
 # LSP framework
 tower-lsp = "0.20"
 lsp-types = "0.95"
-
-# Async runtime
-tokio = { version = "1.35", features = ["full", "test-util"] }
-tokio-util = { version = "0.7", features = ["io"] }
-async-trait = "0.1"
 
 # Serialization
 serde = { version = "1.0", features = ["derive"] }
@@ -32,6 +43,9 @@ serde_json = "1.0"
 thiserror = "2.0"
 anyhow = "1.0"
 
+# Database
+sqlx = { version = "0.8", features = ["mysql", "postgres", "runtime-tokio"] }
+
 # Process spawning
 command-group = "5.0"
 
@@ -39,12 +53,13 @@ command-group = "5.0"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
-# Global test setup/teardown
-ctor = "0.2"
-
 # Test utilities
+serial_test = "3.0"
+ctor = "0.2"
 tempfile = "3.8"
 
-[dev-dependencies]
-serial_test = "3.3.1"
-tokio-test = "0.4"
+# Procedural macros
+proc-macro2 = "1.0"
+quote = "1.0"
+syn = { version = "2.0", features = ["full"] }
+glob = "0.3"

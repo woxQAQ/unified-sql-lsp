@@ -13,6 +13,39 @@ use std::process::Stdio;
 use tokio::process::Command;
 use tracing::{info, warn};
 
+/// Find docker-compose.yml by searching upward from the start directory
+///
+/// This function searches upward from CARGO_MANIFEST_DIR or current directory
+/// to find docker-compose.yml, allowing tests to run from workspace member packages.
+pub fn find_docker_compose_file() -> Result<PathBuf> {
+    let start_dir = std::env::var("CARGO_MANIFEST_DIR")
+        .or_else(|_| std::env::current_dir().map(|p| p.to_string_lossy().to_string()))?;
+
+    let start_path = PathBuf::from(&start_dir);
+
+    // Search upward for docker-compose.yml
+    let mut current_path = start_path.as_path();
+    loop {
+        let candidate = current_path.join("docker-compose.yml");
+        if candidate.exists() {
+            return Ok(candidate);
+        }
+
+        // Move to parent directory
+        match current_path.parent() {
+            Some(parent) if !parent.as_os_str().is_empty() => {
+                current_path = parent;
+            }
+            _ => {
+                return Err(anyhow::anyhow!(
+                    "docker-compose.yml not found when searching upward from {:?}",
+                    start_dir
+                ));
+            }
+        }
+    }
+}
+
 /// Docker Compose manager
 pub struct DockerCompose {
     /// Path to docker-compose.yml file
@@ -39,19 +72,12 @@ impl DockerCompose {
     }
 
     /// Create from default E2E test configuration
+    ///
+    /// Searches upward from CARGO_MANIFEST_DIR or current directory to find docker-compose.yml.
+    /// This allows tests to run from workspace member packages (e.g., mysql-5.7) while finding
+    /// the workspace root's docker-compose.yml file.
     pub fn from_default_config() -> Result<Self> {
-        let workspace_dir = std::env::var("CARGO_MANIFEST_DIR")
-            .or_else(|_| std::env::current_dir().map(|p| p.to_string_lossy().to_string()))?;
-
-        let compose_file = PathBuf::from(workspace_dir).join("docker-compose.yml");
-
-        if !compose_file.exists() {
-            return Err(anyhow::anyhow!(
-                "docker-compose.yml not found at {:?}",
-                compose_file
-            ));
-        }
-
+        let compose_file = find_docker_compose_file()?;
         Ok(Self::new(compose_file, "unified-sql-lsp-e2e".to_string()))
     }
 

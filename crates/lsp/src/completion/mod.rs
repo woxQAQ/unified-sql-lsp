@@ -414,6 +414,10 @@ impl CompletionEngine {
                 self.complete_window_function_clause(&scope_manager, tables, window_part)
                     .await
             }
+            CompletionContext::ReturningClause { tables, qualifier } => {
+                self.complete_returning_clause(&scope_manager, tables, qualifier)
+                    .await
+            }
             CompletionContext::Unknown => Ok(None),
         }
     }
@@ -925,6 +929,39 @@ impl CompletionEngine {
             )
             .await?
             .unwrap_or_default();
+
+        Ok(Some(items))
+    }
+
+    /// Complete RETURNING clause with columns
+    ///
+    /// Provides column completion for PostgreSQL RETURNING clause after INSERT/UPDATE/DELETE
+    #[instrument(skip(self))]
+    async fn complete_returning_clause(
+        &self,
+        scope_manager: &Option<unified_sql_lsp_semantic::ScopeManager>,
+        tables: Vec<String>,
+        qualifier: Option<String>,
+    ) -> Result<Option<Vec<CompletionItem>>, CompletionError> {
+        debug!("Starting RETURNING clause completion");
+
+        // Get columns using the shared scope completion logic
+        let mut items: Vec<CompletionItem> = self
+            .complete_with_scope(
+                scope_manager,
+                tables,
+                qualifier.clone(),
+                false, // exclude_wildcard (RETURNING * is valid, so don't exclude)
+                None,  // function_filter (show all)
+            )
+            .await?
+            .unwrap_or_default();
+
+        // Ensure wildcard is included (it should be from complete_with_scope, but add it manually if not)
+        if !items.iter().any(|i| i.label == "*") {
+            debug!("Adding wildcard (*) to RETURNING clause completion");
+            items.push(CompletionRenderer::wildcard_item());
+        }
 
         Ok(Some(items))
     }

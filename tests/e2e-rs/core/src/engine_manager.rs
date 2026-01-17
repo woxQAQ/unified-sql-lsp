@@ -66,7 +66,7 @@ impl Engine {
     /// # Examples
     ///
     /// ```
-    /// # use unified_sql_lsp_e2e::engine_manager::Engine;
+    /// # use unified_sql_lsp_e2e_core::engine_manager::Engine;
     /// let path = std::path::Path::new("tests/mysql-5.7/completion/test.yaml");
     /// assert_eq!(Engine::from_path(path), Engine::MySQL57);
     /// ```
@@ -171,14 +171,13 @@ fn global_cleanup() {
         if needs_cleanup {
             eprintln!("!!! Global cleanup: stopping Docker Compose services...");
 
-            // Get the compose file path from CARGO_MANIFEST_DIR or current directory
-            let compose_file = std::env::var("CARGO_MANIFEST_DIR")
-                .map(|p| format!("{}/docker-compose.yml", p))
-                .or_else(|_| {
-                    std::env::current_dir()
-                        .map(|p| p.join("docker-compose.yml").to_string_lossy().to_string())
-                })
-                .unwrap_or_else(|_| "tests/e2e-rs/docker-compose.yml".to_string());
+            // Find the compose file path by searching upward
+            let compose_file = crate::docker::find_docker_compose_file()
+                .map(|p| p.to_string_lossy().to_string())
+                .unwrap_or_else(|e| {
+                    eprintln!("!!! Failed to find docker-compose.yml: {}", e);
+                    "tests/e2e-rs/docker-compose.yml".to_string()
+                });
 
             // Use std::process::Command for synchronous execution
             let result = std::process::Command::new("docker")

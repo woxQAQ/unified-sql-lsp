@@ -1,0 +1,10 @@
+[package]
+name = "postgresql-12-e2e-tests"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+unified-sql-lsp-e2e-core = { path = "../core" }
+tokio = { workspace = true }
+anyhow = { workspace = true }
+serial_test = { workspace = true }
