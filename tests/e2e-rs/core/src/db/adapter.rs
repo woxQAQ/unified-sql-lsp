@@ -13,6 +13,8 @@ use std::path::Path;
 use std::sync::Arc;
 use tokio::io::AsyncWriteExt;
 
+use crate::debug_log;
+
 /// Database adapter trait
 #[async_trait]
 pub trait DatabaseAdapter: Send + Sync {
@@ -272,7 +274,7 @@ impl DatabaseAdapter for MySQLAdapter {
             .output()
             .await?;
 
-        eprintln!(
+        debug_log!(
             "!!! MySQL cleanup: DROP={:?}, CREATE={:?}",
             drop_cmd.as_ref().map(|c| c.status.code()).ok(),
             create_cmd.status.code()

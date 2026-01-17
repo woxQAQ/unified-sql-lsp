@@ -49,6 +49,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, LazyLock, OnceLock};
 
 use crate::db::adapter::adapter_from_test_path;
+use crate::debug_log;
 use crate::docker::DockerCompose;
 
 /// Database engine enumeration
@@ -169,13 +170,13 @@ fn global_cleanup() {
             .unwrap_or(false);
 
         if needs_cleanup {
-            eprintln!("!!! Global cleanup: stopping Docker Compose services...");
+            debug_log!("!!! Global cleanup: stopping Docker Compose services...");
 
             // Find the compose file path by searching upward
             let compose_file = crate::docker::find_docker_compose_file()
                 .map(|p| p.to_string_lossy().to_string())
                 .unwrap_or_else(|e| {
-                    eprintln!("!!! Failed to find docker-compose.yml: {}", e);
+                    debug_log!("!!! Failed to find docker-compose.yml: {}", e);
                     "tests/e2e-rs/docker-compose.yml".to_string()
                 });
 
@@ -194,16 +195,16 @@ fn global_cleanup() {
             match result {
                 Ok(output) => {
                     if output.status.success() {
-                        eprintln!("!!! Docker Compose services stopped successfully");
+                        debug_log!("!!! Docker Compose services stopped successfully");
                     } else {
-                        eprintln!(
+                        debug_log!(
                             "!!! Failed to stop Docker Compose: {}",
                             String::from_utf8_lossy(&output.stderr)
                         );
                     }
                 }
                 Err(e) => {
-                    eprintln!("!!! Failed to execute docker compose down: {}", e);
+                    debug_log!("!!! Failed to execute docker compose down: {}", e);
                 }
             }
         }
