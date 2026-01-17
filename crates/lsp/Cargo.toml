@@ -60,11 +60,11 @@ criterion = "0.5"
 # [[bench]]
 # name = "completion_pipeline"
 # harness = false
-#
-# [[bench]]
-# name = "parsing"
-# harness = false
-#
+
+[[bench]]
+name = "parsing"
+harness = false
+
 # [[bench]]
 # name = "semantic"
 # harness = false
