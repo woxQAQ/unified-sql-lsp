@@ -120,6 +120,10 @@ pub struct DiagnosticsExpectation {
     /// Expected error messages (substrings)
     #[serde(default)]
     pub error_messages: Vec<String>,
+
+    /// Expected error codes
+    #[serde(default)]
+    pub error_codes: Vec<String>,
 }
 
 /// Hover expectations

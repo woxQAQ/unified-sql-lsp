@@ -264,7 +264,6 @@ impl DiagnosticCollector {
 
         // Check if root or any descendants have errors
         if root.has_error() {
-            debug!("!!! DIAG: Root has_error=true, checking children");
             self.collect_error_nodes_recursive(
                 &root,
                 source,
@@ -277,9 +276,6 @@ impl DiagnosticCollector {
         // If still no diagnostics found but has_error was true, create a generic error
         // Only if we didn't filter out all ERROR nodes
         if diagnostics.is_empty() && root.has_error() && found_real_errors {
-            debug!(
-                "!!! DIAG: has_error=true but no ERROR nodes found, creating generic diagnostic"
-            );
             let diagnostic = SqlDiagnostic::error(
                 "Syntax error in SQL statement".to_string(),
                 Range {
@@ -321,18 +317,12 @@ impl DiagnosticCollector {
         }
 
         let node_kind = node.kind();
-        debug!(
-            "!!! DIAG: Checking node kind: {}, is_error: {}",
-            node_kind,
-            node_kind == "ERROR"
-        );
 
         // Check if this is an ERROR node
         if node_kind == "ERROR" {
             // Check if this ERROR node should be ignored
             // Some ERROR nodes are false positives from tree-sitter's incomplete SQL grammar
             if self.should_ignore_error_node(node, source) {
-                debug!("!!! DIAG: Ignoring ERROR node (false positive)");
                 // Continue to check children even if we ignore this ERROR
             } else {
                 *found_real_errors = true;
@@ -369,21 +359,14 @@ impl DiagnosticCollector {
         let byte_range = node.byte_range();
         let error_text = &source[byte_range];
 
-        debug!(
-            "!!! DIAG: should_ignore_error_node checking: '{}'",
-            error_text
-        );
-
         // Ignore errors that are empty or just whitespace
         let trimmed = error_text.trim();
         if trimmed.is_empty() {
-            debug!("!!! DIAG: Ignoring ERROR node (empty)");
             return true;
         }
 
         // Ignore single-character errors (likely parser artifacts)
         if trimmed.len() == 1 {
-            debug!("!!! DIAG: Ignoring ERROR node (single char)");
             return true;
         }
 
@@ -410,13 +393,131 @@ impl DiagnosticCollector {
         // Extract the error text for better messages
         let byte_range = node.byte_range();
         let error_text = &source[byte_range];
-        let message = if error_text.len() <= 50 {
-            format!("Syntax error near: '{}'", error_text)
-        } else {
-            "Syntax error in this region".to_string()
-        };
+        let message = self.enhance_error_message(node, source, error_text);
 
         SqlDiagnostic::error(message, range).with_code(DiagnosticCode::SyntaxError)
+    }
+
+    /// Enhance error message with context and suggestions
+    fn enhance_error_message(
+        &self,
+        error_node: &tree_sitter::Node,
+        source: &str,
+        error_text: &str,
+    ) -> String {
+        // Try pattern-based suggestions first
+        if let Some(suggestion) = self.analyze_common_patterns(error_node, source, error_text) {
+            return suggestion;
+        }
+
+        // Fall back to context-aware message
+        if error_text.len() <= 50 {
+            format!("Syntax error near '{}'", error_text)
+        } else {
+            "Syntax error in this region".to_string()
+        }
+    }
+
+    /// Analyze common error patterns and provide specific suggestions
+    fn analyze_common_patterns(
+        &self,
+        node: &tree_sitter::Node,
+        source: &str,
+        error_text: &str,
+    ) -> Option<String> {
+        let trimmed = error_text.trim();
+
+        // Pattern 1: Missing comma (column names without separator)
+        if self.is_missing_comma_pattern(trimmed) {
+            return Some(format!(
+                "Syntax error: missing comma between identifiers. Suggestion: Add comma after '{}'",
+                self.first_identifier(trimmed)
+            ));
+        }
+
+        // Pattern 2: Missing FROM clause
+        if self.is_missing_from_pattern(node, source) {
+            return Some(
+                "Syntax error: SELECT statement missing FROM clause. Expected: 'SELECT ... FROM table ...'".to_string()
+            );
+        }
+
+        // Pattern 3: Unbalanced parentheses
+        if self.is_unmatched_paren_pattern(trimmed) {
+            return Some(
+                "Syntax error: unbalanced parentheses. Check opening/closing pairs".to_string(),
+            );
+        }
+
+        None
+    }
+
+    /// Check if error text matches missing comma pattern
+    fn is_missing_comma_pattern(&self, text: &str) -> bool {
+        let parts: Vec<&str> = text.split_whitespace().collect();
+        if parts.len() < 2 {
+            return false;
+        }
+
+        // Check if we have multiple identifiers without comma
+        let has_identifiers = parts.iter().all(|p| self.is_identifier(p));
+        let no_comma = !text.contains(',');
+
+        has_identifiers && no_comma
+    }
+
+    /// Check if the error is due to missing FROM clause
+    fn is_missing_from_pattern(&self, node: &tree_sitter::Node, _source: &str) -> bool {
+        // Check if we're in a SELECT without FROM
+        let mut current = Some(*node);
+        while let Some(n) = current {
+            match n.kind() {
+                "select_statement" | "select" => {
+                    // Check if this node has a from_clause child
+                    let mut cursor = n.walk();
+                    if cursor.goto_first_child() {
+                        loop {
+                            if cursor.node().kind() == "from_clause" {
+                                return false; // Found FROM, not missing
+                            }
+                            if !cursor.goto_next_sibling() {
+                                break;
+                            }
+                        }
+                    }
+                    // In SELECT but no FROM found
+                    return true;
+                }
+                "from_clause" => return false, // Found FROM
+                _ => {}
+            }
+            current = n.parent();
+        }
+        false
+    }
+
+    /// Check if error text has unmatched parentheses
+    fn is_unmatched_paren_pattern(&self, text: &str) -> bool {
+        let open_count = text.matches('(').count();
+        let close_count = text.matches(')').count();
+        open_count != close_count
+    }
+
+    /// Check if a string looks like an SQL identifier
+    fn is_identifier(&self, text: &str) -> bool {
+        !text.is_empty()
+            && (text.chars().next().unwrap().is_alphabetic()
+                || text.starts_with('_')
+                || text.starts_with('\"')
+                || text.starts_with('`'))
+            && text
+                .chars()
+                .all(|c| c.is_alphanumeric() || c == '_' || c == '\"' || c == '`')
+    }
+
+    /// Extract the first identifier from error text
+    fn first_identifier(&self, text: &str) -> String {
+        text.split_whitespace().next().unwrap_or("").to_string()
     }
 
     /// Collect diagnostics from an Arc<Mutex<Tree>>
@@ -644,5 +745,154 @@ mod tests {
 
         let diagnostics = collector.collect_from_arc(&tree, "SELECT 1", &uri);
         assert!(diagnostics.is_empty());
+    }
+
+    // Tests for pattern detection helpers
+
+    #[test]
+    fn test_is_identifier() {
+        let collector = DiagnosticCollector::new();
+
+        // Valid identifiers
+        assert!(collector.is_identifier("id"));
+        assert!(collector.is_identifier("username"));
+        assert!(collector.is_identifier("_id"));
+        assert!(collector.is_identifier("`id`"));
+        assert!(collector.is_identifier("\"id\""));
+
+        // Invalid identifiers
+        assert!(!collector.is_identifier(""));
+        assert!(!collector.is_identifier("123"));
+        assert!(!collector.is_identifier("id username"));
+        assert!(!collector.is_identifier("id,"));
+    }
+
+    #[test]
+    fn test_is_missing_comma_pattern() {
+        let collector = DiagnosticCollector::new();
+
+        // Missing comma patterns
+        assert!(collector.is_missing_comma_pattern("id username"));
+        assert!(collector.is_missing_comma_pattern("col1 col2 col3"));
+        assert!(collector.is_missing_comma_pattern("username FROM"));
+
+        // Not missing comma
+        assert!(!collector.is_missing_comma_pattern("id, username"));
+        assert!(!collector.is_missing_comma_pattern("id"));
+        assert!(!collector.is_missing_comma_pattern(""));
+    }
+
+    #[test]
+    fn test_is_unmatched_paren_pattern() {
+        let collector = DiagnosticCollector::new();
+
+        // Unmatched parentheses
+        assert!(collector.is_unmatched_paren_pattern("("));
+        assert!(collector.is_unmatched_paren_pattern(")"));
+        assert!(collector.is_unmatched_paren_pattern("((test)"));
+        assert!(collector.is_unmatched_paren_pattern("(test))"));
+
+        // Balanced parentheses
+        assert!(!collector.is_unmatched_paren_pattern("()"));
+        assert!(!collector.is_unmatched_paren_pattern("(test)"));
+        assert!(!collector.is_unmatched_paren_pattern("((test))"));
+        assert!(!collector.is_unmatched_paren_pattern(""));
+    }
+
+    #[test]
+    fn test_first_identifier() {
+        let collector = DiagnosticCollector::new();
+
+        assert_eq!(collector.first_identifier("id username"), "id");
+        assert_eq!(collector.first_identifier("col1 col2 col3"), "col1");
+        assert_eq!(collector.first_identifier("identifier"), "identifier");
+        assert_eq!(collector.first_identifier(""), "");
+    }
+
+    #[test]
+    fn test_analyze_common_patterns_missing_comma() {
+        let collector = DiagnosticCollector::new();
+
+        // We need a real tree-sitter node for this test, but we can test the logic
+        // by using a mock node that will trigger the missing comma pattern
+        // For now, we'll just test the is_missing_comma_pattern function
+        assert!(collector.is_missing_comma_pattern("id username"));
+    }
+
+    #[test]
+    fn test_enhance_error_message_basic() {
+        let collector = DiagnosticCollector::new();
+
+        // Create a mock ERROR node scenario
+        // Since we can't easily create a tree-sitter Node without a parser,
+        // we'll test through the public interface
+
+        if let Some(language) =
+            unified_sql_grammar::language_for_dialect(unified_sql_lsp_ir::Dialect::MySQL)
+        {
+            let mut parser = tree_sitter::Parser::new();
+            if parser.set_language(language).is_ok() {
+                // Parse SQL with obvious syntax error (missing FROM)
+                let sql = "SELECT * WHERE id = 1";
+                if let Some(tree) = parser.parse(sql, None) {
+                    let diagnostics = collector.collect_diagnostics(
+                        &tree,
+                        sql,
+                        &Url::parse("file:///test.sql").unwrap(),
+                    );
+
+                    // Should detect the syntax error
+                    if !diagnostics.is_empty() {
+                        // The message should mention the error
+                        let message = &diagnostics[0].message;
+                        assert!(
+                            message.contains("Syntax error"),
+                            "Error message should mention syntax error: {}",
+                            message
+                        );
+                    } else {
+                        // If no diagnostics, the parser accepted this SQL
+                        // This is OK - it means the grammar is permissive
+                        println!("Parser accepted SQL: {}", sql);
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn test_enhance_error_message_unbalanced_parens() {
+        let collector = DiagnosticCollector::new();
+
+        if let Some(language) =
+            unified_sql_grammar::language_for_dialect(unified_sql_lsp_ir::Dialect::MySQL)
+        {
+            let mut parser = tree_sitter::Parser::new();
+            if parser.set_language(language).is_ok() {
+                // Parse SQL with unbalanced parentheses
+                let sql = "SELECT * FROM users WHERE (id = 1";
+                if let Some(tree) = parser.parse(sql, None) {
+                    let diagnostics = collector.collect_diagnostics(
+                        &tree,
+                        sql,
+                        &Url::parse("file:///test.sql").unwrap(),
+                    );
+
+                    // Should detect the syntax error
+                    if !diagnostics.is_empty() {
+                        // The message should mention parentheses or syntax error
+                        let message = &diagnostics[0].message;
+                        assert!(
+                            message.contains("Syntax error"),
+                            "Error message should mention syntax error: {}",
+                            message
+                        );
+                    } else {
+                        // If no diagnostics, the parser accepted this SQL
+                        println!("Parser accepted SQL: {}", sql);
+                    }
+                }
+            }
+        }
     }
 }

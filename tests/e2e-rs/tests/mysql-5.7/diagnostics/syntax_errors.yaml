@@ -1,0 +1,64 @@
+name: "Syntax error detection tests"
+description: "SQL syntax error detection (DIAG-002)"
+
+database:
+  dialect: "mysql"
+  connection_string: "mysql://test_user:test_password@127.0.0.1:3307/test_db"
+  schemas:
+    - "../../../fixtures/schema/mysql/01_create_tables.sql"
+  data:
+    - "../../../fixtures/data/mysql/02_insert_basic_data.sql"
+
+tests:
+  - name: "missing FROM clause"
+    description: "Should detect missing FROM clause"
+    sql: "SELECT * WHERE id = 1|"
+    expect_diagnostics:
+      error_count: 1
+      error_codes: ["SYNTAX-001"]
+
+  - name: "unterminated string"
+    description: "Should detect unterminated string literal"
+    sql: "SELECT * FROM users WHERE username = '|"
+    expect_diagnostics:
+      error_count: 1
+      error_codes: ["SYNTAX-001"]
+
+  - name: "missing comma between columns"
+    description: "Should detect missing comma"
+    sql: "SELECT id username FROM users|"
+    expect_diagnostics:
+      error_count: 1
+      error_codes: ["SYNTAX-001"]
+
+  - name: "unbalanced parentheses"
+    description: "Should detect unbalanced parentheses"
+    sql: "SELECT * FROM users WHERE (id = 1|"
+    expect_diagnostics:
+      error_count: 1
+      error_codes: ["SYNTAX-001"]
+
+  - name: "invalid keyword placement"
+    description: "Should detect misplaced keyword"
+    sql: "SELECT FROM * users|"
+    expect_diagnostics:
+      error_count: 1
+      error_codes: ["SYNTAX-001"]
+
+  - name: "valid query no errors"
+    description: "Valid query should have no diagnostics"
+    sql: "SELECT id, username FROM users WHERE is_active = TRUE|"
+    expect_diagnostics:
+      error_count: 0
+
+  - name: "valid join query"
+    description: "Valid JOIN should have no diagnostics"
+    sql: "SELECT u.username, o.order_date FROM users u JOIN orders o ON u.id = o.user_id|"
+    expect_diagnostics:
+      error_count: 0
+
+  - name: "valid subquery"
+    description: "Valid subquery should have no diagnostics"
+    sql: "SELECT * FROM users WHERE id IN (SELECT user_id FROM orders)|"
+    expect_diagnostics:
+      error_count: 0

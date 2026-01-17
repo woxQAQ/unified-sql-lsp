@@ -135,6 +135,47 @@ pub fn assert_diagnostics(
     Ok(())
 }
 
+/// Assert diagnostics count, severity, and error codes
+pub fn assert_diagnostics_with_codes(
+    diagnostics: &[Diagnostic],
+    error_count: usize,
+    warning_count: usize,
+    error_codes: Option<&[String]>,
+) -> Result<()> {
+    // First check counts
+    assert_diagnostics(diagnostics, error_count, warning_count)?;
+
+    // Then check error codes if provided
+    if let Some(expected_codes) = error_codes {
+        let actual_codes: Vec<String> = diagnostics
+            .iter()
+            .filter_map(|d| {
+                if d.severity == Some(DiagnosticSeverity::ERROR) {
+                    d.code.as_ref().map(|c| match c {
+                        tower_lsp::lsp_types::NumberOrString::String(s) => s.clone(),
+                        tower_lsp::lsp_types::NumberOrString::Number(n) => n.to_string(),
+                    })
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        for expected_code in expected_codes {
+            if !actual_codes.contains(expected_code) {
+                bail!(
+                    "Expected error code '{}', but got codes: {:?}. Diagnostics: {:?}",
+                    expected_code,
+                    actual_codes,
+                    diagnostics
+                );
+            }
+        }
+    }
+
+    Ok(())
+}
+
 /// Assert hover contains specific text
 pub fn assert_hover_contains(hover: Option<&Hover>, expected: &str) -> Result<()> {
     match hover {
