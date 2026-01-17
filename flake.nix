@@ -1,5 +1,5 @@
 {
-  description = "Tauri + Rust + Node (Nushell)";
+  description = "Rust + Node (Nushell)";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
