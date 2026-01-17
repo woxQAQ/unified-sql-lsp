@@ -49,6 +49,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, LazyLock, OnceLock};
 
 use crate::db::adapter::adapter_from_test_path;
+use crate::docker::DockerCompose;
 
 /// Database engine enumeration
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -145,6 +146,71 @@ static ENGINE_STATES: LazyLock<HashMap<Engine, Arc<EngineState>>> = LazyLock::ne
     ])
 });
 
+/// Global Docker Compose manager (shared across all engines)
+static DOCKER_COMPOSE: LazyLock<Arc<tokio::sync::RwLock<Option<DockerCompose>>>> =
+    LazyLock::new(|| Arc::new(tokio::sync::RwLock::new(None)));
+
+/// Global cleanup function called when test process exits
+///
+/// This uses the `ctor` crate to register a destructor that runs when
+/// the test binary exits, ensuring Docker Compose services are stopped.
+#[ctor::dtor]
+fn global_cleanup() {
+    use std::sync::atomic::{AtomicBool, Ordering};
+
+    static CLEANED_UP: AtomicBool = AtomicBool::new(false);
+
+    // Only cleanup once
+    if !CLEANED_UP.swap(true, Ordering::SeqCst) {
+        // Check if we started Docker Compose services
+        let needs_cleanup = DOCKER_COMPOSE
+            .try_read()
+            .map(|guard| guard.is_some())
+            .unwrap_or(false);
+
+        if needs_cleanup {
+            eprintln!("!!! Global cleanup: stopping Docker Compose services...");
+
+            // Get the compose file path from CARGO_MANIFEST_DIR or current directory
+            let compose_file = std::env::var("CARGO_MANIFEST_DIR")
+                .map(|p| format!("{}/docker-compose.yml", p))
+                .or_else(|_| {
+                    std::env::current_dir()
+                        .map(|p| p.join("docker-compose.yml").to_string_lossy().to_string())
+                })
+                .unwrap_or_else(|_| "tests/e2e-rs/docker-compose.yml".to_string());
+
+            // Use std::process::Command for synchronous execution
+            let result = std::process::Command::new("docker")
+                .args([
+                    "compose",
+                    "-f",
+                    &compose_file,
+                    "-p",
+                    "unified-sql-lsp-e2e",
+                    "down",
+                ])
+                .output();
+
+            match result {
+                Ok(output) => {
+                    if output.status.success() {
+                        eprintln!("!!! Docker Compose services stopped successfully");
+                    } else {
+                        eprintln!(
+                            "!!! Failed to stop Docker Compose: {}",
+                            String::from_utf8_lossy(&output.stderr)
+                        );
+                    }
+                }
+                Err(e) => {
+                    eprintln!("!!! Failed to execute docker compose down: {}", e);
+                }
+            }
+        }
+    }
+}
+
 /// Engine lifecycle guard
 ///
 /// RAII guard that:
@@ -168,7 +234,8 @@ impl EngineGuard {
     ///
     /// This function:
     /// 1. Increments the active test count for the engine
-    /// 2. Initializes the database if this is the first test
+    /// 2. Starts Docker Compose if this is the very first test across all engines
+    /// 3. Initializes the database if this is the first test for this engine
     ///
     /// The returned guard will automatically destroy the database on drop
     /// if this was the last test for the engine.
@@ -176,6 +243,21 @@ impl EngineGuard {
         let state = ENGINE_STATES
             .get(&engine)
             .ok_or_else(|| anyhow::anyhow!("Engine not found in state registry"))?;
+
+        // Start Docker Compose services if not already started
+        {
+            let docker_guard = DOCKER_COMPOSE.read().await;
+            if docker_guard.is_none() {
+                drop(docker_guard);
+                tracing::info!("Starting Docker Compose services...");
+                let mut docker_compose = DockerCompose::from_default_config()?;
+                docker_compose.start().await?;
+
+                let mut compose_guard = DOCKER_COMPOSE.write().await;
+                *compose_guard = Some(docker_compose);
+                tracing::info!("Docker Compose services started");
+            }
+        }
 
         let test_index = state.active_test_count.fetch_add(1, Ordering::SeqCst);
 

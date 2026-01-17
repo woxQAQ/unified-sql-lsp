@@ -381,25 +381,6 @@ impl LspBackend {
             return Some(info);
         }
 
-        // Check for table aliases
-        // Simple heuristic: short single-letter words after FROM/JOIN
-        if word.len() <= 2 && word.chars().all(|c| c.is_alphabetic()) {
-            // Check if this looks like an alias (appears near FROM/JOIN)
-            if source_upper.contains(" FROM ") || source_upper.contains(" JOIN ") {
-                return Some(hover_provider.get_table_alias_hover(word));
-            }
-        }
-
-        // Check for table names by querying catalog
-        if let Ok(tables) = catalog.list_tables().await {
-            let word_lower = word.to_lowercase();
-            for table in tables {
-                if table.name.to_lowercase() == word_lower {
-                    return Some(hover_provider.get_table_hover(&table.name));
-                }
-            }
-        }
-
         // Check for column names by querying catalog
         // Try to extract table name FROM clause
         if let Some(from_pos) = source_upper.find(" FROM ") {
@@ -426,6 +407,25 @@ impl LspBackend {
                         return Some(hover_provider.get_column_hover(&hover_info));
                     }
                 }
+            }
+        }
+
+        // Check for table names by querying catalog
+        if let Ok(tables) = catalog.list_tables().await {
+            let word_lower = word.to_lowercase();
+            for table in tables {
+                if table.name.to_lowercase() == word_lower {
+                    return Some(hover_provider.get_table_hover(&table.name));
+                }
+            }
+        }
+
+        // Check for table aliases (only single-letter aliases)
+        // Simple heuristic: single-letter words after FROM/JOIN
+        if word.len() == 1 && word.chars().all(|c| c.is_alphabetic()) {
+            // Check if this looks like an alias (appears near FROM/JOIN)
+            if source_upper.contains(" FROM ") || source_upper.contains(" JOIN ") {
+                return Some(hover_provider.get_table_alias_hover(word));
             }
         }
 

@@ -124,19 +124,19 @@ impl DockerCompose {
         Ok(())
     }
 
-    /// Wait for MySQL to be ready
+    /// Wait for MySQL 5.7 to be ready
     async fn wait_for_mysql(&self) -> Result<()> {
-        info!("Waiting for MySQL to be ready...");
+        info!("Waiting for MySQL 5.7 to be ready...");
 
         let mut retries = 60; // 60 seconds max
         let interval = tokio::time::Duration::from_secs(1);
 
         while retries > 0 {
-            // Check if MySQL is accepting connections
+            // Check if MySQL 5.7 is accepting connections
             let output = Command::new("docker")
                 .args([
                     "exec",
-                    "unified-sql-lsp-mysql",
+                    "unified-sql-lsp-mysql-57",
                     "mysqladmin",
                     "ping",
                     "-h",
@@ -151,17 +151,17 @@ impl DockerCompose {
 
             if let Ok(out) = output {
                 if out.status.success() {
-                    info!("MySQL is ready!");
+                    info!("MySQL 5.7 is ready!");
                     return Ok(());
                 }
             }
 
-            warn!("MySQL not ready yet, retrying... ({})", retries);
+            warn!("MySQL 5.7 not ready yet, retrying... ({})", retries);
             tokio::time::sleep(interval).await;
             retries -= 1;
         }
 
-        Err(anyhow::anyhow!("MySQL did not become ready in time"))
+        Err(anyhow::anyhow!("MySQL 5.7 did not become ready in time"))
     }
 
     /// Stop Docker Compose services

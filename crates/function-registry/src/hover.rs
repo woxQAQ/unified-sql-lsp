@@ -122,48 +122,48 @@ impl HoverInfoProvider {
     #[allow(clippy::only_used_in_recursion)]
     fn format_data_type(&self, data_type: &DataType) -> String {
         match data_type {
-            DataType::Integer => "Integer".to_string(),
-            DataType::BigInt => "BigInt".to_string(),
-            DataType::SmallInt => "SmallInt".to_string(),
-            DataType::TinyInt => "TinyInt".to_string(),
-            DataType::Decimal => "Decimal".to_string(),
-            DataType::Float => "Float".to_string(),
-            DataType::Double => "Double".to_string(),
-            DataType::Text => "Text".to_string(),
+            DataType::Integer => "INT".to_string(),
+            DataType::BigInt => "BIGINT".to_string(),
+            DataType::SmallInt => "SMALLINT".to_string(),
+            DataType::TinyInt => "TINYINT".to_string(),
+            DataType::Decimal => "DECIMAL".to_string(),
+            DataType::Float => "FLOAT".to_string(),
+            DataType::Double => "DOUBLE".to_string(),
+            DataType::Text => "TEXT".to_string(),
             DataType::Varchar(length) => {
                 if let Some(len) = length {
-                    format!("VarChar({})", len)
+                    format!("VARCHAR({})", len)
                 } else {
-                    "VarChar".to_string()
+                    "VARCHAR".to_string()
                 }
             }
             DataType::Char(length) => {
                 if let Some(len) = length {
-                    format!("Char({})", len)
+                    format!("CHAR({})", len)
                 } else {
-                    "Char".to_string()
+                    "CHAR".to_string()
                 }
             }
-            DataType::Binary => "Binary".to_string(),
+            DataType::Binary => "BINARY".to_string(),
             DataType::VarBinary(length) => {
                 if let Some(len) = length {
-                    format!("VarBinary({})", len)
+                    format!("VARBINARY({})", len)
                 } else {
-                    "VarBinary".to_string()
+                    "VARBINARY".to_string()
                 }
             }
-            DataType::Blob => "Blob".to_string(),
-            DataType::Date => "Date".to_string(),
-            DataType::Time => "Time".to_string(),
-            DataType::DateTime => "DateTime".to_string(),
-            DataType::Timestamp => "Timestamp".to_string(),
-            DataType::Boolean => "Boolean".to_string(),
+            DataType::Blob => "BLOB".to_string(),
+            DataType::Date => "DATE".to_string(),
+            DataType::Time => "TIME".to_string(),
+            DataType::DateTime => "DATETIME".to_string(),
+            DataType::Timestamp => "TIMESTAMP".to_string(),
+            DataType::Boolean => "BOOLEAN".to_string(),
             DataType::Json => "JSON".to_string(),
             DataType::Uuid => "UUID".to_string(),
-            DataType::Enum(values) => format!("Enum({})", values.join(", ")),
+            DataType::Enum(values) => format!("ENUM({})", values.join(", ")),
             DataType::Array(inner) => format!("{}[]", self.format_data_type(inner)),
-            DataType::Other(name) => format!("Other({})", name),
-            _ => "Unknown".to_string(),
+            DataType::Other(name) => format!("OTHER({})", name),
+            _ => "UNKNOWN".to_string(),
         }
     }
 
@@ -239,11 +239,11 @@ mod tests {
     #[test]
     fn test_format_data_type() {
         let provider = HoverInfoProvider::new();
-        assert_eq!(provider.format_data_type(&DataType::Integer), "Integer");
-        assert_eq!(provider.format_data_type(&DataType::Text), "Text");
+        assert_eq!(provider.format_data_type(&DataType::Integer), "INT");
+        assert_eq!(provider.format_data_type(&DataType::Text), "TEXT");
         assert_eq!(
             provider.format_data_type(&DataType::Varchar(Some(255))),
-            "VarChar(255)"
+            "VARCHAR(255)"
         );
     }
 
@@ -265,7 +265,7 @@ mod tests {
         };
         let info = provider.get_column_hover(&column_info);
         assert!(info.contains("id"));
-        assert!(info.contains("Integer"));
+        assert!(info.contains("INT"));
         assert!(info.contains("Primary Key"));
     }
 }

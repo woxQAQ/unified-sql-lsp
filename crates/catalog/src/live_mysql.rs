@@ -240,7 +240,14 @@ impl LiveMySQLCatalog {
 
         match type_name.as_str() {
             // Integer types
-            "tinyint" => DataType::TinyInt,
+            "tinyint" => {
+                // MySQL uses TINYINT(1) for BOOLEAN
+                if type_lower == "tinyint(1)" {
+                    DataType::Boolean
+                } else {
+                    DataType::TinyInt
+                }
+            }
             "smallint" => DataType::SmallInt,
             "int" | "integer" => DataType::Integer,
             "bigint" => DataType::BigInt,
@@ -367,7 +374,7 @@ impl Catalog for LiveMySQLCatalog {
             let query = r#"
                 SELECT
                     CAST(COLUMN_NAME AS CHAR) as column_name,
-                    CAST(DATA_TYPE AS CHAR) as data_type,
+                    CAST(COLUMN_TYPE AS CHAR) as column_type,
                     CAST(IS_NULLABLE AS CHAR) as is_nullable,
                     CAST(COLUMN_DEFAULT AS CHAR) as column_default,
                     CAST(COLUMN_COMMENT AS CHAR) as column_comment,
@@ -402,8 +409,8 @@ impl Catalog for LiveMySQLCatalog {
             let columns: Vec<ColumnMetadata> = rows
                 .into_iter()
                 .map(
-                    |(name, data_type, is_nullable, _default, comment, column_key)| {
-                        let dt = Self::parse_mysql_type(&data_type);
+                    |(name, column_type, is_nullable, _default, comment, column_key)| {
+                        let dt = Self::parse_mysql_type(&column_type);
                         let nullable = is_nullable == "YES";
                         let is_pk = column_key == "PRI";
                         let is_fk = column_key == "MUL";
