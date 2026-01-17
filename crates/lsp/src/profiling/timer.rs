@@ -77,17 +77,19 @@ macro_rules! timed_scope {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::profiling::stats::TimingCollector;
 
     #[test]
     fn test_scoped_timer_timing() {
-        let collector = super::stats::TimingCollector::new();
+        // Clear any existing timings
+        TimingCollector::clear();
 
         {
             let _timer = ScopedTimer::new("test_operation");
             std::thread::sleep(std::time::Duration::from_millis(10));
         }
 
-        let report = collector.report();
+        let report = TimingCollector::report();
         assert!(report.scopes.contains_key("test_operation"));
     }
 }
