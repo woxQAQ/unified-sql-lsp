@@ -1,107 +1,134 @@
-# Repository Guidelines for AI Collaboration
+# AI Collaboration Guide
 
-## Project Overview
+## 1. Project Overview
 
-Unified SQL LSP is a multi-dialect SQL Language Server Protocol implementation supporting MySQL, PostgreSQL, TiDB, MariaDB, and CockroachDB.
+**Purpose:** Multi-dialect SQL Language Server Protocol (LSP) implementation supporting MySQL, PostgreSQL, TiDB, MariaDB, and CockroachDB.
 
-**Core Features:**
+**Core Capabilities:**
 - Multi-dialect grammar support via Tree-sitter
-- Schema-aware code completion
+- Schema-aware code completion (tables, columns, functions, keywords)
 - Real-time syntax and semantic validation
-- High-performance incremental parsing with multi-level caching
+- High-performance incremental parsing with caching
 
-**Tech Stack:** Rust 2024, tower-lsp, Tree-sitter, Docker (E2E testing)
+**Tech Stack:** Rust 2024 edition, tower-lsp framework, Tree-sitter parsers, Docker (E2E testing)
 
-## Architecture
+## 2. Architecture
 
-### Layered Dependency Flow
+### Dependency Flow (Top → Bottom)
 
 ```
 LSP Layer (~3,000 lines)
-    ↓ delegates to
-Semantic Layer (scope, symbols, resolution)
-    ↓ depends on
-Context Layer (CST utilities, completion detection)
-    ↓ depends on
-IR & Grammar Layers (unified IR, Tree-sitter parsers)
+  └─ Protocol handlers, type conversions
+  └─ Delegates business logic to ↓
+Semantic Layer
+  ├─ ScopeManager (tracks visible tables/columns)
+  ├─ AliasResolver (4 resolution strategies)
+  └─ ColumnResolver (resolves column references)
+  └─ Depends on ↓
+Context Layer
+  ├─ NodeExt, ScopeBuilder (CST utilities)
+  ├─ CompletionContext (detects SELECT/FROM/WHERE/etc.)
+  └─ SQL keyword providers
+  └─ Depends on ↓
+IR & Grammar Layers
+  ├─ IR: Unified intermediate representation
+  └─ Grammar: Tree-sitter parsers (dialect-specific)
 ```
 
-### Crate Responsibilities
+### Crate Map
 
-- **`crates/lsp/`** - Thin LSP protocol adapter using tower-lsp. Handles protocol and type conversions only.
-- **`crates/semantic/`** - Semantic analysis: `ScopeManager` (tracks tables/columns), `AliasResolver` (multi-strategy alias resolution), `ColumnResolver`
-- **`crates/context/`** - CST utilities: `NodeExt`, `ScopeBuilder`, `CompletionContext` detection, SQL keyword providers
-- **`crates/lowering/`** - CST to IR conversion with three-tier outcomes: Success, Partial, Failed
-- **`crates/ir/`** - Dialect-independent intermediate representation
-- **`crates/grammar/`** - Tree-sitter grammar definitions with compile-time dialect selection via `DIALECT` env var
-- **`crates/catalog/`** - Database schema abstraction: `LiveCatalog` (real DBs), `StaticCatalog` (YAML/JSON)
-- **`crates/function-registry/`** - Function metadata and hover information
-- **`crates/test-utils/`** - Testing utilities and fixtures
+| Crate | Purpose |
+|-------|---------|
+| `lsp/` | LSP protocol adapter (tower-lsp), thin layer only |
+| `semantic/` | Scope management, symbol resolution, alias resolution |
+| `context/` | CST utilities, completion context detection |
+| `lowering/` | CST → IR conversion (Success/Partial/Failed) |
+| `ir/` | Dialect-independent intermediate representation |
+| `grammar/` | Tree-sitter grammars with `DIALECT` env var selection |
+| `catalog/` | `LiveCatalog` (real DBs), `StaticCatalog` (YAML/JSON) |
+| `function-registry/` | Function metadata, hover information |
+| `test-utils/` | Shared test fixtures and utilities |
 
 ### Dialect Strategy
 
-- Base SQL grammar in `grammar.js`
-- Dialect extensions in `dialect/{mysql,postgresql}.js`
-- Compatible dialects share parsers: TiDB/MariaDB → MySQL, CockroachDB → PostgreSQL
-- Separate parser object files: `parser-base.c`, `parser-mysql.c`, `parser-postgresql.c`
+**Grammar Files:**
+- `grammar.js` - Base SQL grammar
+- `dialect/{mysql,postgresql}.js` - Dialect extensions
 
-### Key Design Patterns
+**Parser Sharing:**
+- TiDB/MariaDB → use MySQL parser
+- CockroachDB → uses PostgreSQL parser
 
-**Three-tier Lowering:**
-- Success - Complete conversion
-- Partial - Degraded mode when parsing partially fails
-- Failed - Complete conversion failure
+**Generated Files:**
+- `parser-base.c`, `parser-mysql.c`, `parser-postgresql.c`
 
-**Performance Strategy:**
-- Coarse-grained cache invalidation (any edit invalidates entire document)
-- SQL queries are short, so full re-parsing is acceptable
-- Partial success mode allows degraded completion
+### Key Architectural Patterns
 
-## Development Workflow
+**Lowering Outcomes (Three-tier):**
+1. **Success** - Complete CST → IR conversion
+2. **Partial** - Degraded mode (partial parsing failure)
+3. **Failed** - Complete conversion failure
+
+**Performance Approach:**
+- Coarse-grained cache: any edit invalidates entire document cache
+- Full re-parsing is acceptable (SQL queries are typically short)
+- Partial success mode enables best-effort completion on errors
+
+## 3. Development Workflow
 
 ### Essential Commands
 
 ```bash
-make build              # Build workspace
+make build              # Build entire workspace
 make test               # Run all tests
 make run                # Run LSP server
-make check              # Run fmt + clippy
-make test-e2e           # Run E2E tests
-make test-e2e-parallel  # Parallel E2E tests (3-4x faster)
+make check              # Run fmt + clippy checks
+make help               # Show all available commands
 ```
 
 ### Prerequisites
 
-- Rust 2024 edition
-- Node.js + tree-sitter CLI: `npm install -g tree-sitter-cli`
+- **Rust:** 2024 edition
+- **Node.js:** Required for tree-sitter CLI
+- **tree-sitter CLI:** `npm install -g tree-sitter-cli`
 
-## Coding Standards
+## 4. Coding Standards & Constraints
 
-**Naming Conventions:**
-- Variables/functions: `snake_case`
-- Structs/enums: `PascalCase`
+### Naming Conventions
+- **Variables/Functions:** `snake_case`
+- **Structs/Enums:** `PascalCase`
 
-**Comment Philosophy:**
-- Code explains WHAT (actions)
-- Comments explain WHY and HOW
+### Comment Philosophy
+- **Code:** Explains WHAT (actions)
+- **Comments:** Explain WHY and HOW (rationale, trade-offs)
 
-**Architectural Constraints:**
-- LSP layer must remain thin (~3,000 lines) - delegate business logic to semantic/context layers
-- Follow dependency flow: LSP → Semantic → Context → IR/Grammar
-- Use IR layer for dialect-independent operations
+### Architectural Constraints
+- **LSP layer thickness:** Must remain ~3,000 lines (thin adapter)
+  - Delegate business logic to semantic/context layers
+  - Only handle LSP protocol and type conversions
+- **Dependency flow:** Follow LSP → Semantic → Context → IR/Grammar
+- **Dialect independence:** Use IR layer for dialect-agnostic operations
 
-## E2E Testing
+### Design Patterns
+- **Three-tier lowering:** Success, Partial, Failed outcomes
+- **Multi-strategy resolution:** AliasResolver with 4 strategies (ExactMatch, StartsWith, FirstLetterPlusNumeric, SingleTableFallback)
 
-**CRITICAL RULES:**
-- **NEVER** run `cargo test` directly in `tests/e2e-rs`
-- **NEVER** run `cargo nextest` without specific targets (runs all database engines)
-- **ALWAYS** use Makefile commands for test execution
-- **After code changes**, run only relevant test subset
-- **When tests fail**, re-run only failed tests with `cargo nextest run --failed`
+## 5. E2E Testing
 
-### Test Execution
+### CRITICAL RULES (MUST FOLLOW)
 
-**By Database Engine:**
+**FORBIDDEN:**
+- ❌ NEVER run `cargo test` directly in `tests/e2e-rs/`
+- ❌ NEVER run `cargo nextest` without specific targets (will try all DB engines)
+
+**REQUIRED:**
+- ✅ ALWAYS use Makefile commands for test execution
+- ✅ After code changes: Run only relevant test subset
+- ✅ When tests fail: Re-run only failed tests with `cargo nextest run --failed`
+
+### Test Execution Commands
+
+**Run by Database Engine:**
 ```bash
 make test-e2e-mysql-5.7       # MySQL 5.7 only
 make test-e2e-mysql-8.0       # MySQL 8.0 only
@@ -112,56 +139,74 @@ make test-e2e-postgresql      # All PostgreSQL versions
 make list-e2e                 # List all E2E tests
 ```
 
+**Full Test Suite:**
+```bash
+make test-e2e           # Run all E2E tests
+make test-e2e-parallel  # Parallel execution (3-4x faster)
+```
+
 **Individual Test:**
 ```bash
 cd tests/e2e-rs
 cargo nextest run --package mysql-5-7-e2e-tests -- test_completion_basic_select
 ```
 
+**Re-run Failed Tests:**
+```bash
+cd tests/e2e-rs
+cargo nextest run --failed
+```
+
 ### Test Categories
 
-- **Completion** - Tables, columns, functions, keywords, JOINs
-- **Hover** - Types, signatures, aliases
-- **Diagnostics** - Syntax, semantic, type mismatch errors
+| Category | Coverage |
+|----------|----------|
+| **Completion** | Tables, columns, functions, keywords, JOINs |
+| **Hover** | Types, signatures, aliases |
+| **Diagnostics** | Syntax, semantic, type mismatch errors |
 
 ### Test Fixtures
 
-- Schema fixtures: `fixtures/schema/`
-- Data fixtures: `fixtures/data/`
-- Ensure changes work across all supported database versions
+- **Schema:** `fixtures/schema/` - Database schema definitions
+- **Data:** `fixtures/data/` - Test data
+- **Requirement:** Changes must work across all supported database versions
 
-## Common Tasks
+## 6. Common Tasks
 
 ### Adding New Completion Feature
 
-1. Implement context detection in `crates/context/`
-2. Add completion logic in `crates/semantic/` or `crates/lsp/`
-3. Write E2E tests in `tests/e2e-rs/`
-4. Run relevant database engine tests: `make test-e2e-mysql`
+1. **Implement context detection** in `crates/context/`
+2. **Add completion logic** in `crates/semantic/` or `crates/lsp/`
+3. **Write E2E tests** in `tests/e2e-rs/`
+4. **Run relevant tests:** `make test-e2e-mysql` (or specific engine)
 
 ### Debugging Completion Issues
 
-1. Check `CompletionContext` detection in context layer
+1. Check `CompletionContext` detection (context layer)
 2. Verify `ScopeManager` tracks correct tables/columns
 3. Ensure `AliasResolver` strategy matches query pattern
 4. Run E2E tests for specific database engine
 
 ### Adding New Dialect Support
 
-1. Create dialect extension in `crates/grammar/dialect/{dialect}.js`
+1. Create dialect extension: `crates/grammar/dialect/{dialect}.js`
 2. Update `DIALECT` environment variable handling
 3. Add dialect-specific lowering in `crates/lowering/`
-4. Create E2E test package in `tests/e2e-rs/`
+4. Create E2E test package: `tests/e2e-rs/`
 5. Add Makefile targets for new dialect
 
-## Domain-Specific Context
+## 7. Domain-Specific Context
 
-**Key Components:**
-- `ScopeManager` - Tracks visible tables/columns at each position
-- `AliasResolver` - Four strategies: ExactMatch, StartsWith, FirstLetterPlusNumeric, SingleTableFallback
-- `HoverInfoProvider` - Function signatures, column types, table information
-- `CompletionContext` - Detects SELECT/FROM/WHERE/etc. contexts
+### Key Components
 
-**Known Limitations:**
-- Coarse-grained caching may affect performance for very large SQL files
-- Partial success mode provides best-effort completion when parsing fails
+| Component | Purpose |
+|-----------|---------|
+| `ScopeManager` | Tracks visible tables/columns at each query position |
+| `AliasResolver` | 4 strategies: ExactMatch, StartsWith, FirstLetterPlusNumeric, SingleTableFallback |
+| `HoverInfoProvider` | Function signatures, column types, table information |
+| `CompletionContext` | Detects SELECT/FROM/WHERE/etc. contexts |
+
+### Known Limitations
+
+- **Coarse-grained caching:** May affect performance for very large SQL files
+- **Partial success mode:** Provides best-effort completion when parsing fails (degraded UX)
