@@ -9,14 +9,13 @@
 
 meta:
   version: "1.0"
-  last_updated: "2026-01-08"
+  last_updated: "2026-01-18"
   total_features: 48
-  completed_features: 23
+  completed_features: 24
   notes: >-
-    TEST-002 fully implemented with 24 comprehensive integration tests covering
-    completion flow (10 tests), multi-document concurrency (6 tests), and
-    catalog integration (8 tests). All tests passing with performance
-    validation (p95 < 200ms) and error isolation.
+    DIAG-001 fully implemented with diagnostic infrastructure including DiagnosticCode enum,
+    SqlDiagnostic struct, DiagnosticCollector with recursive ERROR node detection, LSP integration,
+    graceful degradation, and comprehensive tests (10+ unit tests, 8 integration tests).
 
 features:
   # =============================================================================
@@ -617,10 +616,17 @@ features:
       - 诊断推送机制
       - 严重级别映射
     priority: P1
+    status: done
     dependencies: ["LSP-001"]
     deliverables:
       - crates/lsp/src/diagnostic.rs
       - 类型定义
+      - Note: >-
+          Fully implemented with DiagnosticCode enum, SqlDiagnostic struct, DiagnosticCollector
+          with recursive ERROR node detection, LSP integration via publish_diagnostics_for_document,
+          graceful degradation for missing/locked trees, comprehensive unit and integration tests
+          (10+ unit tests, 8 integration tests), and all four severity levels (ERROR, WARNING,
+          INFORMATION, HINT)
 
   - id: DIAG-002
     name: "语法错误诊断"
