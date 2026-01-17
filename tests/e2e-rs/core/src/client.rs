@@ -14,6 +14,8 @@ use tokio::process::{ChildStdin, ChildStdout};
 use tokio::sync::RwLock;
 use tower_lsp::lsp_types::*;
 
+use crate::debug_log;
+
 /// Mock LSP client that captures responses
 #[derive(Clone)]
 pub struct MockClient {
@@ -151,7 +153,7 @@ impl LspConnection {
                 }
 
                 let trimmed = line.trim();
-                eprintln!("!!! CLIENT: Read header line: {:?}", trimmed);
+                debug_log!("!!! CLIENT: Read header line: {:?}", trimmed);
 
                 if trimmed.is_empty() {
                     // Empty line marks end of headers
@@ -168,7 +170,7 @@ impl LspConnection {
 
             let content_length =
                 content_length.ok_or_else(|| anyhow::anyhow!("Invalid Content-Length header"))?;
-            eprintln!("!!! CLIENT: Content length: {}", content_length);
+            debug_log!("!!! CLIENT: Content length: {}", content_length);
 
             // Read the content
             let mut content_buf = vec![0u8; content_length];
@@ -186,7 +188,7 @@ impl LspConnection {
                 // It's a notification - check if it's publish_diagnostics
                 if let Some(method) = json.get("method").and_then(|m| m.as_str()) {
                     if method == "textDocument/publishDiagnostics" {
-                        eprintln!("!!! CLIENT: Received publish_diagnostics notification");
+                        debug_log!("!!! CLIENT: Received publish_diagnostics notification");
                         if let Some(params) = json.get("params") {
                             if let Some(uri) = params.get("uri").and_then(|u| u.as_str()) {
                                 if let Some(diags) =
@@ -198,7 +200,7 @@ impl LspConnection {
                                     )?;
                                     let diag_count = diagnostics.len();
                                     self.client.record_diagnostics(url, diagnostics).await;
-                                    eprintln!(
+                                    debug_log!(
                                         "!!! CLIENT: Recorded {} diagnostics for {}",
                                         diag_count, uri
                                     );
@@ -206,10 +208,10 @@ impl LspConnection {
                             }
                         }
                     } else {
-                        eprintln!("!!! CLIENT: Skipping notification: {}", method);
+                        debug_log!("!!! CLIENT: Skipping notification: {}", method);
                     }
                 } else {
-                    eprintln!("!!! CLIENT: Skipping notification: {}", content_str);
+                    debug_log!("!!! CLIENT: Skipping notification: {}", content_str);
                 }
             } else {
                 // Not valid JSON, just return it
@@ -285,7 +287,7 @@ impl LspConnection {
         dialect: &str,
         connection_string: &str,
     ) -> Result<()> {
-        eprintln!(
+        debug_log!(
             "!!! CLIENT: Sending did_change_configuration: dialect={}, connection={}",
             dialect, connection_string
         );
@@ -299,11 +301,11 @@ impl LspConnection {
             }),
         };
 
-        eprintln!("!!! CLIENT: Calling notify for workspace/didChangeConfiguration");
+        debug_log!("!!! CLIENT: Calling notify for workspace/didChangeConfiguration");
         let result = self
             .notify("workspace/didChangeConfiguration".to_string(), params)
             .await;
-        eprintln!(
+        debug_log!(
             "!!! CLIENT: did_change_configuration notification sent: {:?}",
             result
         );
@@ -316,7 +318,7 @@ impl LspConnection {
         uri: Url,
         position: Position,
     ) -> Result<Option<Vec<CompletionItem>>> {
-        eprintln!(
+        debug_log!(
             "!!! CLIENT: Requesting completion for uri={}, line={}, col={}",
             uri, position.line, position.character
         );
@@ -342,7 +344,7 @@ impl LspConnection {
             "params": params,
         });
 
-        eprintln!(
+        debug_log!(
             "!!! CLIENT: Sending completion request: {}",
             serde_json::to_string(&json_request)?
         );
@@ -350,54 +352,54 @@ impl LspConnection {
         self.send_message(&serde_json::to_string(&json_request)?)
             .await?;
 
-        eprintln!("!!! CLIENT: Request sent, reading response...");
+        debug_log!("!!! CLIENT: Request sent, reading response...");
         // Read response
         let response_str = self.read_message().await?;
-        eprintln!("!!! CLIENT: Received response: {}", response_str);
+        debug_log!("!!! CLIENT: Received response: {}", response_str);
         let json_response: serde_json::Value = serde_json::from_str(&response_str)?;
 
         if let Some(error) = json_response.get("error") {
             // Completion error is not critical - return empty
-            eprintln!("!!! CLIENT: Completion error: {}", error);
+            debug_log!("!!! CLIENT: Completion error: {}", error);
             return Ok(None);
         }
 
         let result = json_response.get("result");
-        eprintln!("!!! CLIENT: result = {:?}", result);
+        debug_log!("!!! CLIENT: result = {:?}", result);
 
         match result {
             Some(serde_json::Value::Null) => {
-                eprintln!("!!! CLIENT: result is Null, returning Ok(None)");
+                debug_log!("!!! CLIENT: result is Null, returning Ok(None)");
                 Ok(None)
             }
             Some(result) => {
                 // Try to parse as CompletionResponse
                 if let Ok(response) = serde_json::from_value::<CompletionResponse>(result.clone()) {
-                    eprintln!("!!! CLIENT: Parsed as CompletionResponse");
+                    debug_log!("!!! CLIENT: Parsed as CompletionResponse");
                     let items = match response {
                         CompletionResponse::Array(items) => {
-                            eprintln!("!!! CLIENT: Got Array with {} items", items.len());
+                            debug_log!("!!! CLIENT: Got Array with {} items", items.len());
                             items
                         }
                         CompletionResponse::List(list) => {
-                            eprintln!("!!! CLIENT: Got List with {} items", list.items.len());
+                            debug_log!("!!! CLIENT: Got List with {} items", list.items.len());
                             list.items
                         }
                     };
                     Ok(Some(items))
                 } else {
-                    eprintln!(
+                    debug_log!(
                         "!!! CLIENT: Failed to parse as CompletionResponse, trying direct array"
                     );
                     // Try direct array parse
                     let items: Vec<CompletionItem> =
                         serde_json::from_value(result.clone()).unwrap_or_default();
-                    eprintln!("!!! CLIENT: Direct array parse got {} items", items.len());
+                    debug_log!("!!! CLIENT: Direct array parse got {} items", items.len());
                     Ok(Some(items))
                 }
             }
             None => {
-                eprintln!("!!! CLIENT: result is None, returning Ok(None)");
+                debug_log!("!!! CLIENT: result is None, returning Ok(None)");
                 Ok(None)
             }
         }

@@ -32,6 +32,7 @@ pub mod client;
 pub mod db;
 pub mod docker;
 pub mod engine_manager;
+pub mod logging;
 pub mod runner;
 pub mod utils;
 pub mod yaml_parser;
@@ -49,6 +50,8 @@ use tracing::info;
 use client::LspConnection;
 use db::adapter_from_test_path;
 use docker::DockerCompose;
+
+use logging::initialize;
 
 /// Global Docker Compose manager (initialized once, thread-safe)
 static DOCKER_COMPOSE: LazyLock<Arc<RwLock<Option<DockerCompose>>>> =
@@ -122,31 +125,31 @@ pub async fn run_test(
 
     for schema_path in &suite.database.schemas {
         let full_path = suite_dir.join(schema_path);
-        eprintln!("!!! Loading schema from: {:?}", full_path);
+        debug_log!("!!! Loading schema from: {:?}", full_path);
         if full_path.exists() {
-            eprintln!("!!! Schema file exists, loading...");
+            debug_log!("!!! Schema file exists, loading...");
             if let Err(e) = adapter.load_schema(&full_path).await {
-                eprintln!("!!! Failed to load schema: {}", e);
+                debug_log!("!!! Failed to load schema: {}", e);
             } else {
-                eprintln!("!!! Schema loaded successfully");
+                debug_log!("!!! Schema loaded successfully");
             }
         } else {
-            eprintln!("!!! WARNING: Schema file not found: {:?}", full_path);
+            debug_log!("!!! WARNING: Schema file not found: {:?}", full_path);
         }
     }
 
     for data_path in &suite.database.data {
         let full_path = suite_dir.join(data_path);
-        eprintln!("!!! Loading data from: {:?}", full_path);
+        debug_log!("!!! Loading data from: {:?}", full_path);
         if full_path.exists() {
-            eprintln!("!!! Data file exists, loading...");
+            debug_log!("!!! Data file exists, loading...");
             if let Err(e) = adapter.load_data(&full_path).await {
-                eprintln!("!!! Failed to load data: {}", e);
+                debug_log!("!!! Failed to load data: {}", e);
             } else {
-                eprintln!("!!! Data loaded successfully");
+                debug_log!("!!! Data loaded successfully");
             }
         } else {
-            eprintln!("!!! WARNING: Data file not found: {:?}", full_path);
+            debug_log!("!!! WARNING: Data file not found: {:?}", full_path);
         }
     }
 
@@ -273,6 +276,9 @@ pub async fn run_test(
 
 /// Run all tests in a suite
 pub async fn run_suite(suite_path: impl AsRef<std::path::Path>) -> Result<()> {
+    // Initialize logging system
+    initialize();
+
     // Resolve the path - if relative, make it relative to workspace root
     let path = suite_path.as_ref();
     let resolved_path = if path.is_absolute() {
@@ -285,9 +291,9 @@ pub async fn run_suite(suite_path: impl AsRef<std::path::Path>) -> Result<()> {
         workspace_root.join(path)
     };
 
-    eprintln!("!!! Loading test suite from: {:?}", resolved_path);
+    debug_log!("!!! Loading test suite from: {:?}", resolved_path);
     let suite = TestSuite::from_file(&resolved_path)?;
-    eprintln!(
+    debug_log!(
         "!!! Test suite loaded: {} with {} tests",
         suite.name,
         suite.tests.len()
@@ -296,13 +302,18 @@ pub async fn run_suite(suite_path: impl AsRef<std::path::Path>) -> Result<()> {
     let mut failed_tests = Vec::new();
 
     for test in &suite.tests {
-        eprintln!("!!! About to run test: {}", test.name);
+        eprintln!("Running test: {}", test.name);
         match run_test(&suite, test, &resolved_path).await {
             Ok(_) => {
-                eprintln!("!!! Test completed: {}", test.name);
+                eprintln!("Test completed: {}", test.name);
             }
             Err(e) => {
-                eprintln!("!!! Test FAILED: {} - {}", test.name, e);
+                // First failure: flush logs to file
+                if failed_tests.is_empty() {
+                    let _ = logging::flush_to_file();
+                }
+                eprintln!("Test FAILED: {} - {}", test.name, e);
+                debug_log!("!!! Test FAILED: {} - {}", test.name, e);
                 failed_tests.push((test.name.clone(), e));
             }
         }
@@ -310,9 +321,12 @@ pub async fn run_suite(suite_path: impl AsRef<std::path::Path>) -> Result<()> {
 
     // Report summary
     if !failed_tests.is_empty() {
-        eprintln!("\n!!! {} test(s) failed:", failed_tests.len());
+        eprintln!("\n{} test(s) failed", failed_tests.len());
         for (name, error) in &failed_tests {
-            eprintln!("!!!   - {}: {}", name, error);
+            eprintln!("  - {}: {}", name, error);
+        }
+        if let Some(log_path) = logging::log_path() {
+            eprintln!("\nFull debug log: {}", log_path.display());
         }
         Err(anyhow::anyhow!("{} test(s) failed", failed_tests.len()))
     } else {
@@ -333,13 +347,13 @@ fn global_cleanup() {
         .unwrap_or(false);
 
     if needs_cleanup {
-        eprintln!("!!! Global cleanup: stopping Docker Compose services...");
+        debug_log!("!!! Global cleanup: stopping Docker Compose services...");
 
         // Find the compose file path by searching upward
         let compose_file = crate::docker::find_docker_compose_file()
             .map(|p| p.to_string_lossy().to_string())
             .unwrap_or_else(|e| {
-                eprintln!("!!! Failed to find docker-compose.yml: {}", e);
+                debug_log!("!!! Failed to find docker-compose.yml: {}", e);
                 "tests/e2e-rs/docker-compose.yml".to_string()
             });
 
@@ -358,16 +372,16 @@ fn global_cleanup() {
         match result {
             Ok(output) => {
                 if output.status.success() {
-                    eprintln!("!!! Docker Compose services stopped successfully");
+                    debug_log!("!!! Docker Compose services stopped successfully");
                 } else {
-                    eprintln!(
+                    debug_log!(
                         "!!! Failed to stop Docker Compose: {}",
                         String::from_utf8_lossy(&output.stderr)
                     );
                 }
             }
             Err(e) => {
-                eprintln!("!!! Failed to execute docker compose down: {}", e);
+                debug_log!("!!! Failed to execute docker compose down: {}", e);
             }
         }
     }
