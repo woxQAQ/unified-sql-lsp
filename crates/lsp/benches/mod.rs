@@ -21,7 +21,7 @@
 // Uncomment as benchmarks are implemented
 // mod completion_pipeline;
 mod parsing;
-// mod semantic;
+mod semantic;
 // mod catalog;
 // mod concurrency;
 // mod memory;

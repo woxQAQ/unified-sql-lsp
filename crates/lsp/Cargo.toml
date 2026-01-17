@@ -65,9 +65,9 @@ criterion = "0.5"
 name = "parsing"
 harness = false
 
-# [[bench]]
-# name = "semantic"
-# harness = false
+[[bench]]
+name = "semantic"
+harness = false
 #
 # [[bench]]
 # name = "catalog"
