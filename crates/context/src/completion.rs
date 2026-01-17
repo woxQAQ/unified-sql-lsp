@@ -1319,7 +1319,8 @@ fn extract_tables_from_source(source: &str) -> Vec<String> {
 
             if !words.is_empty() {
                 // First word after INTO is the table name
-                let table_name = words[0].trim_end_matches(|c: char| !c.is_alphanumeric() && c != '_');
+                let table_name =
+                    words[0].trim_end_matches(|c: char| !c.is_alphanumeric() && c != '_');
                 tables.push(table_name.to_string());
                 debug!(
                     "!!! LSP: extract_tables_from_source: INSERT extracted table={:?}",
@@ -1371,7 +1372,8 @@ fn extract_tables_from_source(source: &str) -> Vec<String> {
 
             if !words.is_empty() {
                 // First word after FROM is the table name
-                let table_name = words[0].trim_end_matches(|c: char| !c.is_alphanumeric() && c != '_');
+                let table_name =
+                    words[0].trim_end_matches(|c: char| !c.is_alphanumeric() && c != '_');
                 tables.push(table_name.to_string());
                 debug!(
                     "!!! LSP: extract_tables_from_source: DELETE extracted table={:?}",
