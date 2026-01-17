@@ -676,22 +676,25 @@ features:
   # =============================================================================
 
   - id: PERF-001
-    name: "三级缓存实现"
+    name: "性能剖析与基准测试"
     description: |
-      实现完整的缓存体系
-      - Tree 缓存
-      - IR 缓存（ArcSwap）
-      - Semantic 缓存
-      - 粗粒度失效策略
+      建立性能剖析体系，识别实际瓶颈
+      - Flame graph 生成 (使用 flamegraph/flare.rs)
+      - 关键路径耗时分析（parse → lower → semantic → complete）
+      - 内存分配热点分析
+      - 不同场景下的性能特征（小文件 vs 大文件、简单查询 vs 复杂查询）
+      - **目标**: 基于数据决定是否需要缓存优化
     priority: P1
+    status: pending
     dependencies:
       - "LSP-002"
       - "SEMANTIC-002"
-      - "CATALOG-004"
+      - "TEST-002"
     deliverables:
-      - crates/lsp/src/cache.rs
-      - 缓存管理器
-      - 性能测试
+      - crates/lsp/benches/ 目录（Criterion 基准测试）
+      - 性能剖析脚本和工具
+      - 性能瓶颈分析报告
+      - 优化建议文档（基于实测数据）
 
   - id: PERF-002
     name: "并发语义分析"
@@ -720,17 +723,22 @@ features:
       - 性能测试
 
   - id: PERF-004
-    name: "细粒度缓存失效"
+    name: "针对性性能优化"
     description: |
-      实现细粒度缓存失效（Phase 4+）
-      - 仅失效受影响的语句
-      - 受影响作用域分析
+      基于 PERF-001 剖析结果的针对性优化
+      - **前提**: PERF-001 必须先识别出明确瓶颈
+      - 可能的优化方向（待数据验证）：
+        - 细粒度缓存失效（如果解析是瓶颈）
+        - Catalog 批量查询（如果 schema 查询是瓶颈）
+        - 异步语义分析（如果 UI 响应延迟）
+      - **原则**: 一次只优化一个瓶颈，用数据验证效果
     priority: P2
+    status: pending
     dependencies: ["PERF-001", "SEMANTIC-002"]
     deliverables:
-      - 失效策略优化
-      - 性能对比测试
-      - 文档
+      - 基于剖析数据的优化方案
+      - 优化前后的性能对比报告
+      - 单一优化点的实现（避免过度优化）
 
   # =============================================================================
   # 阶段 7: 多方言扩展
@@ -995,7 +1003,7 @@ feature_groups:
 
   - id: GROUP-PERFORMANCE
     name: "性能优化"
-    description: "实现性能优化和缓存"
+    description: "数据驱动的性能优化（先剖析，后优化）"
     features:
       - "PERF-001"
       - "PERF-002"
@@ -1069,9 +1077,10 @@ milestones:
 
     description: |
 
-      性能优化和生产级特性
+      数据驱动的性能优化和生产级特性
 
-      - 缓存优化
+      - 性能剖析与基准测试（先测量）
+      - 基于数据的针对性优化（后优化）
       - 并发处理
       - Schema 过滤
       features: GROUP-PERFORMANCE
