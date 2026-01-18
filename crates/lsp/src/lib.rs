@@ -181,8 +181,8 @@ pub mod symbols;
 #[cfg(all(feature = "lsp", not(target_arch = "wasm32")))]
 pub mod sync;
 
-#[cfg(feature = "profiling")]
-pub mod profiling;
+// profiling module removed in "drop bench" commit
+// TODO: restore if benchmarking is re-added
 
 #[cfg(target_arch = "wasm32")]
 pub mod wasm;
