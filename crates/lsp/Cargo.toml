@@ -47,6 +47,42 @@ unified-sql-grammar = { path = "../grammar" }
 # Tree-sitter parsing
 tree-sitter = { workspace = true }
 
+# Profiling (optional, feature-gated)
+flamegraph = { version = "0.6", optional = true }
+dhat = { version = "0.3", optional = true }
+
 [dev-dependencies]
 tokio-test = "0.4"
 unified-sql-lsp-test-utils = { path = "../test-utils" }
+criterion = "0.5"
+
+# Benchmark harnesses
+[[bench]]
+name = "completion_pipeline"
+harness = false
+
+[[bench]]
+name = "parsing"
+harness = false
+
+[[bench]]
+name = "semantic"
+harness = false
+
+[[bench]]
+name = "catalog"
+harness = false
+
+[[bench]]
+name = "concurrency"
+harness = false
+
+[[bench]]
+name = "memory"
+harness = false
+
+[features]
+default = []
+profiling = []
+flamegraph = ["dep:flamegraph", "profiling"]
+dhat = ["dep:dhat"]

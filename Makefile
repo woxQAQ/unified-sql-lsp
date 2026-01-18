@@ -167,6 +167,25 @@ outdated:
 	@cargo outdated --version >/dev/null 2>&1 || (echo "cargo-outdated not found. Install with: cargo install cargo-outdated" && exit 1)
 	cargo outdated
 
+# ==============================================================================
+# Performance Profiling Targets
+# ==============================================================================
+
+## @profiling: Run quick benchmark suite
+benchmark:
+	@echo "Running quick benchmark suite..."
+	@cargo bench --benches completion,parsing,semantic
+
+## @profiling: Run complete profiling suite
+profile-all:
+	@echo "Running complete profiling suite..."
+	@./scripts/profiling/run_all.sh
+
+## @profiling: Generate CPU flamegraph
+flamegraph:
+	@echo "Generating flamegraph..."
+	@./scripts/profiling/flamegraph.sh
+
 ## @maint: Display project size analysis
 du:
 	@echo "Target directory size:"
@@ -223,6 +242,7 @@ help:
 	@echo ""
 	@echo "Run $(COLOR_BOLD)make <target>$(COLOR_RESET) to execute a command"
 
+<<<<<<< HEAD
 # ==============================================================================
 # PHONY Declarations
 # ==============================================================================
@@ -238,3 +258,27 @@ help:
 	clean update outdated du \
 	status commit amend \
 	help
+||||||| a71b8fb
+## @e2e: Run E2E tests with cargo test (fallback)
+test-e2e-legacy:
+	cd tests/e2e-rs && $(CARGO) test
+=======
+## @e2e: Run E2E tests with cargo test (fallback)
+test-e2e-legacy:
+	cd tests/e2e-rs && $(CARGO) test
+
+# Benchmarking
+.PHONY: benchmark profile-all flamegraph
+
+benchmark:
+	@echo "Running quick benchmark suite..."
+	@cargo bench --benches completion,parsing,semantic
+
+profile-all:
+	@echo "Running complete profiling suite..."
+	@./scripts/profiling/run_all.sh
+
+flamegraph:
+	@echo "Generating flamegraph..."
+	@./scripts/profiling/flamegraph.sh
+>>>>>>> feature/perf-001-profiling
