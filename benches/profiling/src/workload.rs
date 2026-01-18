@@ -1,8 +1,7 @@
 use crate::fixtures::{TestQuery, load_test_queries};
-use crate::operations::{execute_completion, execute_hover, execute_diagnostics};
-use unified_sql_lsp_context::DocumentState;
-use unified_sql_lsp_grammar::Parser;
-use lsp_types::Position;
+use crate::operations::{execute_completion, execute_hover, execute_diagnostics, Document};
+use unified_sql_lsp_context::Position;
+use lsp_types::Url;
 
 pub struct WorkloadResult {
     pub operations_executed: usize,
@@ -85,36 +84,24 @@ pub fn simulate_editing_session() -> WorkloadResult {
     }
 }
 
-fn create_document(query: &TestQuery) -> DocumentState {
-    // Create a document state with the query content
-    DocumentState::new(
-        "test.sql".into(),
-        query.sql.clone(),
-        0, // version
-    )
+fn create_document(query: &TestQuery) -> Document {
+    // Create a document with the query content
+    let uri = Url::parse("file:///test.sql").unwrap();
+    Document::new(query.sql.clone(), uri)
 }
 
-fn find_completion_position(doc: &DocumentState) -> Position {
+fn find_completion_position(_doc: &Document) -> Position {
     // Find SELECT clause position (simplified: line 0, char 10)
     Position { line: 0, character: 10 }
 }
 
-fn find_hover_position(doc: &DocumentState) -> Position {
+fn find_hover_position(_doc: &Document) -> Position {
     // Find a column reference position (simplified)
     Position { line: 0, character: 10 }
 }
 
-fn simulate_edits(doc: &mut DocumentState) {
+fn simulate_edits(_doc: &mut Document) {
     // Apply 1-3 character changes to simulate typing
-    use lsp_types::Range;
-
-    let content = doc.content();
-    if let Some(pos) = content.find('FROM') {
-        let range = Range {
-            start: lsp_types::Position { line: 0, character: pos as u32 },
-            end: lsp_types::Position { line: 0, character: pos as u32 + 4 },
-        };
-        // Small edit
-        // doc.apply_change(range, "from".into()); // Uncomment if API exists
-    }
+    // For now, this is a placeholder - actual edits would require
+    // implementing the apply_document_change function from operations module
 }

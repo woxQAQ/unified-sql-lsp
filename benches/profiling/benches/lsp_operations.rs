@@ -1,9 +1,7 @@
 use criterion::{black_box, criterion_group, criterion_main, Criterion, BenchmarkId};
-use std::path::Path;
-
-mod workload;
-mod operations;
-mod fixtures;
+use lsp_profiling::fixtures;
+use lsp_profiling::operations;
+use lsp_profiling::workload;
 
 fn benchmark_completion(c: &mut Criterion) {
     let mut group = c.benchmark_group("completion");
@@ -58,7 +56,7 @@ fn benchmark_diagnostics(c: &mut Criterion) {
 
 fn benchmark_editing_session(c: &mut Criterion) {
     c.bench_function("editing_session", |b| {
-        b.iter(|| workload::simulate_editing_session(black_box()))
+        b.iter(|| workload::simulate_editing_session())
     });
 }
 
