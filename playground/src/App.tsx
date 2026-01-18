@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
 import * as monaco from 'monaco-editor'
 import { initWasm } from './lib/wasm-interface'
+import { LspBridge } from './lib/lsp-bridge'
 
 export default function App() {
   const editorRef = useRef<HTMLDivElement>(null)
   const editorInstanceRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null)
+  const lspBridgeRef = useRef<LspBridge | null>(null)
   const [wasmReady, setWasmReady] = useState(false)
 
   useEffect(() => {
@@ -34,10 +36,27 @@ export default function App() {
       scrollBeyondLastLine: false,
     })
 
+    // Initialize LSP bridge when WASM is ready
+    if (wasmReady && editorInstanceRef.current) {
+      lspBridgeRef.current = new LspBridge(editorInstanceRef.current)
+
+      // Trigger initial diagnostics
+      const model = editorInstanceRef.current.getModel()
+      if (model) {
+        lspBridgeRef.current.updateDiagnostics(model)
+
+        // Listen for content changes
+        model.onDidChangeContent(() => {
+          lspBridgeRef.current?.updateDiagnostics(model)
+        })
+      }
+    }
+
     return () => {
+      lspBridgeRef.current?.dispose()
       editorInstanceRef.current?.dispose()
     }
-  }, [])
+  }, [wasmReady])
 
   return (
     <div style={{ height: '100vh', display: 'flex', flexDirection: 'column' }}>
