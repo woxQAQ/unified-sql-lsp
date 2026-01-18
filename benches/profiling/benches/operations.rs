@@ -1,7 +1,22 @@
-use unified_sql_lsp_grammar::{Parser, Dialect};
-use unified_sql_lsp_context::{DocumentState, CompletionContext};
-use unified_sql_lsp_semantic::{ScopeManager, SemanticAnalyzer};
-use lsp_types::{Position, Range};
+//! # LSP Operation Profiling Module
+//!
+//! This module provides simplified LSP operations for performance profiling.
+//!
+//! ## Design Assumptions
+//!
+//! - Operations are **not** full LSP implementations
+//! - Focus is on measuring **core logic** not protocol overhead
+//! - Context detection is measured but result discarded (acceptable for timing)
+//! - MockCatalog used instead of real catalog for reproducibility
+//!
+//! ## Usage
+//!
+//! These functions are designed for Criterion benchmarks in `lsp_operations.rs`.
+
+use unified_sql_lsp_ir::Dialect;
+use unified_sql_lsp_context::{detect_completion_context, Position};
+use unified_sql_lsp_semantic::SemanticAnalyzer;
+use unified_sql_lsp_test_utils::MockCatalog;
 use std::sync::Arc;
 
 pub struct OperationResult {
@@ -9,25 +24,52 @@ pub struct OperationResult {
     pub output_size: usize,
 }
 
+/// Simple document wrapper for profiling
+pub struct Document {
+    content: String,
+    uri: lsp_types::Url,
+}
+
+impl Document {
+    pub fn new(content: String, uri: lsp_types::Url) -> Self {
+        Self { content, uri }
+    }
+
+    pub fn content(&self) -> &str {
+        &self.content
+    }
+
+    pub fn uri(&self) -> &lsp_types::Url {
+        &self.uri
+    }
+}
+
 /// Execute completion at the given position
 pub fn execute_completion(
-    doc: &DocumentState,
+    doc: &Document,
     position: Position,
 ) -> Result<OperationResult, String> {
     let start = std::time::Instant::now();
 
-    // Detect completion context
-    let context = CompletionContext::detect(doc, position)
-        .map_err(|e| format!("Context detection failed: {}", e))?;
+    // Parse document to get tree
+    let language = unified_sql_grammar::language_for_dialect(Dialect::MySQL)
+        .ok_or_else(|| "Failed to get language for dialect".to_string())?;
 
-    // Get completion items
-    let _items = match context {
-        unified_sql_lsp_context::CompletionKind::SelectColumns => {
-            // This would call the actual completion logic
-            vec![]
-        }
-        _ => vec![],
-    };
+    let mut parser = tree_sitter::Parser::new();
+    parser
+        .set_language(language)
+        .map_err(|e| format!("Failed to set language: {}", e))?;
+
+    let tree = parser
+        .parse(doc.content(), None)
+        .ok_or_else(|| "Parse returned None".to_string())?;
+
+    // Detect completion context
+    let _context = detect_completion_context(
+        &tree.root_node(),
+        position,
+        doc.content(),
+    );
 
     let duration = start.elapsed().as_nanos();
 
@@ -39,20 +81,28 @@ pub fn execute_completion(
 
 /// Execute hover at the given position
 pub fn execute_hover(
-    doc: &DocumentState,
+    doc: &Document,
     position: Position,
 ) -> Result<OperationResult, String> {
     let start = std::time::Instant::now();
 
     // Parse document
-    let parser = Parser::new(Dialect::MySQL);
-    let cst = parser.parse(doc.content())
-        .map_err(|e| format!("Parse failed: {}", e))?;
+    let language = unified_sql_grammar::language_for_dialect(Dialect::MySQL)
+        .ok_or_else(|| "Failed to get language for dialect".to_string())?;
 
-    // Build semantic analysis
-    let mut scope_manager = ScopeManager::new();
-    let _analyzer = SemanticAnalyzer::new(&mut scope_manager);
-    // analyzer.analyze(&cst); // Would run full analysis
+    let mut parser = tree_sitter::Parser::new();
+    parser
+        .set_language(language)
+        .map_err(|e| format!("Failed to set language: {}", e))?;
+
+    let _tree = parser
+        .parse(doc.content(), None)
+        .ok_or_else(|| "Parse returned None".to_string())?;
+
+    // Build semantic analysis (simplified for profiling)
+    let catalog = Arc::new(MockCatalog::default());
+    let _analyzer = SemanticAnalyzer::new(catalog, Dialect::MySQL);
+    // Full analysis would require lowering CST to IR first
 
     let duration = start.elapsed().as_nanos();
 
@@ -64,34 +114,49 @@ pub fn execute_hover(
 
 /// Execute full diagnostics on document
 pub fn execute_diagnostics(
-    doc: &DocumentState,
+    doc: &Document,
 ) -> Result<OperationResult, String> {
     let start = std::time::Instant::now();
 
     // Parse
-    let parser = Parser::new(Dialect::MySQL);
-    let cst = parser.parse(doc.content())
-        .map_err(|e| format!("Parse failed: {}", e))?;
+    let language = unified_sql_grammar::language_for_dialect(Dialect::MySQL)
+        .ok_or_else(|| "Failed to get language for dialect".to_string())?;
 
-    // Full semantic analysis
-    let mut scope_manager = ScopeManager::new();
-    let _analyzer = SemanticAnalyzer::new(&mut scope_manager);
-    // analyzer.analyze(&cst);
+    let mut parser = tree_sitter::Parser::new();
+    parser
+        .set_language(language)
+        .map_err(|e| format!("Failed to set language: {}", e))?;
+
+    let tree = parser
+        .parse(doc.content(), None)
+        .ok_or_else(|| "Parse returned None".to_string())?;
+
+    // Count nodes as output size
+    let node_count = tree.root_node().descendant_count();
 
     let duration = start.elapsed().as_nanos();
 
     Ok(OperationResult {
         duration_ns: duration,
-        output_size: cst.root_node().child_count(),
+        output_size: node_count as usize,
     })
 }
 
 /// Apply simulated document changes
 pub fn apply_document_change(
-    doc: &mut DocumentState,
-    changes: Vec<(Range, String)>,
-) {
-    for (range, new_text) in changes {
-        doc.apply_change(range, new_text);
+    doc: &mut Document,
+    changes: Vec<(usize, usize, String)>, // (start_byte, end_byte, new_text)
+) -> Result<(), String> {
+    for (start, end, new_text) in changes {
+        if start > end || end > doc.content.len() {
+            return Err(format!(
+                "Invalid range: {}..{} for document of length {}",
+                start, end, doc.content.len()
+            ));
+        }
+        let mut content = doc.content.clone();
+        content.replace_range(start..end, &new_text);
+        doc.content = content;
     }
+    Ok(())
 }

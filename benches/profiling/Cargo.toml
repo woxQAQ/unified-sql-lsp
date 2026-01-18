@@ -13,12 +13,14 @@ unified-sql-lsp-lowering = { path = "../../crates/lowering" }
 unified-sql-lsp-semantic = { path = "../../crates/semantic" }
 unified-sql-lsp-context = { path = "../../crates/context" }
 unified-sql-lsp-ir = { path = "../../crates/ir" }
-unified-sql-lsp-grammar = { path = "../../crates/grammar" }
+unified-sql-grammar = { path = "../../crates/grammar" }
 unified-sql-lsp-catalog = { path = "../../crates/catalog" }
 unified-sql-lsp-function-registry = { path = "../../crates/function-registry" }
+unified-sql-lsp-test-utils = { path = "../../crates/test-utils" }
 
 # LSP types for convenience (reusing data structures)
 lsp-types = "0.95"
+tree-sitter = "0.26"
 
 # Dev/profiling dependencies
 criterion = "0.5"
