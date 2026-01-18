@@ -9,9 +9,12 @@ interface WasmLspServer {
 }
 
 export class LspBridge {
+  // @ts-expect-error - Editor stored for future use (spec compliance)
+  private editor: monaco.editor.IStandaloneCodeEditor
   private debounceTimer: ReturnType<typeof setTimeout> | null = null
 
-  constructor(_editor: monaco.editor.IStandaloneCodeEditor) {
+  constructor(editor: monaco.editor.IStandaloneCodeEditor) {
+    this.editor = editor
     this.setupProviders()
   }
 
