@@ -169,8 +169,8 @@ pub mod parsing;
 pub mod symbols;
 pub mod sync;
 
-#[cfg(feature = "profiling")]
-pub mod profiling;
+// profiling module removed in "drop bench" commit
+// TODO: restore if benchmarking is re-added
 
 // Re-exports for convenience
 pub use backend::{LspBackend, LspError};
