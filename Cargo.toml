@@ -29,6 +29,9 @@ anyhow = "1.0"
 async-trait = "0.1"
 tokio = { version = "1.0", features = ["full"] }
 
+# WASM support
+getrandom = { version = "0.2", features = ["js"] }
+
 # Dev dependencies for testing
 tokio-test = "0.4"
 criterion = "0.5"

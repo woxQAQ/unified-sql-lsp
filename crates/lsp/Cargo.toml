@@ -55,6 +55,11 @@ console_error_panic_hook = "0.1"
 flamegraph = { version = "0.6", optional = true }
 dhat = { version = "0.3", optional = true }
 
+# WASM-specific dependencies
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+tokio = { version = "1.35", default-features = false, features = ["macros"] }
+getrandom = { version = "0.2", features = ["js"] }
+
 [dev-dependencies]
 tokio-test = "0.4"
 unified-sql-lsp-test-utils = { path = "../test-utils" }
