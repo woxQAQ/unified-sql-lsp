@@ -1,0 +1,9 @@
+{
+  "name": "unified-sql-lsp-wasm",
+  "version": "0.1.0",
+  "description": "WASM module for Unified SQL LSP Playground",
+  "type": "module",
+  "module": "unified_sql_lsp_lsp.js",
+  "types": "unified_sql_lsp_lsp.d.ts",
+  "sideEffects": false
+}

@@ -22,6 +22,7 @@
           packages = with pkgs; [
             rustc
             cargo
+            wasm-pack
             nodejs_20
             clippy
             nushell
