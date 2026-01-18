@@ -206,20 +206,14 @@ flamegraph-lsp:
 
 ## @playground: Build WASM module for playground
 playground-wasm:
-	@echo "Building WASM module..."
-	@echo "Note: Full WASM build requires resolving tree-sitter and mio compilation issues"
-	@echo "Placeholder files are in playground/src/wasm/"
-	@# Placeholder for when wasm-pack build works:
-	@# wasm-pack build crates/lsp --no-default-features --features wasm --target web --out-dir playground/src/wasm
+	wasm-pack build crates/lsp --target web --out-dir playground/src/wasm
 
 ## @playground: Start playground development server
 playground-dev:
-	@echo "Starting playground development server..."
 	cd playground && pnpm dev
 
 ## @playground: Build playground for production
 playground-build:
-	@echo "Building playground for production..."
 	cd playground && pnpm build
 
 ## @maint: Display project size analysis
