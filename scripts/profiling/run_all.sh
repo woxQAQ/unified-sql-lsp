@@ -25,7 +25,7 @@ cargo bench --benches completion,parsing,semantic,catalog,concurrency \
 echo ""
 echo "2. Generating flamegraph..."
 if command -v cargo-flamegraph &> /dev/null; then
-    cargo flamegraph --bench completion_pipeline -- \
+    cargo flamegraph --bench completion_pipeline \
         --output "$REPORT_DIR/flamegraph.svg" || true
 else
     echo "  (flamegraph not installed, skipping)"

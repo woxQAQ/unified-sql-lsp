@@ -26,7 +26,7 @@ fn load_fixture(dialect: Dialect, complexity: &str, index: usize) -> String {
 
     let manifest_dir = std::env::var("CARGO_MANIFEST_DIR").unwrap();
     let path = format!(
-        "{}/benches/fixtures/{}{}_{}.sql",
+        "{}/benches/fixtures/{}/{}_{}.sql",
         manifest_dir, complexity, dialect_name, suffix
     );
 

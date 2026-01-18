@@ -181,10 +181,19 @@ profile-all:
 	@echo "Running complete profiling suite..."
 	@./scripts/profiling/run_all.sh
 
-## @profiling: Generate CPU flamegraph
+## @profiling: Generate CPU flamegraph (saved to target/flamegraphs/)
 flamegraph:
 	@echo "Generating flamegraph..."
-	@./scripts/profiling/flamegraph.sh
+	@sh ./scripts/profiling/flamegraph.sh
+
+## @profiling: Open the most recent flamegraph
+flamegraph-open:
+	@if [ -f "$$(ls -t target/flamegraphs/flamegraph-*.svg 2>/dev/null | head -1)" ]; then \
+		xdg-open "$$(ls -t target/flamegraphs/flamegraph-*.svg 2>/dev/null | head -1)"; \
+	else \
+		echo "No flamegraphs found. Run 'make flamegraph' first."; \
+		exit 1; \
+	fi
 
 ## @maint: Display project size analysis
 du:
@@ -256,4 +265,4 @@ help:
 	docs docs-build \
 	clean update outdated du \
 	status commit amend \
-	help benchmark profile-all flamegraph
+	help benchmark profile-all flamegraph flamegraph-open

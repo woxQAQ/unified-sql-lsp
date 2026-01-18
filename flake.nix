@@ -30,6 +30,8 @@
             pkg-config
             openssl
             cargo-nextest
+            cargo-flamegraph
+            gnuplot
           ];
           shellHook =
             #sh
