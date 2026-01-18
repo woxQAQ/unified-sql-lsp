@@ -12,6 +12,7 @@ export class LspBridge {
   // @ts-expect-error - Editor stored for future use (spec compliance)
   private editor: monaco.editor.IStandaloneCodeEditor
   private debounceTimer: ReturnType<typeof setTimeout> | null = null
+  private disposables: monaco.IDisposable[] = []
 
   constructor(editor: monaco.editor.IStandaloneCodeEditor) {
     this.editor = editor
@@ -20,7 +21,7 @@ export class LspBridge {
 
   private setupProviders() {
     // Register completion provider
-    monaco.languages.registerCompletionItemProvider('sql', {
+    const completionDisposable = monaco.languages.registerCompletionItemProvider('sql', {
       provideCompletionItems: async (model, position) => {
         const text = model.getValue()
         const line = position.lineNumber
@@ -40,8 +41,10 @@ export class LspBridge {
       }
     })
 
+    this.disposables.push(completionDisposable)
+
     // Register hover provider
-    monaco.languages.registerHoverProvider('sql', {
+    const hoverDisposable = monaco.languages.registerHoverProvider('sql', {
       provideHover: async (model, position) => {
         const text = model.getValue()
         const line = position.lineNumber
@@ -64,17 +67,23 @@ export class LspBridge {
         }
       }
     })
+
+    this.disposables.push(hoverDisposable)
   }
 
   private convertCompletionItems(items: any[]): monaco.languages.CompletionItem[] {
-    return items.map(item => ({
-      label: item.label,
-      kind: this.convertCompletionKind(item.kind),
-      detail: item.detail,
-      documentation: item.documentation,
-      insertText: item.insertText || item.label,
-      range: undefined as any // Monaco will calculate
-    }))
+    return items.map(item => {
+      const completionItem: monaco.languages.CompletionItem = {
+        label: item.label,
+        kind: this.convertCompletionKind(item.kind),
+        detail: item.detail,
+        documentation: item.documentation,
+        insertText: item.insertText || item.label,
+        sortText: item.label,
+        range: null as any, // Monaco will calculate
+      }
+      return completionItem
+    })
   }
 
   private convertCompletionKind(kind: number): monaco.languages.CompletionItemKind {
@@ -134,5 +143,7 @@ export class LspBridge {
     if (this.debounceTimer) {
       clearTimeout(this.debounceTimer)
     }
+    this.disposables.forEach((d) => d.dispose())
+    this.disposables = []
   }
 }
