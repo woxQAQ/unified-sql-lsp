@@ -10,18 +10,38 @@
 //! ## Architecture
 //!
 //! ```text
-//! JavaScript → LspServer (WASM exports) → LspCore (shared logic)
+//! JavaScript → LspServer (WASM exports) → Core logic
 //! ```
 //!
-//! The WASM exports are thin wrappers around the shared `LspCore` logic.
+//! The WASM exports provide a JavaScript-accessible interface to the SQL LSP.
 
-use crate::core::LspCore;
 use wasm_bindgen::prelude::*;
+
+/// Placeholder completion item
+#[derive(serde::Serialize)]
+pub struct CompletionItem {
+    pub label: String,
+    pub kind: u32,
+}
+
+/// Placeholder hover info
+#[derive(serde::Serialize)]
+pub struct HoverInfo {
+    pub contents: String,
+}
+
+/// Placeholder diagnostic
+#[derive(serde::Serialize)]
+pub struct Diagnostic {
+    pub message: String,
+    pub line: u32,
+    pub col: u32,
+}
 
 /// WebAssembly LSP Server
 ///
 /// This struct provides a JavaScript-accessible interface to the SQL LSP server
-/// running in WebAssembly. It delegates all business logic to the shared `LspCore`.
+/// running in WebAssembly.
 ///
 /// # Examples
 ///
@@ -43,7 +63,7 @@ use wasm_bindgen::prelude::*;
 /// ```
 #[wasm_bindgen]
 pub struct LspServer {
-    core: LspCore,
+    _dialect: String,
 }
 
 #[wasm_bindgen]
@@ -65,9 +85,9 @@ impl LspServer {
     /// The dialect parameter is currently unused but will be used in future tasks
     /// to configure the parser and catalog appropriately.
     #[wasm_bindgen(constructor)]
-    pub fn new(_dialect: &str) -> Self {
+    pub fn new(dialect: &str) -> Self {
         Self {
-            core: LspCore::new(),
+            _dialect: dialect.to_string(),
         }
     }
 
@@ -95,8 +115,8 @@ impl LspServer {
     ///
     /// Currently returns empty array. Real implementation in Task 6.
     #[wasm_bindgen]
-    pub fn completion(&self, text: &str, line: u32, col: u32) -> JsValue {
-        let items = self.core.completion(text, line, col);
+    pub fn completion(&self, _text: &str, _line: u32, _col: u32) -> JsValue {
+        let items: Vec<CompletionItem> = vec![];
         serde_json::to_string(&items)
             .expect("Failed to serialize completion items")
             .into()
@@ -128,8 +148,8 @@ impl LspServer {
     ///
     /// Currently returns null. Real implementation in Task 7.
     #[wasm_bindgen]
-    pub fn hover(&self, text: &str, line: u32, col: u32) -> JsValue {
-        let hover = self.core.hover(text, line, col);
+    pub fn hover(&self, _text: &str, _line: u32, _col: u32) -> JsValue {
+        let hover: Option<HoverInfo> = None;
         serde_json::to_string(&hover)
             .expect("Failed to serialize hover info")
             .into()
@@ -157,8 +177,8 @@ impl LspServer {
     ///
     /// Currently returns empty array. Real implementation in Task 8.
     #[wasm_bindgen]
-    pub fn diagnostics(&self, text: &str) -> JsValue {
-        let diags = self.core.diagnostics(text);
+    pub fn diagnostics(&self, _text: &str) -> JsValue {
+        let diags: Vec<Diagnostic> = vec![];
         serde_json::to_string(&diags)
             .expect("Failed to serialize diagnostics")
             .into()
@@ -173,7 +193,7 @@ mod tests {
     fn test_server_creation() {
         let server = LspServer::new("mysql");
         // Just test that it creates successfully
-        assert!(true);
+        assert_eq!(server._dialect, "mysql");
     }
 
     #[test]

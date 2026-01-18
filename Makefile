@@ -200,6 +200,28 @@ flamegraph-lsp:
 	@echo "Generating LSP flamegraph from separate profiling workspace..."
 	@cd benches/profiling && cargo flamegraph --bench lsp_operations
 
+# ==============================================================================
+# Playground Targets
+# ==============================================================================
+
+## @playground: Build WASM module for playground
+playground-wasm:
+	@echo "Building WASM module..."
+	@echo "Note: Full WASM build requires resolving tree-sitter and mio compilation issues"
+	@echo "Placeholder files are in playground/src/wasm/"
+	@# Placeholder for when wasm-pack build works:
+	@# wasm-pack build crates/lsp --no-default-features --features wasm --target web --out-dir playground/src/wasm
+
+## @playground: Start playground development server
+playground-dev:
+	@echo "Starting playground development server..."
+	cd playground && pnpm dev
+
+## @playground: Build playground for production
+playground-build:
+	@echo "Building playground for production..."
+	cd playground && pnpm build
+
 ## @maint: Display project size analysis
 du:
 	@echo "Target directory size:"
@@ -270,4 +292,5 @@ help:
 	docs docs-build \
 	clean update outdated du \
 	status commit amend \
-	help benchmark profile-all flamegraph flamegraph-open flamegraph-lsp
+	help benchmark profile-all flamegraph flamegraph-open flamegraph-lsp \
+	playground-wasm playground-dev playground-build

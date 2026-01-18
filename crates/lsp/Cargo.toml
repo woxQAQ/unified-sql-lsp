@@ -7,6 +7,9 @@ license.workspace = true
 repository.workspace = true
 description = "LSP server implementation for Unified SQL LSP"
 
+[lib]
+crate-type = ["cdylib", "rlib"]
+
 [[bin]]
 name = "unified-sql-lsp"
 path = "src/bin/main.rs"
@@ -17,36 +20,33 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
 anyhow = { workspace = true }
-async-trait = { workspace = true }
+async-trait = { workspace = true, optional = true }
 
 # LSP framework
-tower-lsp = "0.20"
-lsp-types = "0.95"
+tower-lsp = { version = "0.20", optional = true }
+lsp-types = { version = "0.95", optional = true }
 
 # Async runtime
-tokio = { version = "1.35", features = ["rt-multi-thread", "io-std", "macros"] }
+tokio = { version = "1.35", default-features = false, optional = true, features = ["rt-multi-thread", "io-std", "macros", "net"] }
 
 # Logging
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
-# Text manipulation
-ropey = "1.6"
+# Text manipulation (only needed for document management)
+ropey = { version = "1.6", optional = true }
 
-# Internal crates
-unified-sql-lsp-ir = { path = "../ir" }
-unified-sql-lsp-catalog = { path = "../catalog", features = [
-  "mysql",
-  "postgresql",
-] }
-unified-sql-lsp-function-registry = { path = "../function-registry" }
-unified-sql-lsp-semantic = { path = "../semantic" }
-unified-sql-lsp-context = { path = "../context" }
-unified-sql-lsp-lowering = { path = "../lowering" }
-unified-sql-grammar = { path = "../grammar" }
+# Internal crates (optional for WASM)
+unified-sql-lsp-ir = { path = "../ir", optional = true }
+unified-sql-lsp-catalog = { path = "../catalog", optional = true }
+unified-sql-lsp-function-registry = { path = "../function-registry", optional = true }
+unified-sql-lsp-semantic = { path = "../semantic", optional = true }
+unified-sql-lsp-context = { path = "../context", optional = true }
+unified-sql-lsp-lowering = { path = "../lowering", optional = true }
+unified-sql-grammar = { path = "../grammar", optional = true }
 
-# Tree-sitter parsing
-tree-sitter = { workspace = true }
+# Tree-sitter parsing (not available in WASM)
+tree-sitter = { workspace = true, optional = true }
 
 # WASM support
 wasm-bindgen = "0.2"
@@ -55,11 +55,6 @@ console_error_panic_hook = "0.1"
 # Profiling (optional, feature-gated)
 flamegraph = { version = "0.6", optional = true }
 dhat = { version = "0.3", optional = true }
-
-# WASM-specific dependencies
-[target.'cfg(target_arch = "wasm32")'.dependencies]
-tokio = { version = "1.35", default-features = false, features = ["macros"] }
-getrandom = { version = "0.2", features = ["js"] }
 
 [dev-dependencies]
 tokio-test = "0.4"
@@ -92,7 +87,23 @@ name = "memory"
 harness = false
 
 [features]
-default = []
+default = ["lsp", "catalog", "parser"]
+lsp = ["tower-lsp", "lsp-types", "async-trait", "tokio", "ropey"]
+catalog = [
+  "unified-sql-lsp-catalog",
+  "unified-sql-lsp-catalog/mysql",
+  "unified-sql-lsp-catalog/postgresql"
+]
+parser = [
+  "unified-sql-lsp-ir",
+  "unified-sql-lsp-function-registry",
+  "unified-sql-lsp-semantic",
+  "unified-sql-lsp-context",
+  "unified-sql-lsp-lowering",
+  "unified-sql-grammar",
+  "tree-sitter",
+]
+wasm = []
 profiling = []
 flamegraph = ["dep:flamegraph", "profiling"]
 dhat = ["dep:dhat"]

@@ -157,17 +157,28 @@
 //! cargo test --test integration
 //! ```
 
+#[cfg(all(feature = "lsp", not(target_arch = "wasm32")))]
 pub mod backend;
+#[cfg(all(feature = "catalog", not(target_arch = "wasm32")))]
 pub mod catalog_manager;
+#[cfg(all(feature = "lsp", not(target_arch = "wasm32")))]
 pub mod completion;
+#[cfg(feature = "catalog")]
 pub mod config;
 pub mod core;
+#[cfg(all(feature = "lsp", not(target_arch = "wasm32")))]
 pub mod definition;
+#[cfg(all(feature = "lsp", not(target_arch = "wasm32")))]
 pub mod diagnostic;
+#[cfg(feature = "ropey")]
 pub mod document;
+#[cfg(all(feature = "lsp", not(target_arch = "wasm32")))]
 pub mod hover;
+#[cfg(feature = "parser")]
 pub mod parsing;
+#[cfg(all(feature = "lsp", not(target_arch = "wasm32")))]
 pub mod symbols;
+#[cfg(all(feature = "lsp", not(target_arch = "wasm32")))]
 pub mod sync;
 
 #[cfg(feature = "profiling")]
@@ -177,21 +188,31 @@ pub mod profiling;
 pub mod wasm;
 
 // Re-exports for convenience
+#[cfg(all(feature = "lsp", not(target_arch = "wasm32")))]
 pub use backend::{LspBackend, LspError};
+#[cfg(all(feature = "catalog", not(target_arch = "wasm32")))]
 pub use catalog_manager::CatalogManager;
+#[cfg(all(feature = "lsp", not(target_arch = "wasm32")))]
 pub use completion::CompletionEngine;
+#[cfg(feature = "catalog")]
 pub use config::{ConfigError, ConnectionPoolConfig, DialectVersion, EngineConfig, SchemaFilter};
 pub use core::LspCore;
+#[cfg(all(feature = "lsp", not(target_arch = "wasm32")))]
 pub use definition::{
     ColumnDefinition, Definition, DefinitionError, DefinitionFinder, TableDefinition,
 };
+#[cfg(all(feature = "lsp", not(target_arch = "wasm32")))]
 pub use diagnostic::{
     DiagnosticCode, DiagnosticCollector, SqlDiagnostic, node_to_range,
     publish_diagnostics_for_document,
 };
+#[cfg(feature = "ropey")]
 pub use document::{Document, DocumentError, DocumentMetadata, DocumentStore, ParseMetadata};
+#[cfg(feature = "parser")]
 pub use parsing::{ParseError, ParseResult, ParserManager};
+#[cfg(all(feature = "lsp", not(target_arch = "wasm32")))]
 pub use symbols::{SymbolBuilder, SymbolCatalogFetcher, SymbolError, SymbolRenderer};
+#[cfg(all(feature = "lsp", not(target_arch = "wasm32")))]
 pub use sync::DocumentSync;
 
 /// Version information
