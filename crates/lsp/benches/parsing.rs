@@ -26,7 +26,7 @@ fn load_fixture(dialect: Dialect, complexity: &str, index: usize) -> String {
 
     let manifest_dir = std::env::var("CARGO_MANIFEST_DIR").unwrap();
     let path = format!(
-        "{}/benches/fixtures/{}/{}_{}.sql",
+        "{}/benches/fixtures/{}{}_{}.sql",
         manifest_dir, complexity, dialect_name, suffix
     );
 
@@ -68,26 +68,10 @@ fn bench_parsing_simple(c: &mut Criterion) {
     }
 }
 
-fn bench_parsing_medium(c: &mut Criterion) {
-    for dialect in [Dialect::MySQL, Dialect::PostgreSQL] {
-        for index in 1..=3 {
-            bench_parse_query(c, dialect, "medium", index);
-        }
-    }
-}
-
-fn bench_parsing_complex(c: &mut Criterion) {
-    for dialect in [Dialect::MySQL, Dialect::PostgreSQL] {
-        for index in 1..=3 {
-            bench_parse_query(c, dialect, "complex", index);
-        }
-    }
-}
-
 fn bench_parsing_dialect_comparison(c: &mut Criterion) {
     let mut group = c.benchmark_group("parsing/dialect_comparison");
 
-    for (complexity, index) in [("simple", 1), ("medium", 1), ("complex", 1)] {
+    for (complexity, index) in [("simple", 1)] {
         for dialect in [Dialect::MySQL, Dialect::PostgreSQL] {
             let query = load_fixture(dialect, complexity, index);
             let language = language_for_dialect(dialect).unwrap();
@@ -118,8 +102,6 @@ criterion_group!(
     config = Criterion::default().sample_size(100);
     targets =
         bench_parsing_simple,
-        bench_parsing_medium,
-        bench_parsing_complex,
         bench_parsing_dialect_comparison
 );
 
