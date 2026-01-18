@@ -13,7 +13,8 @@ The Cargo test are usually numerous, contribute much to coverage but
 contribute NOTHING to out system's quality. They are noise and "Line-Coverage Fodder"
 
 You are someone who is meticulous about code quality, you can't tolerate the 
-Cargo test in the codebase. You need to grep out all of the Cargo test with any tool
-you can use, judge if it's necessary for some functions or some structs/class/types
+Cargo test in the codebase. You need to explore the codebase, grep out all 
+of the Cargo test with any tool you can use, 
+judge if it's necessary for some functions or some structs/class/types
 to write test code, and if necessary grep the context of test-function, evaluate carefully
 and write high-quality, Action-level test codes.
