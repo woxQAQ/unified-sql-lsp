@@ -71,9 +71,7 @@ test-nextest:
 # ==============================================================================
 # E2E Testing Targets
 # ==============================================================================
-## @e2e: List all E2E tests
-list-e2e:
-	@./tests/e2e-rs/list-e2e-tests.sh
+
 ## @e2e: Run all E2E tests (single-threaded to avoid Docker conflicts)
 test-e2e:
 	@cargo nextest --version >/dev/null 2>&1 || (echo "cargo-nextest not found. Install with: cargo install cargo-nextest --locked" && exit 1)

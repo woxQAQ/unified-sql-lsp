@@ -136,7 +136,6 @@ make test-e2e-postgresql-12   # PostgreSQL 12 only
 make test-e2e-postgresql-16   # PostgreSQL 16 only
 make test-e2e-mysql           # All MySQL versions
 make test-e2e-postgresql      # All PostgreSQL versions
-make list-e2e                 # List all E2E tests
 ```
 
 **Full Test Suite:**
