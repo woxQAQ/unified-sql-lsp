@@ -21,8 +21,6 @@ serde_yaml = "0.9"
 
 tree-sitter = "0.26"
 
-# Random number generation (with WASM support)
-getrandom = { version = "0.2", features = ["js"] }
 # Error handling
 thiserror = "2.0"
 anyhow = "1.0"
