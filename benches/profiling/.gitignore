@@ -4,3 +4,4 @@
 
 # Flamegraph outputs
 *.svg
+perf.data*

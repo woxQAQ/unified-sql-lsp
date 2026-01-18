@@ -20,7 +20,7 @@ OUTPUT_PATH="$FLAMEGRAPH_DIR/flamegraph-$TIMESTAMP.svg"
 echo "Running LSP operations benchmark..."
 cd benches/profiling
 cargo flamegraph --bench lsp_operations \
-    --output "../$OUTPUT_PATH"
+    --output "../../$OUTPUT_PATH"
 
 echo ""
 echo "Flamegraph generated: $OUTPUT_PATH"
