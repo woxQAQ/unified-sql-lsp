@@ -172,6 +172,9 @@ pub mod sync;
 #[cfg(feature = "profiling")]
 pub mod profiling;
 
+#[cfg(target_arch = "wasm32")]
+pub mod wasm;
+
 // Re-exports for convenience
 pub use backend::{LspBackend, LspError};
 pub use catalog_manager::CatalogManager;

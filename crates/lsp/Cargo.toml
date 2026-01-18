@@ -47,6 +47,11 @@ unified-sql-grammar = { path = "../grammar" }
 # Tree-sitter parsing
 tree-sitter = { workspace = true }
 
+# WASM support
+wasm-bindgen = "0.2"
+console_error_panic_hook = "0.1"
+getrandom = { version = "0.2", features = ["js"] }
+
 # Profiling (optional, feature-gated)
 flamegraph = { version = "0.6", optional = true }
 dhat = { version = "0.3", optional = true }
