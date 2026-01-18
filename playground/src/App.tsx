@@ -1,14 +1,28 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import * as monaco from 'monaco-editor'
+import { initWasm } from './lib/wasm-interface'
 
 export default function App() {
   const editorRef = useRef<HTMLDivElement>(null)
   const editorInstanceRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null)
+  const [wasmReady, setWasmReady] = useState(false)
+
+  useEffect(() => {
+    async function init() {
+      try {
+        await initWasm('mysql')
+        setWasmReady(true)
+        console.log('WASM initialized successfully')
+      } catch (error) {
+        console.error('Failed to initialize WASM:', error)
+      }
+    }
+    init()
+  }, [])
 
   useEffect(() => {
     if (!editorRef.current) return
 
-    // Initialize Monaco Editor
     editorInstanceRef.current = monaco.editor.create(editorRef.current, {
       value: 'SELECT * FROM users WHERE id = 1;',
       language: 'sql',
@@ -28,7 +42,11 @@ export default function App() {
   return (
     <div style={{ height: '100vh', display: 'flex', flexDirection: 'column' }}>
       <header style={{ padding: '1rem', borderBottom: '1px solid #30363d', background: '#0d1117' }}>
-        <h1 style={{ color: '#c9d1d9', fontSize: '1.5rem' }}>Unified SQL LSP Playground</h1>
+        <h1 style={{ color: '#c9d1d9', fontSize: '1.5rem' }}>
+          Unified SQL LSP Playground
+          {!wasmReady && <span style={{ fontSize: '0.875rem', marginLeft: '1rem', color: '#f85149' }}>Loading WASM...</span>}
+          {wasmReady && <span style={{ fontSize: '0.875rem', marginLeft: '1rem', color: '#3fb950' }}>✓ WASM Ready</span>}
+        </h1>
       </header>
       <main style={{ flex: 1, display: 'flex' }}>
         <aside style={{ width: '250px', borderRight: '1px solid #30363d', background: '#0d1117', padding: '1rem' }}>
