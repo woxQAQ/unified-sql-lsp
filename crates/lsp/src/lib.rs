@@ -161,6 +161,7 @@ pub mod backend;
 pub mod catalog_manager;
 pub mod completion;
 pub mod config;
+pub mod core;
 pub mod definition;
 pub mod diagnostic;
 pub mod document;
@@ -180,6 +181,7 @@ pub use backend::{LspBackend, LspError};
 pub use catalog_manager::CatalogManager;
 pub use completion::CompletionEngine;
 pub use config::{ConfigError, ConnectionPoolConfig, DialectVersion, EngineConfig, SchemaFilter};
+pub use core::LspCore;
 pub use definition::{
     ColumnDefinition, Definition, DefinitionError, DefinitionFinder, TableDefinition,
 };
