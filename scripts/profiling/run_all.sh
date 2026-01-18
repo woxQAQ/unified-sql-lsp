@@ -23,10 +23,12 @@ cargo bench --benches completion,parsing,semantic,catalog,concurrency \
     --output-format bencher | tee "$REPORT_DIR/bench_output.txt"
 
 echo ""
-echo "2. Generating flamegraph..."
+echo "2. Generating LSP flamegraph..."
 if command -v cargo-flamegraph &> /dev/null; then
-    cargo flamegraph --bench completion_pipeline \
-        --output "$REPORT_DIR/flamegraph.svg" || true
+    cd benches/profiling
+    cargo flamegraph --bench lsp_operations \
+        --output "../../target/profiling-reports/$REPORT_DIR/flamegraph.svg" || true
+    cd ../..
 else
     echo "  (flamegraph not installed, skipping)"
 fi
