@@ -4,9 +4,9 @@
 //! - Scope creation and management
 //! - Symbol resolution
 
-use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
-use unified_sql_lsp_semantic::{ScopeManager, ScopeType, TableSymbol, ColumnSymbol};
+use criterion::{BenchmarkId, Criterion, black_box, criterion_group, criterion_main};
 use unified_sql_lsp_catalog::DataType;
+use unified_sql_lsp_semantic::{ColumnSymbol, ScopeManager, ScopeType, TableSymbol};
 
 fn bench_scope_creation(c: &mut Criterion) {
     c.bench_function("semantic/scope_creation", |b| {
@@ -24,12 +24,11 @@ fn bench_scope_with_tables(c: &mut Criterion) {
             let mut manager = ScopeManager::new();
             let scope_id = manager.create_scope(ScopeType::Query, None);
 
-            let table = TableSymbol::new("users")
-                .with_columns(vec![
-                    ColumnSymbol::new("id", DataType::Integer, "users"),
-                    ColumnSymbol::new("name", DataType::Text, "users"),
-                    ColumnSymbol::new("email", DataType::Text, "users"),
-                ]);
+            let table = TableSymbol::new("users").with_columns(vec![
+                ColumnSymbol::new("id", DataType::Integer, "users"),
+                ColumnSymbol::new("name", DataType::Text, "users"),
+                ColumnSymbol::new("email", DataType::Text, "users"),
+            ]);
 
             let scope = manager.get_scope_mut(scope_id).unwrap();
             scope.add_table(table).unwrap();
@@ -42,11 +41,10 @@ fn bench_table_resolution(c: &mut Criterion) {
     let mut manager = ScopeManager::new();
     let scope_id = manager.create_scope(ScopeType::Query, None);
 
-    let table = TableSymbol::new("users")
-        .with_columns(vec![
-            ColumnSymbol::new("id", DataType::Integer, "users"),
-            ColumnSymbol::new("name", DataType::Text, "users"),
-        ]);
+    let table = TableSymbol::new("users").with_columns(vec![
+        ColumnSymbol::new("id", DataType::Integer, "users"),
+        ColumnSymbol::new("name", DataType::Text, "users"),
+    ]);
 
     let scope = manager.get_scope_mut(scope_id).unwrap();
     scope.add_table(table).unwrap();
@@ -67,7 +65,11 @@ fn bench_nested_scopes(c: &mut Criterion) {
             // Create parent scope
             let parent_id = manager.create_scope(ScopeType::Query, None);
             let table = TableSymbol::new("users");
-            manager.get_scope_mut(parent_id).unwrap().add_table(table).unwrap();
+            manager
+                .get_scope_mut(parent_id)
+                .unwrap()
+                .add_table(table)
+                .unwrap();
 
             // Create child scope
             let child_id = manager.create_scope(ScopeType::Subquery, Some(parent_id));

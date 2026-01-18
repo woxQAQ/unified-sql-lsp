@@ -2,7 +2,7 @@
 //!
 //! Measures the performance of the full completion flow.
 
-use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
+use criterion::{BenchmarkId, Criterion, black_box, criterion_group, criterion_main};
 
 // Simple completion operations benchmark
 fn bench_completion_creation(c: &mut Criterion) {
@@ -30,7 +30,10 @@ fn bench_completion_lookup(c: &mut Criterion) {
 fn bench_completion_by_complexity(c: &mut Criterion) {
     let queries = [
         ("simple", "SELECT id, name FROM users WHERE active = TRUE"),
-        ("medium", "SELECT u.id, u.name, o.total FROM users u JOIN orders o ON u.id = o.user_id"),
+        (
+            "medium",
+            "SELECT u.id, u.name, o.total FROM users u JOIN orders o ON u.id = o.user_id",
+        ),
     ];
 
     for (complexity, query) in queries {

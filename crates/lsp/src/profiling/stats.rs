@@ -32,7 +32,8 @@ impl TimingCollector {
     /// This is called automatically by ScopedTimer when dropped.
     pub fn record(name: &'static str, duration: Duration) {
         TIMINGS.with(|timings| {
-            timings.borrow_mut()
+            timings
+                .borrow_mut()
                 .entry(name)
                 .or_insert_with(Vec::new)
                 .push(duration);
@@ -87,7 +88,10 @@ pub struct TimingStats {
 impl TimingStats {
     /// Calculate statistics from a slice of durations
     fn from_durations(durations: &[Duration]) -> Self {
-        assert!(!durations.is_empty(), "Cannot calculate stats for empty slice");
+        assert!(
+            !durations.is_empty(),
+            "Cannot calculate stats for empty slice"
+        );
 
         let mut sorted: Vec<_> = durations.iter().copied().collect();
         sorted.sort();

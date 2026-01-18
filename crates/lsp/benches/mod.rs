@@ -19,9 +19,9 @@
 //! ```
 
 // All benchmarks implemented
-mod completion_pipeline;
-mod parsing;
-mod semantic;
 mod catalog;
+mod completion_pipeline;
 mod concurrency;
 mod memory;
+mod parsing;
+mod semantic;

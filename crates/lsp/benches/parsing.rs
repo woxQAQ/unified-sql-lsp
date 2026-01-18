@@ -4,7 +4,7 @@
 //! - Query complexity levels (simple, medium, complex)
 //! - Dialects (MySQL, PostgreSQL)
 
-use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
+use criterion::{BenchmarkId, Criterion, Throughput, black_box, criterion_group, criterion_main};
 use unified_sql_grammar::language_for_dialect;
 use unified_sql_lsp_ir::Dialect;
 
@@ -41,7 +41,9 @@ fn bench_parse_query(c: &mut Criterion, dialect: Dialect, complexity: &str, inde
         .unwrap_or_else(|| panic!("No language for dialect: {:?}", dialect));
 
     let mut parser = tree_sitter::Parser::new();
-    parser.set_language(language).expect("Failed to set language");
+    parser
+        .set_language(language)
+        .expect("Failed to set language");
 
     let mut group = c.benchmark_group(format!("parsing/{:?}/{}", dialect, complexity));
 
@@ -91,7 +93,10 @@ fn bench_parsing_dialect_comparison(c: &mut Criterion) {
             let language = language_for_dialect(dialect).unwrap();
 
             group.bench_function(
-                BenchmarkId::new(format!("{:?}", dialect), format!("{}_{}", complexity, index)),
+                BenchmarkId::new(
+                    format!("{:?}", dialect),
+                    format!("{}_{}", complexity, index),
+                ),
                 |b| {
                     let mut parser = tree_sitter::Parser::new();
                     parser.set_language(language).unwrap();

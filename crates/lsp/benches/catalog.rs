@@ -2,8 +2,8 @@
 //!
 //! Measures the performance of catalog operations.
 
-use criterion::{black_box, criterion_group, criterion_main, Criterion};
-use unified_sql_lsp_catalog::{TableMetadata, ColumnMetadata, DataType, TableType};
+use criterion::{Criterion, black_box, criterion_group, criterion_main};
+use unified_sql_lsp_catalog::{ColumnMetadata, DataType, TableMetadata, TableType};
 
 fn create_test_table() -> TableMetadata {
     TableMetadata {

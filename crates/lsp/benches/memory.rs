@@ -2,7 +2,7 @@
 //!
 //! Uses basic operations to identify memory patterns.
 
-use criterion::{black_box, criterion_group, criterion_main, Criterion};
+use criterion::{Criterion, black_box, criterion_group, criterion_main};
 
 fn bench_memory_1000_operations(c: &mut Criterion) {
     c.bench_function("memory/1000_operations", |b| {

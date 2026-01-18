@@ -6,14 +6,14 @@
 
 // Only compile instrumentation when profiling feature is enabled
 #[cfg(feature = "profiling")]
-mod timer;
-#[cfg(feature = "profiling")]
 mod stats;
+#[cfg(feature = "profiling")]
+mod timer;
 
 #[cfg(feature = "profiling")]
-pub use timer::ScopedTimer;
-#[cfg(feature = "profiling")]
 pub use stats::{TimingCollector, TimingReport, TimingStats};
+#[cfg(feature = "profiling")]
+pub use timer::ScopedTimer;
 
 // When profiling is disabled, provide a no-op macro
 #[cfg(not(feature = "profiling"))]
