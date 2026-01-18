@@ -10,33 +10,13 @@
 //! ## Architecture
 //!
 //! ```text
-//! JavaScript → LspServer (WASM exports) → Core logic
+//! JavaScript → LspServer (WASM exports) → LspCore → Business logic
 //! ```
 //!
 //! The WASM exports provide a JavaScript-accessible interface to the SQL LSP.
 
+use crate::core::LspCore;
 use wasm_bindgen::prelude::*;
-
-/// Placeholder completion item
-#[derive(serde::Serialize)]
-pub struct CompletionItem {
-    pub label: String,
-    pub kind: u32,
-}
-
-/// Placeholder hover info
-#[derive(serde::Serialize)]
-pub struct HoverInfo {
-    pub contents: String,
-}
-
-/// Placeholder diagnostic
-#[derive(serde::Serialize)]
-pub struct Diagnostic {
-    pub message: String,
-    pub line: u32,
-    pub col: u32,
-}
 
 /// WebAssembly LSP Server
 ///
@@ -63,7 +43,7 @@ pub struct Diagnostic {
 /// ```
 #[wasm_bindgen]
 pub struct LspServer {
-    _dialect: String,
+    core: LspCore,
 }
 
 #[wasm_bindgen]
@@ -85,9 +65,9 @@ impl LspServer {
     /// The dialect parameter is currently unused but will be used in future tasks
     /// to configure the parser and catalog appropriately.
     #[wasm_bindgen(constructor)]
-    pub fn new(dialect: &str) -> Self {
+    pub fn new(_dialect: &str) -> Self {
         Self {
-            _dialect: dialect.to_string(),
+            core: LspCore::new(),
         }
     }
 
@@ -113,13 +93,12 @@ impl LspServer {
     ///
     /// # Implementation Status
     ///
-    /// Currently returns empty array. Real implementation in Task 6.
+    /// Mock implementation returns SQL keywords and common table/column names.
+    /// Real implementation with parsing and catalog integration coming in Task 6.
     #[wasm_bindgen]
-    pub fn completion(&self, _text: &str, _line: u32, _col: u32) -> JsValue {
-        let items: Vec<CompletionItem> = vec![];
-        serde_json::to_string(&items)
-            .expect("Failed to serialize completion items")
-            .into()
+    pub fn completion(&self, text: &str, line: u32, col: u32) -> JsValue {
+        let items = self.core.completion(text, line, col);
+        serde_json::to_string(&items).unwrap().into()
     }
 
     /// Get hover information for a given position in the SQL text
@@ -148,11 +127,9 @@ impl LspServer {
     ///
     /// Currently returns null. Real implementation in Task 7.
     #[wasm_bindgen]
-    pub fn hover(&self, _text: &str, _line: u32, _col: u32) -> JsValue {
-        let hover: Option<HoverInfo> = None;
-        serde_json::to_string(&hover)
-            .expect("Failed to serialize hover info")
-            .into()
+    pub fn hover(&self, text: &str, line: u32, col: u32) -> JsValue {
+        let hover = self.core.hover(text, line, col);
+        serde_json::to_string(&hover).unwrap().into()
     }
 
     /// Get diagnostics for a SQL document
@@ -177,11 +154,9 @@ impl LspServer {
     ///
     /// Currently returns empty array. Real implementation in Task 8.
     #[wasm_bindgen]
-    pub fn diagnostics(&self, _text: &str) -> JsValue {
-        let diags: Vec<Diagnostic> = vec![];
-        serde_json::to_string(&diags)
-            .expect("Failed to serialize diagnostics")
-            .into()
+    pub fn diagnostics(&self, text: &str) -> JsValue {
+        let diags = self.core.diagnostics(text);
+        serde_json::to_string(&diags).unwrap().into()
     }
 }
 
@@ -193,7 +168,7 @@ mod tests {
     fn test_server_creation() {
         let server = LspServer::new("mysql");
         // Just test that it creates successfully
-        assert_eq!(server._dialect, "mysql");
+        let _ = &server.core;
     }
 
     #[test]
@@ -201,7 +176,12 @@ mod tests {
         let server = LspServer::new("mysql");
         let result = server.completion("SELECT * FROM users", 0, 20);
         let result_str = result.as_string().unwrap();
-        assert_eq!(result_str, "[]");
+        // Should not be empty anymore (mock data from LspCore)
+        assert_ne!(result_str, "[]");
+        // Should contain mock completion items
+        assert!(result_str.contains("SELECT"));
+        assert!(result_str.contains("FROM"));
+        assert!(result_str.contains("users"));
     }
 
     #[test]
