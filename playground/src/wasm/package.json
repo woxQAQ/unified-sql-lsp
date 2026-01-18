@@ -1,27 +1,9 @@
 {
-  "name": "unified-sql-lsp-lsp-wasm",
+  "name": "unified-sql-lsp-wasm",
   "version": "0.1.0",
-  "description": "WebAssembly bindings for Unified SQL LSP",
+  "description": "WASM module for Unified SQL LSP Playground",
   "type": "module",
   "module": "unified_sql_lsp_lsp.js",
   "types": "unified_sql_lsp_lsp.d.ts",
-  "sideEffects": false,
-  "keywords": [
-    "sql",
-    "lsp",
-    "wasm",
-    "webassembly"
-  ],
-  "author": "Vibe Kanban Team",
-  "license": "MIT OR Apache-2.0",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/vibe-kanban/unified-sql-lsp"
-  },
-  "files": [
-    "unified_sql_lsp_lsp.js",
-    "unified_sql_lsp_lsp_bg.js",
-    "unified_sql_lsp_lsp_bg.wasm",
-    "unified_sql_lsp_lsp.d.ts"
-  ]
+  "sideEffects": false
 }

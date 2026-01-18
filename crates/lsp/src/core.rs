@@ -41,7 +41,44 @@
 //! - Task 7: Hover integration
 //! - Task 8: Diagnostics integration
 
-use lsp_types::{CompletionItem, Diagnostic, Hover};
+use serde::{Deserialize, Serialize};
+
+/// Simple completion item for WASM compatibility
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CompletionItem {
+    pub label: String,
+    pub kind: Option<u32>,
+    pub detail: Option<String>,
+    pub documentation: Option<String>,
+}
+
+/// Simple hover response for WASM compatibility
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Hover {
+    pub contents: String,
+    pub range: Option<Range>,
+}
+
+/// Simple diagnostic for WASM compatibility
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Diagnostic {
+    pub range: Range,
+    pub severity: Option<u32>,
+    pub message: String,
+}
+
+/// Simple position/range for WASM compatibility
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Position {
+    pub line: u32,
+    pub character: u32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Range {
+    pub start: Position,
+    pub end: Position,
+}
 
 /// Shared LSP core logic
 ///

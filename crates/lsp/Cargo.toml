@@ -56,6 +56,9 @@ console_error_panic_hook = "0.1"
 flamegraph = { version = "0.6", optional = true }
 dhat = { version = "0.3", optional = true }
 
+[package.metadata.wasm-pack.profile.release]
+wasm-opt = false
+
 [dev-dependencies]
 tokio-test = "0.4"
 unified-sql-lsp-test-utils = { path = "../test-utils" }
@@ -106,4 +109,4 @@ parser = [
 wasm = []
 profiling = []
 flamegraph = ["dep:flamegraph", "profiling"]
-dhat = ["dep:dhat"]
+dhat = ["dep:dhat", "profiling"]

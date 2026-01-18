@@ -206,7 +206,7 @@ flamegraph-lsp:
 
 ## @playground: Build WASM module for playground
 playground-wasm:
-	wasm-pack build crates/lsp --target web --out-dir playground/src/wasm
+	wasm-pack build crates/lsp --target web --out-dir playground/src/wasm --no-default-features --features wasm
 
 ## @playground: Start playground development server
 playground-dev:
