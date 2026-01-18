@@ -167,39 +167,6 @@ outdated:
 	@cargo outdated --version >/dev/null 2>&1 || (echo "cargo-outdated not found. Install with: cargo install cargo-outdated" && exit 1)
 	cargo outdated
 
-# ==============================================================================
-# Performance Profiling Targets
-# ==============================================================================
-
-## @profiling: Run quick benchmark suite
-benchmark:
-	@echo "Running quick benchmark suite..."
-	@cargo bench --benches completion,parsing,semantic
-
-## @profiling: Run complete profiling suite
-profile-all:
-	@echo "Running complete profiling suite..."
-	@./scripts/profiling/run_all.sh
-
-## @profiling: Generate CPU flamegraph (saved to target/flamegraphs/)
-flamegraph:
-	@echo "Generating flamegraph..."
-	@sh ./scripts/profiling/flamegraph.sh
-
-## @profiling: Open the most recent flamegraph
-flamegraph-open:
-	@if [ -f "$$(ls -t target/flamegraphs/flamegraph-*.svg 2>/dev/null | head -1)" ]; then \
-		xdg-open "$$(ls -t target/flamegraphs/flamegraph-*.svg 2>/dev/null | head -1)"; \
-	else \
-		echo "No flamegraphs found. Run 'make flamegraph' first."; \
-		exit 1; \
-	fi
-
-## @profiling: Generate LSP flamegraph (separate workspace)
-flamegraph-lsp:
-	@echo "Generating LSP flamegraph from separate profiling workspace..."
-	@cd benches/profiling && cargo flamegraph --bench lsp_operations
-
 ## @maint: Display project size analysis
 du:
 	@echo "Target directory size:"
@@ -270,4 +237,4 @@ help:
 	docs docs-build \
 	clean update outdated du \
 	status commit amend \
-	help benchmark profile-all flamegraph flamegraph-open flamegraph-lsp
+	help
