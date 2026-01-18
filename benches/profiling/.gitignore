@@ -1,0 +1,6 @@
+# Benchmark outputs
+/target/
+/Cargo.lock
+
+# Flamegraph outputs
+*.svg
