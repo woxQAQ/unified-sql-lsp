@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import * as monaco from 'monaco-editor'
 import { initWasm } from './lib/wasm-interface'
 import { LspBridge } from './lib/lsp-bridge'
+import { SchemaBrowser } from './components/SchemaBrowser'
 
 export default function App() {
   const editorRef = useRef<HTMLDivElement>(null)
@@ -69,10 +70,7 @@ export default function App() {
       </header>
       <main style={{ flex: 1, display: 'flex' }}>
         <aside style={{ width: '250px', borderRight: '1px solid #30363d', background: '#0d1117', padding: '1rem' }}>
-          <h2 style={{ color: '#c9d1d9', fontSize: '1rem', marginBottom: '1rem' }}>Schema Browser</h2>
-          <div style={{ color: '#8b949e', fontSize: '0.875rem' }}>
-            <p>Coming soon...</p>
-          </div>
+          <SchemaBrowser />
         </aside>
         <div style={{ flex: 1 }}>
           <div ref={editorRef} style={{ height: '100%' }} />
