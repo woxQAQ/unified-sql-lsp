@@ -1,0 +1,12 @@
+/home/woxQAQ/unified-sql-lsp/.worktrees/lsp-profiling/benches/profiling/target/debug/deps/unified_sql_lsp_catalog-31124c15ada91a82.d: /home/woxQAQ/unified-sql-lsp/.worktrees/lsp-profiling/crates/catalog/src/lib.rs /home/woxQAQ/unified-sql-lsp/.worktrees/lsp-profiling/crates/catalog/src/error.rs /home/woxQAQ/unified-sql-lsp/.worktrees/lsp-profiling/crates/catalog/src/live_mysql.rs /home/woxQAQ/unified-sql-lsp/.worktrees/lsp-profiling/crates/catalog/src/live_postgres.rs /home/woxQAQ/unified-sql-lsp/.worktrees/lsp-profiling/crates/catalog/src/metadata.rs /home/woxQAQ/unified-sql-lsp/.worktrees/lsp-profiling/crates/catalog/src/trait.rs
+
+/home/woxQAQ/unified-sql-lsp/.worktrees/lsp-profiling/benches/profiling/target/debug/deps/libunified_sql_lsp_catalog-31124c15ada91a82.rlib: /home/woxQAQ/unified-sql-lsp/.worktrees/lsp-profiling/crates/catalog/src/lib.rs /home/woxQAQ/unified-sql-lsp/.worktrees/lsp-profiling/crates/catalog/src/error.rs /home/woxQAQ/unified-sql-lsp/.worktrees/lsp-profiling/crates/catalog/src/live_mysql.rs /home/woxQAQ/unified-sql-lsp/.worktrees/lsp-profiling/crates/catalog/src/live_postgres.rs /home/woxQAQ/unified-sql-lsp/.worktrees/lsp-profiling/crates/catalog/src/metadata.rs /home/woxQAQ/unified-sql-lsp/.worktrees/lsp-profiling/crates/catalog/src/trait.rs
+
+/home/woxQAQ/unified-sql-lsp/.worktrees/lsp-profiling/benches/profiling/target/debug/deps/libunified_sql_lsp_catalog-31124c15ada91a82.rmeta: /home/woxQAQ/unified-sql-lsp/.worktrees/lsp-profiling/crates/catalog/src/lib.rs /home/woxQAQ/unified-sql-lsp/.worktrees/lsp-profiling/crates/catalog/src/error.rs /home/woxQAQ/unified-sql-lsp/.worktrees/lsp-profiling/crates/catalog/src/live_mysql.rs /home/woxQAQ/unified-sql-lsp/.worktrees/lsp-profiling/crates/catalog/src/live_postgres.rs /home/woxQAQ/unified-sql-lsp/.worktrees/lsp-profiling/crates/catalog/src/metadata.rs /home/woxQAQ/unified-sql-lsp/.worktrees/lsp-profiling/crates/catalog/src/trait.rs
+
+/home/woxQAQ/unified-sql-lsp/.worktrees/lsp-profiling/crates/catalog/src/lib.rs:
+/home/woxQAQ/unified-sql-lsp/.worktrees/lsp-profiling/crates/catalog/src/error.rs:
+/home/woxQAQ/unified-sql-lsp/.worktrees/lsp-profiling/crates/catalog/src/live_mysql.rs:
+/home/woxQAQ/unified-sql-lsp/.worktrees/lsp-profiling/crates/catalog/src/live_postgres.rs:
+/home/woxQAQ/unified-sql-lsp/.worktrees/lsp-profiling/crates/catalog/src/metadata.rs:
+/home/woxQAQ/unified-sql-lsp/.worktrees/lsp-profiling/crates/catalog/src/trait.rs:

@@ -1,0 +1,10 @@
+/home/woxQAQ/unified-sql-lsp/.worktrees/lsp-profiling/benches/profiling/target/debug/deps/unified_sql_lsp_function_registry-9c2a7d79f40398ce.d: /home/woxQAQ/unified-sql-lsp/.worktrees/lsp-profiling/crates/function-registry/src/lib.rs /home/woxQAQ/unified-sql-lsp/.worktrees/lsp-profiling/crates/function-registry/src/builtin/mod.rs /home/woxQAQ/unified-sql-lsp/.worktrees/lsp-profiling/crates/function-registry/src/builtin/mysql.rs /home/woxQAQ/unified-sql-lsp/.worktrees/lsp-profiling/crates/function-registry/src/builtin/postgresql.rs /home/woxQAQ/unified-sql-lsp/.worktrees/lsp-profiling/crates/function-registry/src/hover.rs /home/woxQAQ/unified-sql-lsp/.worktrees/lsp-profiling/crates/function-registry/src/registry.rs
+
+/home/woxQAQ/unified-sql-lsp/.worktrees/lsp-profiling/benches/profiling/target/debug/deps/libunified_sql_lsp_function_registry-9c2a7d79f40398ce.rmeta: /home/woxQAQ/unified-sql-lsp/.worktrees/lsp-profiling/crates/function-registry/src/lib.rs /home/woxQAQ/unified-sql-lsp/.worktrees/lsp-profiling/crates/function-registry/src/builtin/mod.rs /home/woxQAQ/unified-sql-lsp/.worktrees/lsp-profiling/crates/function-registry/src/builtin/mysql.rs /home/woxQAQ/unified-sql-lsp/.worktrees/lsp-profiling/crates/function-registry/src/builtin/postgresql.rs /home/woxQAQ/unified-sql-lsp/.worktrees/lsp-profiling/crates/function-registry/src/hover.rs /home/woxQAQ/unified-sql-lsp/.worktrees/lsp-profiling/crates/function-registry/src/registry.rs
+
+/home/woxQAQ/unified-sql-lsp/.worktrees/lsp-profiling/crates/function-registry/src/lib.rs:
+/home/woxQAQ/unified-sql-lsp/.worktrees/lsp-profiling/crates/function-registry/src/builtin/mod.rs:
+/home/woxQAQ/unified-sql-lsp/.worktrees/lsp-profiling/crates/function-registry/src/builtin/mysql.rs:
+/home/woxQAQ/unified-sql-lsp/.worktrees/lsp-profiling/crates/function-registry/src/builtin/postgresql.rs:
+/home/woxQAQ/unified-sql-lsp/.worktrees/lsp-profiling/crates/function-registry/src/hover.rs:
+/home/woxQAQ/unified-sql-lsp/.worktrees/lsp-profiling/crates/function-registry/src/registry.rs:

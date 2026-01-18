@@ -195,6 +195,11 @@ flamegraph-open:
 		exit 1; \
 	fi
 
+## @profiling: Generate LSP flamegraph (separate workspace)
+flamegraph-lsp:
+	@echo "Generating LSP flamegraph from separate profiling workspace..."
+	@cd benches/profiling && cargo flamegraph --bench lsp_operations
+
 ## @maint: Display project size analysis
 du:
 	@echo "Target directory size:"
@@ -265,4 +270,4 @@ help:
 	docs docs-build \
 	clean update outdated du \
 	status commit amend \
-	help benchmark profile-all flamegraph flamegraph-open
+	help benchmark profile-all flamegraph flamegraph-open flamegraph-lsp
