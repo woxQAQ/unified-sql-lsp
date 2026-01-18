@@ -148,16 +148,59 @@ impl LspCore {
     ///
     /// # Implementation Status
     ///
-    /// Currently returns empty vector. Real implementation in Task 6.
-    pub fn completion(&self, _text: &str, _line: u32, _col: u32) -> Vec<CompletionItem> {
-        // TODO: Implement completion logic (Task 6)
-        // Future implementation:
-        // 1. Parse text with tree-sitter
-        // 2. Build completion context
-        // 3. Query scope manager for visible tables/columns
-        // 4. Query catalog for schema information
-        // 5. Build completion items
-        vec![]
+    /// Mock implementation for playground testing. Returns basic SQL keywords,
+    /// table names, and column names with context-aware suggestions.
+    pub fn completion(&self, text: &str, _line: u32, _col: u32) -> Vec<CompletionItem> {
+        let mut items = vec![
+            CompletionItem {
+                label: "SELECT".into(),
+                kind: Some(14), // Keyword
+                detail: Some("Keyword".into()),
+                documentation: None,
+            },
+            CompletionItem {
+                label: "FROM".into(),
+                kind: Some(14), // Keyword
+                detail: Some("Keyword".into()),
+                documentation: None,
+            },
+            CompletionItem {
+                label: "WHERE".into(),
+                kind: Some(14), // Keyword
+                detail: Some("Keyword".into()),
+                documentation: None,
+            },
+            CompletionItem {
+                label: "users".into(),
+                kind: Some(5), // Class
+                detail: Some("Table".into()),
+                documentation: None,
+            },
+            CompletionItem {
+                label: "id".into(),
+                kind: Some(5), // Field
+                detail: Some("Column (INT)".into()),
+                documentation: None,
+            },
+            CompletionItem {
+                label: "name".into(),
+                kind: Some(5), // Field
+                detail: Some("Column (VARCHAR)".into()),
+                documentation: None,
+            },
+        ];
+
+        // Context-aware: suggest FROM after SELECT
+        if text.contains("SELECT") && !text.contains("FROM") {
+            items.push(CompletionItem {
+                label: " FROM ".into(),
+                kind: Some(14), // Keyword
+                detail: Some("Keyword".into()),
+                documentation: None,
+            });
+        }
+
+        items
     }
 
     /// Get hover information for a given position
@@ -246,10 +289,14 @@ mod tests {
     }
 
     #[test]
-    fn test_completion_stub() {
+    fn test_completion_mock() {
         let core = LspCore::new();
         let items = core.completion("SELECT * FROM users", 0, 20);
-        assert!(items.is_empty());
+        // Should return mock completion items
+        assert!(!items.is_empty());
+        assert!(items.iter().any(|i| i.label == "SELECT"));
+        assert!(items.iter().any(|i| i.label == "FROM"));
+        assert!(items.iter().any(|i| i.label == "users"));
     }
 
     #[test]
