@@ -49,19 +49,56 @@ use tower_lsp::lsp_types::*;
 use tower_lsp::jsonrpc::Result as JsonRpcResult;
 
 /// JSON-RPC request
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize)]
 struct JsonRpcRequest {
     jsonrpc: String,
-    id: Option<JsonValue>,
     #[serde(flatten)]
     data: JsonRpcRequestData,
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize)]
 #[serde(untagged)]
 enum JsonRpcRequestData {
-    Request { method: String, params: Option<JsonValue> },
-    Notification { method: String, params: Option<JsonValue> },
+    Request {
+        id: JsonValue,
+        method: String,
+        params: Option<JsonValue>,
+    },
+    Notification {
+        method: String,
+        params: Option<JsonValue>,
+    },
+}
+
+impl JsonRpcRequest {
+    /// Get the request ID if this is a request (not a notification)
+    fn id(&self) -> Option<JsonValue> {
+        match &self.data {
+            JsonRpcRequestData::Request { id, .. } => Some(id.clone()),
+            JsonRpcRequestData::Notification { .. } => None,
+        }
+    }
+
+    /// Get the method name
+    fn method(&self) -> &str {
+        match &self.data {
+            JsonRpcRequestData::Request { method, .. } => method,
+            JsonRpcRequestData::Notification { method, .. } => method,
+        }
+    }
+
+    /// Get the parameters
+    fn params(&self) -> Option<&JsonValue> {
+        match &self.data {
+            JsonRpcRequestData::Request { params, .. } => params.as_ref(),
+            JsonRpcRequestData::Notification { params, .. } => params.as_ref(),
+        }
+    }
+
+    /// Check if this is a notification
+    fn is_notification(&self) -> bool {
+        matches!(self.data, JsonRpcRequestData::Notification { .. })
+    }
 }
 
 /// JSON-RPC response
@@ -381,131 +418,130 @@ async fn handle_lsp_message(
 ) -> Result<JsonRpcResponse, Box<dyn std::error::Error>> {
     let request: JsonRpcRequest = serde_json::from_str(message)?;
 
-    let id = request.id.clone().unwrap_or(JsonValue::Null);
+    let id = request.id().unwrap_or(JsonValue::Null);
+    let method = request.method().to_string();
+    let params = request.params().cloned();
 
-    match request.data {
-        JsonRpcRequestData::Request { method, params } => {
-            debug!("LSP request: {}", method);
+    if request.is_notification() {
+        debug!("LSP notification: {}", method);
 
-            let catalog = session.catalog.clone();
-
-            // Call actual backend methods
-            let result = match method.as_str() {
-                "initialize" => {
-                    serde_json::json!({
-                        "capabilities": {
-                            "textDocumentSync": 1,
-                            "completionProvider": {
-                                "triggerCharacters": [".", " "]
-                            },
-                            "hoverProvider": true,
-                            "diagnosticProvider": true
-                        },
-                        "serverInfo": {
-                            "name": "unified-sql-lsp",
-                            "version": env!("CARGO_PKG_VERSION")
-                        }
-                    })
-                }
-                "initialized" => {
-                    serde_json::json!({})
-                }
-                "shutdown" => {
-                    serde_json::json!({})
-                }
-                "textDocument/completion" => {
-                    let params_value = params.unwrap_or(JsonValue::Null);
-                    let params: CompletionParams = serde_json::from_value(params_value)?;
-
-                    match session.complete(params, catalog).await {
-                        Ok(Some(response)) => {
-                            match response {
-                                CompletionResponse::Array(items) => serde_json::json!(items),
-                                CompletionResponse::List(list) => serde_json::json!(list),
-                            }
-                        }
-                        Ok(None) => serde_json::json!(null),
-                        Err(e) => {
-                            error!("Completion error: {}", e);
-                            serde_json::json!([])
-                        }
-                    }
-                }
-                "textDocument/hover" => {
-                    let params_value = params.unwrap_or(JsonValue::Null);
-                    let params: HoverParams = serde_json::from_value(params_value)?;
-
-                    match session.hover(params, catalog).await {
-                        Ok(Some(hover)) => serde_json::json!(hover),
-                        Ok(None) => serde_json::json!(null),
-                        Err(e) => {
-                            error!("Hover error: {}", e);
-                            serde_json::json!(null)
-                        }
-                    }
-                }
-                "textDocument/diagnostic" => {
-                    // TODO: Implement diagnostics
-                    serde_json::json!([])
-                }
-                _ => {
-                    warn!("Unknown method: {}", method);
-                    return Ok(JsonRpcResponse {
-                        jsonrpc: "2.0".to_string(),
-                        id,
-                        result: None,
-                        error: Some(JsonRpcError {
-                            code: -32601,
-                            message: format!("Method not found: {}", method),
-                            data: None,
-                        }),
-                    });
-                }
-            };
-
-            Ok(JsonRpcResponse {
-                jsonrpc: "2.0".to_string(),
-                id,
-                result: Some(result),
-                error: None,
-            })
+        // Handle notifications (no response expected)
+        match method.as_str() {
+            "textDocument/didOpen" => {
+                let params_value = params.unwrap_or(JsonValue::Null);
+                let parsed: DidOpenTextDocumentParams = serde_json::from_value(params_value)?;
+                session.handle_did_open(parsed).await;
+            }
+            "textDocument/didChange" => {
+                let params_value = params.unwrap_or(JsonValue::Null);
+                let parsed: DidChangeTextDocumentParams = serde_json::from_value(params_value)?;
+                session.handle_did_change(parsed).await;
+            }
+            "textDocument/didClose" => {
+                let params_value = params.unwrap_or(JsonValue::Null);
+                let parsed: DidCloseTextDocumentParams = serde_json::from_value(params_value)?;
+                session.handle_did_close(parsed).await;
+            }
+            "exit" => {
+                debug!("Received exit notification");
+            }
+            _ => {
+                warn!("Unknown notification: {}", method);
+            }
         }
-        JsonRpcRequestData::Notification { method, params } => {
-            debug!("LSP notification: {}", method);
 
-            // Handle notifications (no response expected)
-            match method.as_str() {
-                "textDocument/didOpen" => {
-                    let params_value = params.unwrap_or(JsonValue::Null);
-                    let params: DidOpenTextDocumentParams = serde_json::from_value(params_value)?;
-                    session.handle_did_open(params).await;
-                }
-                "textDocument/didChange" => {
-                    let params_value = params.unwrap_or(JsonValue::Null);
-                    let params: DidChangeTextDocumentParams = serde_json::from_value(params_value)?;
-                    session.handle_did_change(params).await;
-                }
-                "textDocument/didClose" => {
-                    let params_value = params.unwrap_or(JsonValue::Null);
-                    let params: DidCloseTextDocumentParams = serde_json::from_value(params_value)?;
-                    session.handle_did_close(params).await;
-                }
-                "exit" => {
-                    debug!("Received exit notification");
-                }
-                _ => {
-                    warn!("Unknown notification: {}", method);
+        // Notifications don't get responses
+        Ok(JsonRpcResponse {
+            jsonrpc: "2.0".to_string(),
+            id: JsonValue::Null,
+            result: None,
+            error: None,
+        })
+    } else {
+        debug!("LSP request: {}", method);
+
+        let catalog = session.catalog.clone();
+
+        // Call actual backend methods
+        let result = match method.as_str() {
+            "initialize" => {
+                serde_json::json!({
+                    "capabilities": {
+                        "textDocumentSync": 1,
+                        "completionProvider": {
+                            "triggerCharacters": [".", " "]
+                        },
+                        "hoverProvider": true,
+                        "diagnosticProvider": true
+                    },
+                    "serverInfo": {
+                        "name": "unified-sql-lsp",
+                        "version": env!("CARGO_PKG_VERSION")
+                    }
+                })
+            }
+            "initialized" => {
+                serde_json::json!({})
+            }
+            "shutdown" => {
+                serde_json::json!({})
+            }
+            "textDocument/completion" => {
+                let params_value = params.unwrap_or(JsonValue::Null);
+                let parsed: CompletionParams = serde_json::from_value(params_value)?;
+
+                match session.complete(parsed, catalog).await {
+                    Ok(Some(response)) => {
+                        match response {
+                            CompletionResponse::Array(items) => serde_json::json!(items),
+                            CompletionResponse::List(list) => serde_json::json!(list),
+                        }
+                    }
+                    Ok(None) => serde_json::json!(null),
+                    Err(e) => {
+                        error!("Completion error: {}", e);
+                        serde_json::json!([])
+                    }
                 }
             }
+            "textDocument/hover" => {
+                let params_value = params.unwrap_or(JsonValue::Null);
+                let parsed: HoverParams = serde_json::from_value(params_value)?;
 
-            // Notifications don't get responses
-            Ok(JsonRpcResponse {
-                jsonrpc: "2.0".to_string(),
-                id: JsonValue::Null,
-                result: None,
-                error: None,
-            })
-        }
+                match session.hover(parsed, catalog).await {
+                    Ok(Some(hover)) => serde_json::json!(hover),
+                    Ok(None) => serde_json::json!(null),
+                    Err(e) => {
+                        error!("Hover error: {}", e);
+                        serde_json::json!(null)
+                    }
+                }
+            }
+            "textDocument/diagnostic" => {
+                // TODO: Implement diagnostics
+                serde_json::json!([])
+            }
+            _ => {
+                warn!("Unknown method: {}", method);
+                return Ok(JsonRpcResponse {
+                    jsonrpc: "2.0".to_string(),
+                    id,
+                    result: None,
+                    error: Some(JsonRpcError {
+                        code: -32601,
+                        message: format!("Method not found: {}", method),
+                        data: None,
+                    }),
+                });
+            }
+        };
+
+        Ok(JsonRpcResponse {
+            jsonrpc: "2.0".to_string(),
+            id,
+            result: Some(result),
+            error: None,
+        })
     }
 }
 
@@ -519,13 +555,19 @@ mod tests {
         let request: JsonRpcRequest = serde_json::from_str(json).unwrap();
 
         assert_eq!(request.jsonrpc, "2.0");
-        assert_eq!(request.id, Some(JsonValue::Number(1.into())));
+        assert_eq!(request.id(), Some(JsonValue::Number(1.into())));
+        assert_eq!(request.method(), "initialize");
+        assert!(!request.is_notification());
+    }
 
-        match request.data {
-            JsonRpcRequestData::Request { method, .. } => {
-                assert_eq!(method, "initialize");
-            }
-            _ => panic!("Expected request"),
-        }
+    #[test]
+    fn test_json_rpc_notification_parsing() {
+        let json = r#"{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{}}"#;
+        let request: JsonRpcRequest = serde_json::from_str(json).unwrap();
+
+        assert_eq!(request.jsonrpc, "2.0");
+        assert_eq!(request.id(), None);
+        assert_eq!(request.method(), "textDocument/didOpen");
+        assert!(request.is_notification());
     }
 }
