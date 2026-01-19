@@ -105,6 +105,7 @@ pub fn generate_engine_tests(input: TokenStream) -> TokenStream {
             ("test_completion_functions", "tests/mysql-5.7/completion/functions.yaml"),
             ("test_completion_join_advanced", "tests/mysql-5.7/completion/join_advanced.yaml"),
             ("test_completion_join_completion", "tests/mysql-5.7/completion/join_completion.yaml"),
+            ("test_completion_join_aliases", "tests/mysql-5.7/completion/join_aliases.yaml"),
             ("test_completion_keywords", "tests/mysql-5.7/completion/keywords.yaml"),
             ("test_completion_select_advanced", "tests/mysql-5.7/completion/select_advanced.yaml"),
             ("test_completion_select_clause", "tests/mysql-5.7/completion/select_clause.yaml"),

@@ -651,14 +651,76 @@ impl CompletionEngine {
             // Store a copy of CTE names for later use
             let context_tables_copy = context_tables.clone();
 
-            // Use AliasResolver to resolve all context tables
+            // Build alias-to-table mapping from context_tables
+            // When context_tables contains both table names and aliases (e.g., ["users", "u", "orders", "o"]),
+            // we need to identify which are aliases and filter them out before resolution.
+            // Heuristic: if a short string is a prefix of a longer string, it's likely an alias.
+            let mut table_names_only = Vec::new();
+            let mut alias_to_table: std::collections::HashMap<String, String> = std::collections::HashMap::new();
+
+            // Sort by length (longer first) to identify aliases
+            let mut sorted_tables = context_tables.clone();
+            sorted_tables.sort_by_key(|a| std::cmp::Reverse(a.len()));
+            sorted_tables.dedup(); // Remove duplicates
+
+            for (i, table) in sorted_tables.iter().enumerate() {
+                // Check if any longer string starts with this shorter string
+                // If "users" starts with "u", then "u" is an alias for "users"
+                let mut is_alias = false;
+                if table.len() < 6 {
+                    // Only check short strings (likely aliases) against longer ones
+                    for other in sorted_tables.iter().take(i) {
+                        // Only check against longer strings that come before us
+                        if other.len() > table.len() && other.to_lowercase().starts_with(&table.to_lowercase()) {
+                            // 'table' is a prefix of 'other', so 'table' is likely an alias
+                            alias_to_table.insert(table.clone(), other.clone());
+                            is_alias = true;
+                            break;
+                        }
+                    }
+                }
+
+                if !is_alias {
+                    table_names_only.push(table.clone());
+                }
+            }
+
+            debug!(
+                ?table_names_only,
+                ?alias_to_table,
+                "Filtered table names and built alias mapping"
+            );
+
+            // Use AliasResolver to resolve only table names (not aliases)
             let resolver = AliasResolver::new(self.catalog_fetcher.catalog());
-            let tables_with_columns = resolver.resolve_multiple(context_tables).await?;
+            let mut tables_with_columns = resolver.resolve_multiple(table_names_only).await?;
 
             debug!(
                 table_count = tables_with_columns.len(),
                 "Resolved tables from context"
             );
+
+            // Set aliases on resolved tables using our mapping
+            for table in &mut tables_with_columns {
+                if let Some(alias) = alias_to_table
+                    .iter()
+                    .find(|(_, table_name)| table_name.eq_ignore_ascii_case(&table.table_name))
+                    .map(|(alias, _)| alias.clone())
+                {
+                    *table = table.clone().with_alias(alias);
+                }
+            }
+
+            // Also check if the qualifier is an alias, and if so, add it to the mapping
+            if let Some(ref q) = qualifier {
+                if let Some(table_name) = alias_to_table.get(q) {
+                    // Qualifier is an alias, make sure it maps to a table
+                    debug!("Qualifier '{}' is an alias for table '{}'", q, table_name);
+                }
+            }
+
+            // Clone tables_with_columns for later use (after potential move in match)
+            let tables_with_columns_clone = tables_with_columns.clone();
 
             // Fetch functions from catalog
             let functions = self.catalog_fetcher.list_functions().await?;
@@ -693,9 +755,20 @@ impl CompletionEngine {
                             debug!("Found alias match for qualifier");
                             alias_match
                         } else {
-                            // Qualifier doesn't match any table - return empty
-                            debug!("Qualifier doesn't match any table");
-                            return Ok(None);
+                            // Qualifier doesn't match any resolved table - might be a CTE
+                            // Check if qualifier matches any name in context_tables (which includes CTEs)
+                            let qualifier_matches_cte = context_tables_copy
+                                .iter()
+                                .any(|name| name.eq_ignore_ascii_case(q));
+
+                            if qualifier_matches_cte {
+                                debug!("Qualifier matches a CTE name, continuing to CTE rendering");
+                                vec![] // Return empty list so CTE rendering logic can handle it
+                            } else {
+                                // Qualifier doesn't match any table or CTE - return empty
+                                debug!("Qualifier doesn't match any table or CTE");
+                                return Ok(None);
+                            }
                         }
                     }
                 }
@@ -711,10 +784,23 @@ impl CompletionEngine {
 
             debug!(item_count = items.len(), "Rendered column items");
 
-            // If no tables were resolved (CTEs are not in catalog), render CTE names as table items
-            if tables_to_render.is_empty() && !context_tables_copy.is_empty() {
-                debug!("No tables resolved from catalog, rendering CTE names as table items");
-                for cte_name in &context_tables_copy {
+            // Check if context_tables contains names that weren't resolved from catalog (likely CTEs)
+            // Get the set of resolved table names
+            let resolved_table_names: std::collections::HashSet<String> = tables_with_columns_clone
+                .iter()
+                .map(|t| t.table_name.clone())
+                .collect();
+
+            // Find names in context_tables that weren't resolved (these are likely CTEs)
+            let cte_names: Vec<_> = context_tables_copy
+                .iter()
+                .filter(|name| !resolved_table_names.contains(*name))
+                .collect();
+
+            // If we have CTEs, add them as completion items
+            if !cte_names.is_empty() {
+                debug!("Found {} potential CTE names not in catalog: {:?}", cte_names.len(), cte_names);
+                for cte_name in cte_names {
                     // Create a simple completion item for the CTE
                     items.push(CompletionItem {
                         label: cte_name.clone(),

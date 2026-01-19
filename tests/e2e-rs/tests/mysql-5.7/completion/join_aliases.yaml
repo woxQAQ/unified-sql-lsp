@@ -1,0 +1,114 @@
+name: "JOIN alias completion"
+description: "Column completion for JOINed tables with aliases"
+
+database:
+  dialect: "mysql"
+  connection_string: "mysql://test_user:test_password@127.0.0.1:3308/test_db"
+  schemas:
+    - "../../../fixtures/schema/mysql/01_create_tables.sql"
+  data:
+    - "../../../fixtures/data/mysql/02_insert_basic_data.sql"
+
+tests:
+  - name: "simple join with two aliases"
+    description: "Should show columns from both joined tables when using aliases"
+    sql: "SELECT u.| FROM users AS u JOIN orders AS o ON u.id = o.user_id"
+    expect_completion:
+      contains:
+        - "u.id"
+        - "u.username"
+        - "u.email"
+        - "u.full_name"
+      not_contains:
+        - "o.id"
+        - "orders"
+      min_count: 10
+
+  - name: "switch to second table alias"
+    description: "Should show columns from orders table when using o. prefix"
+    sql: "SELECT u.id, o.| FROM users AS u JOIN orders AS o ON u.id = o.user_id"
+    expect_completion:
+      contains:
+        - "o.id"
+        - "o.user_id"
+        - "o.total_amount"
+        - "o.status"
+      not_contains:
+        - "u.id"
+        - "users"
+      min_count: 5
+
+  - name: "multiple joins"
+    description: "Should handle multiple JOINs with different aliases"
+    sql: "SELECT u.| FROM users AS u JOIN orders AS o ON u.id = o.user_id JOIN order_items AS oi ON o.id = oi.order_id"
+    expect_completion:
+      # Note: Testing that we can at least get columns from the first table in a multi-join
+      contains:
+        - "u.id"
+        - "u.username"
+      min_count: 2
+
+  - name: "join without explicit alias"
+    description: "Should show table-qualified columns when JOIN has no alias"
+    sql: "SELECT users., orders.| FROM users JOIN orders ON users.id = orders.user_id"
+    expect_completion:
+      contains:
+        - "orders.id"
+        - "orders.user_id"
+        - "orders.total_amount"
+      min_count: 3
+
+  - name: "left join with aliases"
+    description: "Should work correctly with LEFT JOIN and aliases"
+    sql: "SELECT u.| FROM users AS u LEFT JOIN orders AS o ON u.id = o.user_id"
+    expect_completion:
+      contains:
+        - "u.id"
+        - "u.username"
+      min_count: 2
+
+  - name: "inner join with explicit as"
+    description: "Should handle INNER JOIN with explicit AS keyword"
+    sql: "SELECT u.| FROM users AS u INNER JOIN orders AS o ON u.id = o.user_id"
+    expect_completion:
+      contains:
+        - "u.id"
+      not_contains:
+        - "users.id"
+      min_count: 1
+
+  - name: "join with no alias on second table"
+    description: "Should handle mixed aliases and non-aliases"
+    sql: "SELECT u.| FROM users AS u JOIN orders ON u.id = orders.id"
+    expect_completion:
+      contains:
+        - "u.id"
+        - "u.username"
+      min_count: 2
+
+  - name: "three-way join all with aliases"
+    description: "Should handle complex multi-join scenarios"
+    sql: "SELECT u.| FROM users AS u JOIN orders AS o ON u.id = o.user_id JOIN order_items AS oi ON o.id = oi.order_id"
+    expect_completion:
+      contains:
+        - "u.id"
+        - "u.username"
+      min_count: 2
+
+  - name: "right join with aliases"
+    description: "Should handle RIGHT JOIN with aliases"
+    sql: "SELECT u.| FROM users AS u RIGHT JOIN orders AS o ON u.id = o.user_id"
+    expect_completion:
+      contains:
+        - "u.id"
+        - "u.username"
+      min_count: 2
+
+  - name: "cross join with aliases"
+    description: "Should handle CROSS JOIN with aliases"
+    sql: "SELECT u.| FROM users AS u CROSS JOIN orders AS o"
+    expect_completion:
+      contains:
+        - "u.id"
+        - "u.username"
+      min_count: 2

@@ -2087,17 +2087,33 @@ fn extract_tables_from_from_clause(select_node: &Node, source: &str) -> Vec<Stri
         select_node.byte_range()
     );
 
-    for child in select_node.children(&mut select_node.walk()) {
+    // Try to find from_clause as a direct child first
+    let mut cursor = select_node.walk();
+    let child_count = select_node.named_child_count();
+    eprintln!(
+        "!!! extract_tables_from_from_clause: named_child_count={}",
+        child_count
+    );
+
+    let mut found_from = false;
+    for child in select_node.named_children(&mut cursor) {
         eprintln!(
-            "!!! extract_tables_from_from_clause: child.kind()={}",
-            child.kind()
+            "!!! extract_tables_from_from_clause: named child.kind()='{}', text='{}'",
+            child.kind(),
+            &source[child.byte_range()]
         );
         if child.kind() == "from_clause" {
             // Find table_reference nodes
             eprintln!("!!! extract_tables_from_from_clause: found from_clause");
             extract_table_names_recursive(&child, source, &mut tables);
-            break;
+            found_from = true;
         }
+    }
+
+    // If not found as a direct child, search recursively in the entire tree
+    if !found_from {
+        eprintln!("!!! from_clause not found as direct child, searching recursively");
+        find_and_extract_from_clause_recursive(select_node, source, &mut tables);
     }
 
     eprintln!(
@@ -2107,7 +2123,22 @@ fn extract_tables_from_from_clause(select_node: &Node, source: &str) -> Vec<Stri
     tables
 }
 
-/// Recursively extract table names from table_reference nodes
+/// Recursively search for from_clause and extract tables
+fn find_and_extract_from_clause_recursive(node: &Node, source: &str, tables: &mut Vec<String>) {
+    if node.kind() == "from_clause" {
+        eprintln!("!!! Found from_clause via recursive search");
+        extract_table_names_recursive(node, source, tables);
+        return;
+    }
+
+    // Recurse into children
+    let mut cursor = node.walk();
+    for child in node.children(&mut cursor) {
+        find_and_extract_from_clause_recursive(&child, source, tables);
+    }
+}
+
+/// Recursively extract table names from table_reference and join_clause nodes
 fn extract_table_names_recursive(node: &Node, source: &str, tables: &mut Vec<String>) {
     eprintln!(
         "!!! extract_table_names_recursive: node.kind()='{}', text='{}'",
@@ -2122,6 +2153,38 @@ fn extract_table_names_recursive(node: &Node, source: &str, tables: &mut Vec<Str
                     name
                 );
                 tables.push(name);
+            }
+        }
+        "join_clause" => {
+            // Extract table name from JOIN clause
+            // Format: JOIN table_name [AS alias] ON ...
+            // We need to extract both the table_name and the alias (if present)
+            let mut found_table = false;
+            for child in node.children(&mut node.walk()) {
+                match child.kind() {
+                    "table_name" | "identifier" if !found_table => {
+                        // First identifier is the table name
+                        if let Some(name) = extract_identifier_name(&child, source) {
+                            eprintln!(
+                                "!!! extract_table_names_recursive: extracting JOIN table name='{}'",
+                                name
+                            );
+                            tables.push(name);
+                            found_table = true;
+                        }
+                    }
+                    "alias" => {
+                        // Extract alias separately
+                        if let Some(alias_name) = extract_identifier_name(&child, source) {
+                            eprintln!(
+                                "!!! extract_table_names_recursive: extracting JOIN alias='{}'",
+                                alias_name
+                            );
+                            tables.push(alias_name);
+                        }
+                    }
+                    _ => {}
+                }
             }
         }
         _ => {
