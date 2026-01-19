@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import * as monaco from 'monaco-editor'
-import { initWasm } from './lib/wasm-interface'
-import { LspBridge } from './lib/lsp-bridge'
+import { LspClient } from './lib/lsp-client'
+import { setupMonacoWithLSP, updateDiagnostics } from './lib/monaco-setup'
 import { SchemaBrowser } from './components/SchemaBrowser'
 import { DiagnosticsPanel } from './components/DiagnosticsPanel'
 
@@ -49,12 +49,20 @@ WHERE created_at >= '2024-01-01';`,
 
 type ExampleQuery = keyof typeof EXAMPLE_QUERIES
 
+// Helper to update Monaco diagnostics (avoid name collision)
+function updateDiagnosticsMonaco(
+  editor: monaco.editor.IStandaloneCodeEditor,
+  diagnostics: any[]
+) {
+  updateDiagnostics(editor, diagnostics);
+}
+
 export default function App() {
   const editorRef = useRef<HTMLDivElement>(null)
   const editorInstanceRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null)
-  const lspBridgeRef = useRef<LspBridge | null>(null)
-  const [wasmReady, setWasmReady] = useState(false)
-  const [wasmError, setWasmError] = useState<string | null>(null)
+  const lspClientRef = useRef<LspClient | null>(null)
+  const [connectionStatus, setConnectionStatus] = useState<'connecting' | 'connected' | 'disconnected'>('disconnected')
+  const [connectionError, setConnectionError] = useState<string | null>(null)
   const [currentDialect, setCurrentDialect] = useState<Dialect>('MySQL')
 
   const loadExampleQuery = (queryName: ExampleQuery) => {
@@ -75,60 +83,70 @@ export default function App() {
   useEffect(() => {
     async function init() {
       try {
-        setWasmError(null)
-        const dialect = currentDialect.toLowerCase()
-        await initWasm(dialect)
-        setWasmReady(true)
-        console.log(`WASM initialized successfully for ${currentDialect}`)
+        setConnectionError(null)
+        setConnectionStatus('connecting')
+
+        // Create LSP client
+        lspClientRef.current = new LspClient()
+
+        // Connect to server
+        await lspClientRef.current.connect()
+        setConnectionStatus('connected')
+        console.log('[App] Connected to LSP server')
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : 'Unknown error'
-        setWasmError(errorMessage)
-        setWasmReady(false)
-        console.error('Failed to initialize WASM:', error)
+        setConnectionError(errorMessage)
+        setConnectionStatus('disconnected')
+        console.error('[App] Failed to connect to LSP server:', error)
       }
     }
+
     init()
-  }, [currentDialect])
+
+    // Cleanup on unmount
+    return () => {
+      lspClientRef.current?.disconnect()
+    }
+  }, [])
 
   useEffect(() => {
-    if (!editorRef.current) return
+    if (!editorRef.current || connectionStatus !== 'connected') return
 
-    editorInstanceRef.current = monaco.editor.create(editorRef.current, {
+    // Create Monaco editor with LSP integration
+    editorInstanceRef.current = setupMonacoWithLSP(editorRef.current, lspClientRef.current!, {
       value: 'SELECT * FROM users WHERE id = 1;',
-      language: 'sql',
-      theme: 'vs-dark',
-      automaticLayout: true,
-      minimap: { enabled: false },
-      fontSize: 14,
-      lineNumbers: 'on',
-      scrollBeyondLastLine: false,
-      suggest: {
-        showIcons: true,
-        showSnippets: true,
-      },
     })
 
-    // Initialize LSP bridge when WASM is ready
-    if (wasmReady && editorInstanceRef.current) {
-      lspBridgeRef.current = new LspBridge(editorInstanceRef.current)
+    // Set up diagnostics on content change
+    const model = editorInstanceRef.current.getModel()
+    if (model) {
+      const updateDiagnostics = async () => {
+        if (!lspClientRef.current?.isConnected()) return
 
-      // Trigger initial diagnostics
-      const model = editorInstanceRef.current.getModel()
-      if (model) {
-        lspBridgeRef.current.updateDiagnostics(model)
-
-        // Listen for content changes
-        model.onDidChangeContent(() => {
-          lspBridgeRef.current?.updateDiagnostics(model)
-        })
+        const text = model.getValue()
+        try {
+          const diagnostics = await lspClientRef.current.diagnostics(text)
+          updateDiagnosticsMonaco(editorInstanceRef.current!, diagnostics)
+        } catch (error) {
+          console.error('[App] Diagnostics error:', error)
+        }
       }
+
+      // Initial diagnostics
+      updateDiagnostics()
+
+      // Update on content changes with debounce
+      let timeout: ReturnType<typeof setTimeout>
+      model.onDidChangeContent(() => {
+        clearTimeout(timeout)
+        timeout = setTimeout(updateDiagnostics, 500)
+      })
     }
 
     return () => {
-      lspBridgeRef.current?.dispose()
       editorInstanceRef.current?.dispose()
     }
-  }, [wasmReady])
+  }, [connectionStatus])
 
   return (
     <div style={{ height: '100vh', display: 'flex', flexDirection: 'column' }}>
@@ -136,22 +154,45 @@ export default function App() {
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <h1 style={{ color: '#c9d1d9', fontSize: '1.5rem', margin: 0 }}>
             Unified SQL LSP Playground
-            {!wasmReady && !wasmError && (
-              <span style={{ fontSize: '0.875rem', marginLeft: '1rem', color: '#f85149' }}>
-                Loading WASM...
+            {connectionStatus === 'connecting' && (
+              <span style={{ fontSize: '0.875rem', marginLeft: '1rem', color: '#d29922' }}>
+                Connecting to LSP server...
               </span>
             )}
-            {wasmReady && (
+            {connectionStatus === 'connected' && (
               <span style={{ fontSize: '0.875rem', marginLeft: '1rem', color: '#3fb950' }}>
-                ✓ WASM Ready
+                ✓ Connected to LSP
               </span>
             )}
-            {wasmError && (
-              <span
-                style={{ fontSize: '0.875rem', marginLeft: '1rem', color: '#f85149' }}
-                title={wasmError}
-              >
-                ✗ WASM Error (see console)
+            {connectionStatus === 'disconnected' && !connectionError && (
+              <span style={{ fontSize: '0.875rem', marginLeft: '1rem', color: '#f85149' }}>
+                ⚠ LSP server not running
+              </span>
+            )}
+            {connectionError && (
+              <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <span
+                  style={{ fontSize: '0.875rem', marginLeft: '1rem', color: '#f85149' }}
+                  title={connectionError}
+                >
+                  ✗ Connection failed
+                </span>
+                <button
+                  onClick={() => window.location.reload()}
+                  style={{
+                    padding: '0.25rem 0.75rem',
+                    background: '#238636',
+                    border: 'none',
+                    borderRadius: '4px',
+                    color: '#ffffff',
+                    fontSize: '0.75rem',
+                    cursor: 'pointer',
+                  }}
+                  onMouseEnter={(e) => e.currentTarget.style.background = '#2ea043'}
+                  onMouseLeave={(e) => e.currentTarget.style.background = '#238636'}
+                >
+                  Retry
+                </button>
               </span>
             )}
           </h1>

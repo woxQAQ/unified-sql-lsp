@@ -23,7 +23,11 @@ async-trait = { workspace = true }
 tower-lsp = "0.20"
 
 # Async runtime
-tokio = { version = "1.35", features = ["rt-multi-thread", "io-std", "macros"] }
+tokio = { version = "1.35", features = ["rt-multi-thread", "io-std", "macros", "net"] }
+
+# WebSocket support
+tokio-tungstenite = "0.21"
+futures-util = "0.3"
 
 # Logging
 tracing = "0.1"
