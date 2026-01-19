@@ -87,6 +87,7 @@ pub fn generate_engine_tests(input: TokenStream) -> TokenStream {
         #[cfg(test)]
         mod #test_func_name {
             use super::*;
+            use serial_test::serial;
 
             #[tokio::test]
             #[serial(#serial_key)]
