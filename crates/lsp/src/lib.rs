@@ -168,6 +168,7 @@ pub mod hover;
 pub mod parsing;
 pub mod symbols;
 pub mod sync;
+pub mod tcp;
 
 // profiling module removed in "drop bench" commit
 // TODO: restore if benchmarking is re-added

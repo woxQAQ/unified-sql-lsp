@@ -56,6 +56,24 @@ watch:
 	cargo watch -x 'build --workspace' -x 'test --workspace'
 
 # ==============================================================================
+# Playground Targets
+# ==============================================================================
+
+## @playground: Start the SQL LSP playground (LSP server + web UI)
+run-playground:
+	@chmod +x playground/start.sh
+	@playground/start.sh
+
+## @playground: Start only the LSP server in TCP mode (for manual testing)
+run-lsp-tcp:
+	@echo "Starting LSP server on TCP port 4137..."
+	@cargo run --bin unified-sql-lsp -- --tcp 4137 --catalog playground
+
+## @playground: Start only the web UI (assumes LSP server already running)
+run-playground-ui:
+	@cd playground && pnpm run dev
+
+# ==============================================================================
 # Testing Targets
 # ==============================================================================
 

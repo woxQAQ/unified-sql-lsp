@@ -4,6 +4,7 @@ A web-based SQL editor demonstrating the Unified SQL LSP capabilities with real-
 
 ## Features
 
+- **Real LSP Server Integration**: Connects to actual Rust LSP server via WebSocket
 - **Multi-dialect SQL Support**: MySQL, PostgreSQL, TiDB, MariaDB, CockroachDB
 - **LSP Features**:
   - Code completion (Ctrl+Space)
@@ -12,6 +13,46 @@ A web-based SQL editor demonstrating the Unified SQL LSP capabilities with real-
 - **Schema Browser**: View available tables and columns
 - **Example Queries**: Load pre-written SQL examples to test features
 - **Dialect Switching**: Change SQL dialect on-the-fly
+
+## Quick Start
+
+### Prerequisites
+
+- Rust 2021+ (for building the LSP server)
+- Node.js 20+
+- pnpm (recommended) or npm
+
+### Running the Playground
+
+The easiest way to start the playground is using the provided start script:
+
+```bash
+# From the project root
+make run-playground
+```
+
+This will:
+1. Start the LSP server on TCP port 4137
+2. Start the playground web UI on http://localhost:5173
+3. Open your browser automatically
+
+Press `Ctrl+C` to stop both servers.
+
+### Manual Setup
+
+If you prefer to start the servers manually:
+
+```bash
+# Terminal 1: Start LSP server
+cargo run --bin unified-sql-lsp -- --tcp 4137 --catalog playground
+
+# Terminal 2: Start web UI
+cd playground
+pnpm install  # First time only
+pnpm dev
+```
+
+The playground will open at `http://localhost:5173`
 
 ## Development
 
@@ -92,17 +133,42 @@ To deploy to a different location or with a custom base path:
 ## Architecture
 
 ```
+┌─────────────────────────────────────────────────┐
+│                  Browser                        │
+│  ┌───────────────────────────────────────────┐ │
+│  │  Monaco Editor (React + TypeScript)      │ │
+│  │  - SQL editing with syntax highlighting   │ │
+│  │  - LSP integration (completion, hover)    │ │
+│  │  - Real-time diagnostics                 │ │
+│  └───────────────┬───────────────────────────┘ │
+│                  │ WebSocket                   │
+└──────────────────┼─────────────────────────────┘
+                   │ ws://localhost:4137
+┌──────────────────┼─────────────────────────────┐
+│                  ↓                              │
+│  ┌───────────────────────────────────────────┐ │
+│  │  LSP Server (Rust)                        │ │
+│  │  - TCP/WebSocket transport               │ │
+│  │  - Tree-sitter parsing                    │ │
+│  │  - Semantic analysis (ScopeManager, etc) │ │
+│  │  - StaticCatalog (playground schema)      │ │
+│  └───────────────────────────────────────────┘ │
+└─────────────────────────────────────────────────┘
+```
+
 playground/
 ├── src/
 │   ├── components/      # React components
 │   │   ├── SchemaBrowser.tsx
 │   │   └── DiagnosticsPanel.tsx
 │   ├── lib/             # Utilities
-│   │   ├── wasm-interface.ts    # WASM loader
-│   │   └── lsp-bridge.ts        # Monaco LSP adapter
+│   │   ├── lsp-client.ts         # WebSocket LSP client
+│   │   └── monaco-setup.ts       # Monaco LSP integration
 │   ├── App.tsx          # Main application
 │   └── main.tsx         # Entry point
-├── wasm/                # Compiled WASM (generated)
+├── fixtures/
+│   └── schema.sql       # Playground test schema
+├── start.sh            # Start script (LSP + web UI)
 ├── index.html
 ├── vite.config.ts
 └── package.json
@@ -112,8 +178,8 @@ playground/
 
 - **Frontend**: React 18 + TypeScript + Vite
 - **Editor**: Monaco Editor (VS Code's editor)
-- **LSP Backend**: Rust compiled to WebAssembly
-- **Deployment**: GitHub Pages
+- **LSP Backend**: Rust with TCP/WebSocket transport
+- **Deployment**: GitHub Pages (static files only)
 
 ## Bundle Size
 
