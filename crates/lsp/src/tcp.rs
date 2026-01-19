@@ -43,10 +43,10 @@ use crate::completion::CompletionEngine;
 use crate::config::EngineConfig;
 use crate::document::{DocumentStore, ParseMetadata};
 use crate::parsing::{ParseResult, ParserManager};
+use tower_lsp::jsonrpc::Result as JsonRpcResult;
+use tower_lsp::lsp_types::*;
 use unified_sql_lsp_catalog::Catalog;
 use unified_sql_lsp_ir::Dialect;
-use tower_lsp::lsp_types::*;
-use tower_lsp::jsonrpc::Result as JsonRpcResult;
 
 /// JSON-RPC request
 #[derive(Debug, Clone, Deserialize)]
@@ -146,7 +146,11 @@ impl ClientSession {
         debug!("did_open: uri={}, language={}", uri, language_id);
 
         // Open document in store
-        if let Err(e) = self.documents.open_document(uri.clone(), text, 0, language_id).await {
+        if let Err(e) = self
+            .documents
+            .open_document(uri.clone(), text, 0, language_id)
+            .await
+        {
             error!("Failed to open document: {}", e);
             return;
         }
@@ -168,7 +172,11 @@ impl ClientSession {
                         error_count: 0,
                     };
                     if let Some(tree) = tree {
-                        if let Err(e) = self.documents.update_document_tree(&uri, tree, metadata).await {
+                        if let Err(e) = self
+                            .documents
+                            .update_document_tree(&uri, tree, metadata)
+                            .await
+                        {
                             error!("Failed to update document tree: {}", e);
                         }
                     }
@@ -182,7 +190,11 @@ impl ClientSession {
                         error_count: errors.len(),
                     };
                     if let Some(tree) = tree {
-                        if let Err(e) = self.documents.update_document_tree(&uri, tree, metadata).await {
+                        if let Err(e) = self
+                            .documents
+                            .update_document_tree(&uri, tree, metadata)
+                            .await
+                        {
                             error!("Failed to update document tree: {}", e);
                         }
                     }
@@ -198,11 +210,22 @@ impl ClientSession {
         let uri = params.text_document.uri.clone();
         let version = params.text_document.version;
 
-        debug!("did_change: uri={}, changes={}", uri, params.content_changes.len());
+        debug!(
+            "did_change: uri={}, changes={}",
+            uri,
+            params.content_changes.len()
+        );
 
         // Update document content
-        let identifier = VersionedTextDocumentIdentifier { uri: uri.clone(), version };
-        if let Err(e) = self.documents.update_document(&identifier, &params.content_changes).await {
+        let identifier = VersionedTextDocumentIdentifier {
+            uri: uri.clone(),
+            version,
+        };
+        if let Err(e) = self
+            .documents
+            .update_document(&identifier, &params.content_changes)
+            .await
+        {
             error!("Failed to update document: {}", e);
             return;
         }
@@ -224,7 +247,11 @@ impl ClientSession {
                         error_count: 0,
                     };
                     if let Some(tree) = tree {
-                        if let Err(e) = self.documents.update_document_tree(&uri, tree, metadata).await {
+                        if let Err(e) = self
+                            .documents
+                            .update_document_tree(&uri, tree, metadata)
+                            .await
+                        {
                             error!("Failed to update document tree: {}", e);
                         }
                     }
@@ -238,7 +265,11 @@ impl ClientSession {
                         error_count: errors.len(),
                     };
                     if let Some(tree) = tree {
-                        if let Err(e) = self.documents.update_document_tree(&uri, tree, metadata).await {
+                        if let Err(e) = self
+                            .documents
+                            .update_document_tree(&uri, tree, metadata)
+                            .await
+                        {
                             error!("Failed to update document tree: {}", e);
                         }
                     }
@@ -258,7 +289,11 @@ impl ClientSession {
         self.documents.close_document(&uri).await;
     }
 
-    async fn complete(&self, params: CompletionParams, catalog: Arc<dyn Catalog>) -> JsonRpcResult<Option<CompletionResponse>> {
+    async fn complete(
+        &self,
+        params: CompletionParams,
+        catalog: Arc<dyn Catalog>,
+    ) -> JsonRpcResult<Option<CompletionResponse>> {
         let uri = params.text_document_position.text_document.uri;
         let position = params.text_document_position.position;
 
@@ -281,7 +316,11 @@ impl ClientSession {
         }
     }
 
-    async fn hover(&self, params: HoverParams, catalog: Arc<dyn Catalog>) -> JsonRpcResult<Option<Hover>> {
+    async fn hover(
+        &self,
+        params: HoverParams,
+        catalog: Arc<dyn Catalog>,
+    ) -> JsonRpcResult<Option<Hover>> {
         let uri = params.text_document_position_params.text_document.uri;
         let position = params.text_document_position_params.position;
 
@@ -491,12 +530,10 @@ async fn handle_lsp_message(
                 let parsed: CompletionParams = serde_json::from_value(params_value)?;
 
                 match session.complete(parsed, catalog).await {
-                    Ok(Some(response)) => {
-                        match response {
-                            CompletionResponse::Array(items) => serde_json::json!(items),
-                            CompletionResponse::List(list) => serde_json::json!(list),
-                        }
-                    }
+                    Ok(Some(response)) => match response {
+                        CompletionResponse::Array(items) => serde_json::json!(items),
+                        CompletionResponse::List(list) => serde_json::json!(list),
+                    },
                     Ok(None) => serde_json::json!(null),
                     Err(e) => {
                         error!("Completion error: {}", e);
