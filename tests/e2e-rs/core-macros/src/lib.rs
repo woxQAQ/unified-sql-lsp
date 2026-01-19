@@ -10,8 +10,7 @@
 
 use proc_macro::TokenStream;
 use quote::quote;
-use proc_macro2;
-use syn::{parse_macro_input, DeriveInput};
+use syn::{DeriveInput, parse_macro_input};
 
 /// Generate engine-specific test functions from YAML files
 ///
@@ -61,16 +60,17 @@ pub fn generate_engine_tests(input: TokenStream) -> TokenStream {
         &format!("test_{}", engine_name),
         proc_macro2::Span::call_site(),
     );
-    let engine_ident = proc_macro2::Ident::new(
-        engine_enum_name,
-        proc_macro2::Span::call_site(),
-    );
+    let engine_ident = proc_macro2::Ident::new(engine_enum_name, proc_macro2::Span::call_site());
 
     // Generate glob patterns for each test type
     let glob_pattern_literals: Vec<proc_macro2::Literal> = test_types
         .iter()
         .map(|test_type| {
-            let pattern = format!("tests/{}/{}/*.yaml", format_engine_path(engine_name), test_type);
+            let pattern = format!(
+                "tests/{}/{}/*.yaml",
+                format_engine_path(engine_name),
+                test_type
+            );
             proc_macro2::Literal::string(&pattern)
         })
         .collect();
@@ -143,7 +143,11 @@ pub fn derive_test_metadata(input: TokenStream) -> TokenStream {
 /// These match the directory structure discovered by build.rs
 fn get_test_types_for_engine(engine_name: &str) -> Vec<String> {
     match engine_name {
-        "mysql_57" => vec!["completion".to_string(), "diagnostics".to_string(), "hover".to_string()],
+        "mysql_57" => vec![
+            "completion".to_string(),
+            "diagnostics".to_string(),
+            "hover".to_string(),
+        ],
         "mysql_80" => vec!["completion".to_string()],
         "postgresql_12" => vec!["completion".to_string()],
         "postgresql_16" => vec!["completion".to_string()],
