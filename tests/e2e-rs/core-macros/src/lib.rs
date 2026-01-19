@@ -4,11 +4,13 @@
 // See LICENSE files for details
 
 //! Procedural macros for generating E2E tests from YAML files
+//!
+//! This macro uses dynamic YAML discovery via build.rs and glob patterns,
+//! automatically discovering all test files without manual configuration.
 
 use proc_macro::TokenStream;
 use quote::quote;
-use proc_macro2;
-use syn::{parse_macro_input, DeriveInput};
+use syn::{DeriveInput, parse_macro_input};
 
 /// Generate engine-specific test functions from YAML files
 ///
@@ -25,7 +27,7 @@ use syn::{parse_macro_input, DeriveInput};
 pub fn generate_engine_tests(input: TokenStream) -> TokenStream {
     let input_str = input.to_string();
 
-    // Parse engine name (simple string matching for now)
+    // Parse engine name (keep existing logic)
     let engine_name = if input_str.contains("MySQL57") {
         "mysql_57"
     } else if input_str.contains("MySQL80") {
@@ -50,118 +52,70 @@ pub fn generate_engine_tests(input: TokenStream) -> TokenStream {
         "MySQL57"
     };
 
-    // Parse test_dir (extract between quotes)
-    // Will be used in next task for YAML discovery
-    let _test_dir = if let Some(start) = input_str.find("test_dir:") {
-        let after_start = &input_str[start..];
-        if let Some(quote_start) = after_start.find('"') {
-            let rest = &after_start[quote_start + 1..];
-            if let Some(quote_end) = rest.find('"') {
-                &rest[..quote_end]
-            } else {
-                "../tests"
-            }
-        } else {
-            "../tests"
-        }
-    } else {
-        "../tests"
-    };
+    // Get test types for this engine
+    // These match what build.rs discovers in the tests/ directory
+    let test_types = get_test_types_for_engine(engine_name);
 
-    // Parse test_types
-    let _test_types = if let Some(start) = input_str.find("test_types:") {
-        let after_start = &input_str[start..];
-        if let Some(bracket_start) = after_start.find('[') {
-            let after_bracket_start = &after_start[bracket_start + 1..];
-            if let Some(bracket_end) = after_bracket_start.find(']') {
-                let types_str = &after_bracket_start[..bracket_end];
-                types_str
-                    .split(',')
-                    .map(|s| s.trim().trim_matches('"'))
-                    .collect::<Vec<_>>()
-            } else {
-                vec!["completion"]
-            }
-        } else {
-            vec!["completion"]
-        }
-    } else {
-        vec!["completion"]
-    };
+    let test_func_name = proc_macro2::Ident::new(
+        &format!("test_{}", engine_name),
+        proc_macro2::Span::call_site(),
+    );
+    let engine_ident = proc_macro2::Ident::new(engine_enum_name, proc_macro2::Span::call_site());
 
-    // Discover YAML files
-    // TODO: Implement dynamic YAML discovery using build-time generated file lists
-    // The build.rs script now tracks changes in tests/ directory.
-    // Future enhancement will use glob patterns to discover YAML files at compile time:
-    // - Walk tests/{engine}/{test_type}/ directories
-    // - Use include_str! with compile-time generated paths
-    // - Support patterns like: tests/mysql-5.7/completion/*.yaml
-    // For now, create test functions manually for MySQL 5.7, MySQL 8.0, PostgreSQL 12, and PostgreSQL 16 completion tests
-    let tests = if engine_name == "mysql_57" {
-        vec![
-            ("test_completion_basic_select", "tests/mysql-5.7/completion/basic_select.yaml"),
-            ("test_completion_from_advanced", "tests/mysql-5.7/completion/from_advanced.yaml"),
-            ("test_completion_from_clause", "tests/mysql-5.7/completion/from_clause.yaml"),
-            ("test_completion_functions", "tests/mysql-5.7/completion/functions.yaml"),
-            ("test_completion_join_advanced", "tests/mysql-5.7/completion/join_advanced.yaml"),
-            ("test_completion_join_completion", "tests/mysql-5.7/completion/join_completion.yaml"),
-            ("test_completion_join_aliases", "tests/mysql-5.7/completion/join_aliases.yaml"),
-            ("test_completion_keywords", "tests/mysql-5.7/completion/keywords.yaml"),
-            ("test_completion_select_advanced", "tests/mysql-5.7/completion/select_advanced.yaml"),
-            ("test_completion_select_clause", "tests/mysql-5.7/completion/select_clause.yaml"),
-            ("test_completion_where_clause", "tests/mysql-5.7/completion/where_clause.yaml"),
-        ]
-    } else if engine_name == "mysql_80" {
-        vec![
-            ("test_completion_cte", "tests/mysql-8.0/completion/cte.yaml"),
-            ("test_completion_window_functions", "tests/mysql-8.0/completion/window_functions.yaml"),
-        ]
-    } else if engine_name == "postgresql_12" {
-        vec![
-            ("test_completion_basic_select", "tests/postgresql-12/completion/basic_select.yaml"),
-            ("test_completion_postgresql_functions", "tests/postgresql-12/completion/postgresql_functions.yaml"),
-            // Note: returning_clause test disabled - RETURNING completion not fully implemented
-        ]
-    } else if engine_name == "postgresql_16" {
-        vec![
-            // Note: advanced_features test disabled - JSON functions not loading in runtime
-        ]
-    } else {
-        vec![]
-    };
-
-    let generated_tests: Vec<proc_macro2::TokenStream> = tests
+    // Generate glob patterns for each test type
+    let glob_pattern_literals: Vec<proc_macro2::Literal> = test_types
         .iter()
-        .map(|(name, path)| {
-            let test_name = proc_macro2::Ident::new(name, proc_macro2::Span::call_site());
-            let test_path = proc_macro2::Literal::string(path);
-            let serial_key = proc_macro2::Ident::new(engine_name, proc_macro2::Span::call_site());
-            let engine_ident = proc_macro2::Ident::new(engine_enum_name, proc_macro2::Span::call_site());
-
-            quote::quote! {
-                #[tokio::test]
-                #[serial(#serial_key)]
-                async fn #test_name() -> anyhow::Result<()> {
-                    use unified_sql_lsp_e2e_core::{Engine, ensure_engine_ready};
-                    let _guard = ensure_engine_ready(&Engine::#engine_ident).await?;
-                    unified_sql_lsp_e2e_core::run_suite(#test_path).await
-                }
-            }
+        .map(|test_type| {
+            let pattern = format!(
+                "tests/{}/{}/*.yaml",
+                format_engine_path(engine_name),
+                test_type
+            );
+            proc_macro2::Literal::string(&pattern)
         })
         .collect();
 
-    let module_name = proc_macro2::Ident::new(
-        &format!("generated_tests_{}", engine_name),
-        proc_macro2::Span::call_site(),
-    );
+    let serial_key = proc_macro2::Ident::new(engine_name, proc_macro2::Span::call_site());
+
+    // Build array syntax manually
+    let patterns_array = if glob_pattern_literals.len() == 1 {
+        let pat = &glob_pattern_literals[0];
+        quote::quote! { &[#pat] }
+    } else {
+        quote::quote! { &[#(#glob_pattern_literals),*] }
+    };
 
     let output = quote::quote! {
         #[cfg(test)]
-        mod #module_name {
+        mod #test_func_name {
             use super::*;
             use serial_test::serial;
 
-            #(#generated_tests)*
+            #[tokio::test]
+            #[serial(#serial_key)]
+            async fn #test_func_name() -> anyhow::Result<()> {
+                use unified_sql_lsp_e2e_core::{Engine, ensure_engine_ready};
+                let _guard = ensure_engine_ready(&Engine::#engine_ident).await?;
+
+                let patterns: &[&str] = #patterns_array;
+                let mut test_count = 0;
+
+                for pattern in patterns {
+                    for entry in glob::glob(pattern).map_err(|e| anyhow::anyhow!("Invalid glob pattern: {}", e))? {
+                        let yaml_path = entry.map_err(|e| anyhow::anyhow!("Failed to read path: {}", e))?;
+                        println!("Running test: {}", yaml_path.display());
+
+                        unified_sql_lsp_e2e_core::run_suite(yaml_path.to_str().unwrap())
+                            .await
+                            .map_err(|e| anyhow::anyhow!("Test failed for {}: {}", yaml_path.display(), e))?;
+
+                        test_count += 1;
+                    }
+                }
+
+                println!("✓ Ran {} tests for {}", test_count, #engine_name);
+                Ok(())
+            }
         }
     };
 
@@ -183,4 +137,25 @@ pub fn derive_test_metadata(input: TokenStream) -> TokenStream {
     };
 
     TokenStream::from(output)
+}
+
+/// Get test types for a specific engine
+/// These match the directory structure discovered by build.rs
+fn get_test_types_for_engine(engine_name: &str) -> Vec<String> {
+    match engine_name {
+        "mysql_57" => vec![
+            "completion".to_string(),
+            "diagnostics".to_string(),
+            "hover".to_string(),
+        ],
+        "mysql_80" => vec!["completion".to_string()],
+        "postgresql_12" => vec!["completion".to_string()],
+        "postgresql_16" => vec!["completion".to_string()],
+        _ => Vec::new(),
+    }
+}
+
+/// Format engine name for use in paths (mysql_57 -> mysql-5.7)
+fn format_engine_path(engine_name: &str) -> String {
+    engine_name.replace("_", "-")
 }

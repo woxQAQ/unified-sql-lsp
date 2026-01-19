@@ -256,6 +256,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "data-encoding"
+version = "2.10.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d7a1e2f27636f116493b8b860f5546edb47c8d8f8ea73e1d2a20be88e28d1fea"
+
+[[package]]
 name = "der"
 version = "0.7.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -590,6 +596,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "http"
+version = "1.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e3ba2a386d7f85a81f119ad7498ebe444d2e22c2af0b86b069416ace48b3311a"
+dependencies = [
+ "bytes",
+ "itoa",
+]
+
+[[package]]
 name = "httparse"
 version = "1.10.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -883,6 +899,7 @@ name = "mysql-5-7-e2e-tests"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "glob",
  "serial_test",
  "tokio",
  "unified-sql-lsp-e2e-core",
@@ -893,6 +910,7 @@ name = "mysql-8-0-e2e-tests"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "glob",
  "serial_test",
  "tokio",
  "unified-sql-lsp-e2e-core",
@@ -1078,6 +1096,7 @@ name = "postgresql-12-e2e-tests"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "glob",
  "serial_test",
  "tokio",
  "unified-sql-lsp-e2e-core",
@@ -1088,6 +1107,7 @@ name = "postgresql-16-e2e-tests"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "glob",
  "serial_test",
  "tokio",
  "unified-sql-lsp-e2e-core",
@@ -1535,7 +1555,7 @@ dependencies = [
  "serde_json",
  "sha2",
  "smallvec",
- "thiserror",
+ "thiserror 2.0.17",
  "tokio",
  "tokio-stream",
  "tracing",
@@ -1617,7 +1637,7 @@ dependencies = [
  "smallvec",
  "sqlx-core",
  "stringprep",
- "thiserror",
+ "thiserror 2.0.17",
  "tracing",
  "whoami",
 ]
@@ -1654,7 +1674,7 @@ dependencies = [
  "smallvec",
  "sqlx-core",
  "stringprep",
- "thiserror",
+ "thiserror 2.0.17",
  "tracing",
  "whoami",
 ]
@@ -1678,7 +1698,7 @@ dependencies = [
  "serde",
  "serde_urlencoded",
  "sqlx-core",
- "thiserror",
+ "thiserror 2.0.17",
  "tracing",
  "url",
 ]
@@ -1755,11 +1775,31 @@ dependencies = [
 
 [[package]]
 name = "thiserror"
+version = "1.0.69"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b6aaf5339b578ea85b50e080feb250a3e8ae8cfcdff9a461c9ec2904bc923f52"
+dependencies = [
+ "thiserror-impl 1.0.69",
+]
+
+[[package]]
+name = "thiserror"
 version = "2.0.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f63587ca0f12b72a0600bcba1d40081f830876000bb46dd2337a3051618f4fc8"
 dependencies = [
- "thiserror-impl",
+ "thiserror-impl 2.0.17",
+]
+
+[[package]]
+name = "thiserror-impl"
+version = "1.0.69"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4fee6c4efc90059e10f81e6d42c60a18f76588c3d74cb83a0b242a2b6c7504c1"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
 ]
 
 [[package]]
@@ -1844,6 +1884,18 @@ dependencies = [
  "futures-core",
  "pin-project-lite",
  "tokio",
+]
+
+[[package]]
+name = "tokio-tungstenite"
+version = "0.21.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c83b561d025642014097b66e6c1bb422783339e0909e4429cde4749d1990bc38"
+dependencies = [
+ "futures-util",
+ "log",
+ "tokio",
+ "tungstenite",
 ]
 
 [[package]]
@@ -2002,6 +2054,25 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4ae62f7eae5eb549c71b76658648b72cc6111f2d87d24a1e31fa907f4943e3ce"
 
 [[package]]
+name = "tungstenite"
+version = "0.21.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9ef1a641ea34f399a848dea702823bbecfb4c486f911735368f1f137cb8257e1"
+dependencies = [
+ "byteorder",
+ "bytes",
+ "data-encoding",
+ "http",
+ "httparse",
+ "log",
+ "rand",
+ "sha1",
+ "thiserror 1.0.69",
+ "url",
+ "utf-8",
+]
+
+[[package]]
 name = "typenum"
 version = "1.19.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2050,7 +2121,7 @@ dependencies = [
  "async-trait",
  "serde",
  "sqlx",
- "thiserror",
+ "thiserror 2.0.17",
  "tracing",
  "unified-sql-lsp-function-registry",
  "unified-sql-lsp-ir",
@@ -2061,7 +2132,7 @@ name = "unified-sql-lsp-context"
 version = "0.1.0"
 dependencies = [
  "serde",
- "thiserror",
+ "thiserror 2.0.17",
  "tracing",
  "tree-sitter",
  "unified-sql-grammar",
@@ -2103,7 +2174,7 @@ dependencies = [
  "sqlx",
  "syn",
  "tempfile",
- "thiserror",
+ "thiserror 2.0.17",
  "tokio",
  "tokio-util",
  "tower-lsp",
@@ -2120,6 +2191,7 @@ dependencies = [
 name = "unified-sql-lsp-e2e-core-macros"
 version = "0.1.0"
 dependencies = [
+ "glob",
  "proc-macro2",
  "quote",
  "syn",
@@ -2139,7 +2211,7 @@ version = "0.1.0"
 dependencies = [
  "serde",
  "serde_json",
- "thiserror",
+ "thiserror 2.0.17",
 ]
 
 [[package]]
@@ -2147,7 +2219,7 @@ name = "unified-sql-lsp-lowering"
 version = "0.1.0"
 dependencies = [
  "serde",
- "thiserror",
+ "thiserror 2.0.17",
  "tree-sitter",
  "unified-sql-lsp-ir",
 ]
@@ -2158,11 +2230,13 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
+ "futures-util",
  "ropey",
  "serde",
  "serde_json",
- "thiserror",
+ "thiserror 2.0.17",
  "tokio",
+ "tokio-tungstenite",
  "tower-lsp",
  "tracing",
  "tracing-subscriber",
@@ -2182,7 +2256,7 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "serde",
- "thiserror",
+ "thiserror 2.0.17",
  "tracing",
  "unified-sql-lsp-catalog",
  "unified-sql-lsp-ir",
@@ -2197,7 +2271,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_yaml",
- "thiserror",
+ "thiserror 2.0.17",
  "tokio",
  "unified-sql-lsp-catalog",
  "unified-sql-lsp-ir",
@@ -2222,6 +2296,12 @@ dependencies = [
  "serde",
  "serde_derive",
 ]
+
+[[package]]
+name = "utf-8"
+version = "0.7.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "09cc8ee72d2a9becf2f2febe0205bbed8fc6615b7cb429ad062dc7b7ddd036a9"
 
 [[package]]
 name = "utf8_iter"

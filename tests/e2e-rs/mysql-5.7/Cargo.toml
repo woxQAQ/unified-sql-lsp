@@ -8,3 +8,4 @@ unified-sql-lsp-e2e-core = { path = "../core" }
 tokio = { workspace = true }
 anyhow = { workspace = true }
 serial_test = { workspace = true }
+glob = "0.3"

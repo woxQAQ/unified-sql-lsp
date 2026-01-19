@@ -22,10 +22,13 @@
 //!
 //! ```rust,no_run
 //! use unified_sql_lsp_lsp::tcp::TcpServer;
+//! use unified_sql_lsp_catalog::StaticCatalog;
+//! use std::sync::Arc;
 //!
 //! #[tokio::main]
 //! async fn main() {
-//!     let server = TcpServer::new(4137).await.unwrap();
+//!     let catalog = Arc::new(StaticCatalog::new());
+//!     let server = TcpServer::new(4137, catalog).await.unwrap();
 //!     server.serve().await.unwrap();
 //! }
 //! ```
