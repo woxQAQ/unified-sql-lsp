@@ -377,10 +377,7 @@ impl Catalog for LiveMySQLCatalog {
                 .fetch_optional(pool)
                 .await
                 .map_err(|e| {
-                    CatalogError::QueryFailed(format!(
-                        "Failed to get current database: {}",
-                        e
-                    ))
+                    CatalogError::QueryFailed(format!("Failed to get current database: {}", e))
                 })?;
 
             let query = r#"
@@ -417,7 +414,6 @@ impl Catalog for LiveMySQLCatalog {
                     table, e
                 ))
             })?;
-
 
             let columns: Vec<ColumnMetadata> = rows
                 .into_iter()

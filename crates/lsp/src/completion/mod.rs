@@ -656,7 +656,8 @@ impl CompletionEngine {
             // we need to identify which are aliases and filter them out before resolution.
             // Heuristic: if a short string is a prefix of a longer string, it's likely an alias.
             let mut table_names_only = Vec::new();
-            let mut alias_to_table: std::collections::HashMap<String, String> = std::collections::HashMap::new();
+            let mut alias_to_table: std::collections::HashMap<String, String> =
+                std::collections::HashMap::new();
 
             // Sort by length (longer first) to identify aliases
             let mut sorted_tables = context_tables.clone();
@@ -671,7 +672,9 @@ impl CompletionEngine {
                     // Only check short strings (likely aliases) against longer ones
                     for other in sorted_tables.iter().take(i) {
                         // Only check against longer strings that come before us
-                        if other.len() > table.len() && other.to_lowercase().starts_with(&table.to_lowercase()) {
+                        if other.len() > table.len()
+                            && other.to_lowercase().starts_with(&table.to_lowercase())
+                        {
                             // 'table' is a prefix of 'other', so 'table' is likely an alias
                             alias_to_table.insert(table.clone(), other.clone());
                             is_alias = true;
@@ -799,7 +802,11 @@ impl CompletionEngine {
 
             // If we have CTEs, add them as completion items
             if !cte_names.is_empty() {
-                debug!("Found {} potential CTE names not in catalog: {:?}", cte_names.len(), cte_names);
+                debug!(
+                    "Found {} potential CTE names not in catalog: {:?}",
+                    cte_names.len(),
+                    cte_names
+                );
                 for cte_name in cte_names {
                     // Create a simple completion item for the CTE
                     items.push(CompletionItem {

@@ -37,8 +37,8 @@
 //! TODO: (SEMANTIC-002) Replace with full semantic analyzer when available
 
 use std::collections::HashMap;
-use tree_sitter::Node;
 use tracing::warn;
+use tree_sitter::Node;
 use unified_sql_lsp_semantic::{ScopeManager, ScopeType, TableSymbol};
 
 /// Scope builder error
@@ -265,10 +265,7 @@ impl ScopeBuilder {
     /// LEFT JOIN orders o ON u.id = o.user_id
     /// INNER JOIN orders o ON u.id = o.user_id
     /// ```
-    pub fn parse_join_clause(
-        node: &Node,
-        source: &str,
-    ) -> Result<TableSymbol, ScopeBuildError> {
+    pub fn parse_join_clause(node: &Node, source: &str) -> Result<TableSymbol, ScopeBuildError> {
         let mut table_name = None;
         let mut alias = None;
 
@@ -354,12 +351,12 @@ mod tests {
         let root = tree.root_node();
 
         // Find the select_statement node anywhere in the tree
-        let select_stmt = find_select_statement(&root)
-            .expect("No SELECT statement found in parsed tree");
+        let select_stmt =
+            find_select_statement(&root).expect("No SELECT statement found in parsed tree");
 
         // Use the public API
-        let manager = ScopeBuilder::build_from_select(&select_stmt, sql)
-            .expect("Failed to build scope");
+        let manager =
+            ScopeBuilder::build_from_select(&select_stmt, sql).expect("Failed to build scope");
 
         let scope = manager.get_scope(0).expect("No scope found");
         let tables = &scope.tables;
@@ -384,7 +381,8 @@ mod tests {
 
     #[test]
     fn test_extract_join_without_alias() {
-        let sql = "SELECT users.id, orders.total FROM users JOIN orders ON users.id = orders.user_id";
+        let sql =
+            "SELECT users.id, orders.total FROM users JOIN orders ON users.id = orders.user_id";
         let lang = language_for_dialect_with_version(Dialect::MySQL, Some(DialectVersion::MySQL80))
             .expect("Failed to get MySQL 8.0 language");
 
@@ -393,11 +391,11 @@ mod tests {
         let tree = parser.parse(sql, None).expect("Failed to parse SQL");
         let root = tree.root_node();
 
-        let select_stmt = find_select_statement(&root)
-            .expect("No SELECT statement found in parsed tree");
+        let select_stmt =
+            find_select_statement(&root).expect("No SELECT statement found in parsed tree");
 
-        let manager = ScopeBuilder::build_from_select(&select_stmt, sql)
-            .expect("Failed to build scope");
+        let manager =
+            ScopeBuilder::build_from_select(&select_stmt, sql).expect("Failed to build scope");
 
         let scope = manager.get_scope(0).expect("No scope found");
         let tables = &scope.tables;
@@ -432,11 +430,11 @@ mod tests {
         let tree = parser.parse(sql, None).expect("Failed to parse SQL");
         let root = tree.root_node();
 
-        let select_stmt = find_select_statement(&root)
-            .expect("No SELECT statement found in parsed tree");
+        let select_stmt =
+            find_select_statement(&root).expect("No SELECT statement found in parsed tree");
 
-        let manager = ScopeBuilder::build_from_select(&select_stmt, sql)
-            .expect("Failed to build scope");
+        let manager =
+            ScopeBuilder::build_from_select(&select_stmt, sql).expect("Failed to build scope");
 
         let scope = manager.get_scope(0).expect("No scope found");
         let tables = &scope.tables;
@@ -464,11 +462,11 @@ mod tests {
         let tree = parser.parse(sql, None).expect("Failed to parse SQL");
         let root = tree.root_node();
 
-        let select_stmt = find_select_statement(&root)
-            .expect("No SELECT statement found in parsed tree");
+        let select_stmt =
+            find_select_statement(&root).expect("No SELECT statement found in parsed tree");
 
-        let manager = ScopeBuilder::build_from_select(&select_stmt, sql)
-            .expect("Failed to build scope");
+        let manager =
+            ScopeBuilder::build_from_select(&select_stmt, sql).expect("Failed to build scope");
 
         let scope = manager.get_scope(0).expect("No scope found");
         let tables = &scope.tables;
@@ -493,11 +491,11 @@ mod tests {
         let tree = parser.parse(sql, None).expect("Failed to parse SQL");
         let root = tree.root_node();
 
-        let select_stmt = find_select_statement(&root)
-            .expect("No SELECT statement found in parsed tree");
+        let select_stmt =
+            find_select_statement(&root).expect("No SELECT statement found in parsed tree");
 
-        let manager = ScopeBuilder::build_from_select(&select_stmt, sql)
-            .expect("Failed to build scope");
+        let manager =
+            ScopeBuilder::build_from_select(&select_stmt, sql).expect("Failed to build scope");
 
         let scope = manager.get_scope(0).expect("No scope found");
         let tables = &scope.tables;
@@ -519,11 +517,11 @@ mod tests {
         let tree = parser.parse(sql, None).expect("Failed to parse SQL");
         let root = tree.root_node();
 
-        let select_stmt = find_select_statement(&root)
-            .expect("No SELECT statement found in parsed tree");
+        let select_stmt =
+            find_select_statement(&root).expect("No SELECT statement found in parsed tree");
 
-        let manager = ScopeBuilder::build_from_select(&select_stmt, sql)
-            .expect("Failed to build scope");
+        let manager =
+            ScopeBuilder::build_from_select(&select_stmt, sql).expect("Failed to build scope");
 
         let scope = manager.get_scope(0).expect("No scope found");
         let tables = &scope.tables;
@@ -549,8 +547,8 @@ mod tests {
         let tree = parser.parse(sql, None).expect("Failed to parse SQL");
         let root = tree.root_node();
 
-        let select_stmt = find_select_statement(&root)
-            .expect("No SELECT statement found in parsed tree");
+        let select_stmt =
+            find_select_statement(&root).expect("No SELECT statement found in parsed tree");
 
         // CST-based scope building doesn't work for subqueries due to grammar limitations
         // The tree-sitter grammar creates ERROR nodes for subquery aliases
@@ -558,7 +556,10 @@ mod tests {
         let result = ScopeBuilder::build_from_select(&select_stmt, sql);
 
         // Verify it fails (as expected due to CST limitations)
-        assert!(result.is_err(), "CST-based scope building should fail for subqueries");
+        assert!(
+            result.is_err(),
+            "CST-based scope building should fail for subqueries"
+        );
 
         // The workaround is that text-based extraction in completion.rs handles subqueries
         // This is documented as a known limitation
@@ -567,7 +568,8 @@ mod tests {
     #[test]
     fn test_self_join_with_different_aliases() {
         // Phase 3: Test that self-joins with different aliases are allowed
-        let sql = "SELECT u1.id, u2.name FROM users AS u1 JOIN users AS u2 ON u1.id = u2.manager_id";
+        let sql =
+            "SELECT u1.id, u2.name FROM users AS u1 JOIN users AS u2 ON u1.id = u2.manager_id";
         let lang = language_for_dialect_with_version(Dialect::MySQL, Some(DialectVersion::MySQL80))
             .expect("Failed to get MySQL 8.0 language");
 
@@ -576,11 +578,11 @@ mod tests {
         let tree = parser.parse(sql, None).expect("Failed to parse SQL");
         let root = tree.root_node();
 
-        let select_stmt = find_select_statement(&root)
-            .expect("No SELECT statement found in parsed tree");
+        let select_stmt =
+            find_select_statement(&root).expect("No SELECT statement found in parsed tree");
 
-        let manager = ScopeBuilder::build_from_select(&select_stmt, sql)
-            .expect("Failed to build scope");
+        let manager =
+            ScopeBuilder::build_from_select(&select_stmt, sql).expect("Failed to build scope");
 
         let scope = manager.get_scope(0).expect("No scope found");
         let tables = &scope.tables;
