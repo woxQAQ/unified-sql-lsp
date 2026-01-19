@@ -371,6 +371,18 @@ impl Catalog for LiveMySQLCatalog {
     async fn get_columns(&self, table: &str) -> CatalogResult<Vec<ColumnMetadata>> {
         #[cfg(feature = "mysql")]
         if let Some(pool) = &self.pool {
+            // Debug: Check what database we're connected to
+            let db_check_query = "SELECT DATABASE() as current_db";
+            let db_result: Option<(String,)> = sqlx::query_as(db_check_query)
+                .fetch_optional(pool)
+                .await
+                .map_err(|e| {
+                    CatalogError::QueryFailed(format!(
+                        "Failed to get current database: {}",
+                        e
+                    ))
+                })?;
+
             let query = r#"
                 SELECT
                     CAST(COLUMN_NAME AS CHAR) as column_name,
@@ -405,6 +417,7 @@ impl Catalog for LiveMySQLCatalog {
                     table, e
                 ))
             })?;
+
 
             let columns: Vec<ColumnMetadata> = rows
                 .into_iter()
