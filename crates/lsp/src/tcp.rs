@@ -51,6 +51,7 @@ use unified_sql_lsp_ir::Dialect;
 /// JSON-RPC request
 #[derive(Debug, Clone, Deserialize)]
 struct JsonRpcRequest {
+    #[allow(dead_code)]
     jsonrpc: String,
     #[serde(flatten)]
     data: JsonRpcRequestData,
@@ -123,7 +124,9 @@ struct JsonRpcError {
 /// Per-client session state
 struct ClientSession {
     documents: Arc<DocumentStore>,
+    #[allow(dead_code)]
     catalog_manager: Arc<tokio::sync::RwLock<CatalogManager>>,
+    #[allow(dead_code)]
     config: Arc<tokio::sync::RwLock<Option<EngineConfig>>>,
     catalog: Arc<dyn Catalog>,
 }
@@ -171,14 +174,13 @@ impl ClientSession {
                         has_errors: false,
                         error_count: 0,
                     };
-                    if let Some(tree) = tree {
-                        if let Err(e) = self
+                    if let Some(tree) = tree
+                        && let Err(e) = self
                             .documents
                             .update_document_tree(&uri, tree, metadata)
                             .await
-                        {
-                            error!("Failed to update document tree: {}", e);
-                        }
+                    {
+                        error!("Failed to update document tree: {}", e);
                     }
                 }
                 ParseResult::Partial { tree, errors } => {
@@ -189,14 +191,13 @@ impl ClientSession {
                         has_errors: true,
                         error_count: errors.len(),
                     };
-                    if let Some(tree) = tree {
-                        if let Err(e) = self
+                    if let Some(tree) = tree
+                        && let Err(e) = self
                             .documents
                             .update_document_tree(&uri, tree, metadata)
                             .await
-                        {
-                            error!("Failed to update document tree: {}", e);
-                        }
+                    {
+                        error!("Failed to update document tree: {}", e);
                     }
                 }
                 ParseResult::Failed { .. } => {
@@ -246,14 +247,13 @@ impl ClientSession {
                         has_errors: false,
                         error_count: 0,
                     };
-                    if let Some(tree) = tree {
-                        if let Err(e) = self
+                    if let Some(tree) = tree
+                        && let Err(e) = self
                             .documents
                             .update_document_tree(&uri, tree, metadata)
                             .await
-                        {
-                            error!("Failed to update document tree: {}", e);
-                        }
+                    {
+                        error!("Failed to update document tree: {}", e);
                     }
                 }
                 ParseResult::Partial { tree, errors } => {
@@ -264,14 +264,13 @@ impl ClientSession {
                         has_errors: true,
                         error_count: errors.len(),
                     };
-                    if let Some(tree) = tree {
-                        if let Err(e) = self
+                    if let Some(tree) = tree
+                        && let Err(e) = self
                             .documents
                             .update_document_tree(&uri, tree, metadata)
                             .await
-                        {
-                            error!("Failed to update document tree: {}", e);
-                        }
+                    {
+                        error!("Failed to update document tree: {}", e);
                     }
                 }
                 ParseResult::Failed { .. } => {
