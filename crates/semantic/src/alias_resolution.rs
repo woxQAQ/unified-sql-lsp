@@ -185,7 +185,7 @@ impl AliasResolver {
                     Ok(ResolutionResult::Found(table))
                 }
             }
-            Err(e) => {
+            Err(_e) => {
                 debug!("Exact match failed, table not found");
                 Ok(ResolutionResult::NotFound)
             }

@@ -715,11 +715,11 @@ impl CompletionEngine {
             }
 
             // Also check if the qualifier is an alias, and if so, add it to the mapping
-            if let Some(ref q) = qualifier {
-                if let Some(table_name) = alias_to_table.get(q) {
-                    // Qualifier is an alias, make sure it maps to a table
-                    debug!("Qualifier '{}' is an alias for table '{}'", q, table_name);
-                }
+            if let Some(ref q) = qualifier
+                && let Some(table_name) = alias_to_table.get(q)
+            {
+                // Qualifier is an alias, make sure it maps to a table
+                debug!("Qualifier '{}' is an alias for table '{}'", q, table_name);
             }
 
             // Clone tables_with_columns for later use (after potential move in match)
