@@ -69,19 +69,23 @@ pub fn generate_engine_tests(input: TokenStream) -> TokenStream {
     );
 
     // Generate glob patterns for each test type
-    let glob_patterns: Vec<String> = test_types
+    let glob_pattern_literals: Vec<proc_macro2::Literal> = test_types
         .iter()
         .map(|test_type| {
-            format!("tests/{}/{}/*.yaml", format_engine_path(engine_name), test_type)
+            let pattern = format!("tests/{}/{}/*.yaml", format_engine_path(engine_name), test_type);
+            proc_macro2::Literal::string(&pattern)
         })
         .collect();
 
-    let glob_pattern_tokens: Vec<proc_macro2::Literal> = glob_patterns
-        .iter()
-        .map(|p| proc_macro2::Literal::string(p))
-        .collect();
-
     let serial_key = proc_macro2::Ident::new(engine_name, proc_macro2::Span::call_site());
+
+    // Build array syntax manually
+    let patterns_array = if glob_pattern_literals.len() == 1 {
+        let pat = &glob_pattern_literals[0];
+        quote::quote! { [#pat] }
+    } else {
+        quote::quote! { [#(#glob_pattern_literals),*] }
+    };
 
     let output = quote::quote! {
         #[cfg(test)]
@@ -95,7 +99,7 @@ pub fn generate_engine_tests(input: TokenStream) -> TokenStream {
                 use unified_sql_lsp_e2e_core::{Engine, ensure_engine_ready};
                 let _guard = ensure_engine_ready(&Engine::#engine_ident).await?;
 
-                let patterns = &[#(#glob_pattern_tokens),*];
+                let patterns: &[&str] = #patterns_array;
                 let mut test_count = 0;
 
                 for pattern in patterns {
@@ -142,24 +146,22 @@ fn parse_test_types(discovery_data: &str, engine_name: &str) -> Vec<String> {
 
     // Parse the discovery data to extract test types
     // Example line: pub const MYSQL_5_7: &[&str] = &["completion", "hover", "diagnostics"];
-    discovery_data
-        .lines()
-        .find(|line| line.starts_with(&format!("pub const {}:", const_name)))
-        .and_then(|line| {
-            line.split("=&[")
-                .nth(1)
-                .map(|rest| {
-                    let array_part = rest.trim_end_matches("];");
-                    array_part
-                        .split("\",\"")
-                        .map(|s| s.trim_matches('"').to_string())
-                        .collect()
-                })
-        })
-        .unwrap_or_else(|| {
-            // Fallback if parsing fails - return empty vec
-            Vec::new()
-        })
+    if let Some(line) = discovery_data.lines().find(|line| line.starts_with(&format!("pub const {}:", const_name))) {
+        // Find the array part between &[ and ]
+        if let Some(start) = line.find(" &[") {
+            if let Some(end) = line.rfind("]") {
+                let array_str = &line[start + 3..end];
+                // Parse CSV strings: "completion", "hover", "diagnostics"
+                return array_str
+                    .split(',')
+                    .map(|s| s.trim().trim_matches('"').to_string())
+                    .collect();
+            }
+        }
+    }
+
+    // Fallback if parsing fails - return empty vec
+    Vec::new()
 }
 
 /// Format engine name for use in paths (mysql_57 -> mysql-5.7)
