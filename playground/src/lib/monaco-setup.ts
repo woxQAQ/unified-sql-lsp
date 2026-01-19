@@ -37,6 +37,56 @@ export function setupMonacoWithLSP(
     ...options,
   });
 
+  // Get the model and notify LSP server when document opens
+  const model = editor.getModel();
+  if (model) {
+    // Send didOpen notification when document is first created
+    const documentUri = 'file:///playground.sql';
+    const initialContent = model.getValue();
+    const languageId = model.getLanguageId();
+
+    // Send didOpen notification asynchronously to ensure connection is ready
+    setTimeout(async () => {
+      try {
+        await lspClient.sendNotification('textDocument/didOpen', {
+          textDocument: {
+            uri: documentUri,
+            languageId: languageId,
+            version: 1,
+            text: initialContent,
+          },
+        });
+        console.log('[Monaco] Sent didOpen notification');
+      } catch (error) {
+        console.error('[Monaco] Failed to send didOpen:', error);
+      }
+    }, 100);
+
+    // Track content changes for didChange notifications
+    let version = 1;
+    model.onDidChangeContent((event) => {
+      version++;
+      const changes = event.changes.map((change) => ({
+        range: {
+          start: { line: change.range.startLineNumber - 1, character: change.range.startColumn - 1 },
+          end: { line: change.range.endLineNumber - 1, character: change.range.endColumn - 1 },
+        },
+        rangeLength: change.rangeLength,
+        text: change.text,
+      }));
+
+      lspClient.sendNotification('textDocument/didChange', {
+        textDocument: {
+          uri: documentUri,
+          version: version,
+        },
+        contentChanges: changes,
+      }).catch((error) => {
+        console.error('[Monaco] Failed to send didChange:', error);
+      });
+    });
+  }
+
   // Register completion provider
   const completionProvider = monaco.languages.registerCompletionItemProvider('sql', {
     triggerCharacters: ['.', ' '],

@@ -210,6 +210,31 @@ export class LspClient {
   }
 
   /**
+   * Send a JSON-RPC notification (no response expected)
+   */
+  async sendNotification(method: string, params: any): Promise<void> {
+    return new Promise((resolve, reject) => {
+      if (!this.isConnected()) {
+        reject(new Error('Not connected to LSP server'));
+        return;
+      }
+
+      const message = JSON.stringify({
+        jsonrpc: '2.0',
+        method,
+        params,
+      });
+
+      try {
+        this.ws!.send(message);
+        resolve();
+      } catch (error) {
+        reject(error);
+      }
+    });
+  }
+
+  /**
    * Handle incoming WebSocket message
    */
   private handleMessage(data: string) {
