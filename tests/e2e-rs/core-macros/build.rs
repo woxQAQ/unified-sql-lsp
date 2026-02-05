@@ -33,8 +33,7 @@ fn main() {
     let generated_code = generate_discovery_code(&discovery);
     let output_path = tests_dir.join("test_discovery.rs");
 
-    fs::write(&output_path, generated_code)
-        .expect("Failed to write test_discovery.rs");
+    fs::write(&output_path, generated_code).expect("Failed to write test_discovery.rs");
 
     // Tell cargo to track the tests directory for changes
     println!("cargo:rerun-if-changed=tests/");

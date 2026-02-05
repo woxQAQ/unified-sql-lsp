@@ -10,7 +10,6 @@
 use anyhow::Result;
 use std::path::Path;
 use std::process::Stdio;
-use tokio::io::AsyncBufReadExt;
 use tokio::process::Command as TokioCommand;
 use tracing::{debug, info};
 
@@ -137,8 +136,8 @@ impl LspRunner {
             .stderr(Stdio::piped());
 
         // Set environment variables for testing
-        // Enable error/warn logging to debug configuration issues
-        cmd.env("RUST_LOG", "warn");
+        // Suppress LSP server stderr output to keep test output clean
+        cmd.env("RUST_LOG", "error");
         cmd.env("RUST_BACKTRACE", "0");
 
         // Spawn the process
@@ -149,23 +148,16 @@ impl LspRunner {
         let pid = child.id();
         info!("LSP server spawned with PID: {:?}", pid);
 
-        // Forward stderr to parent stderr in background
+        // Consume stderr silently to prevent pipe buffer filling
+        // but don't print it to keep test output clean
         if let Some(stderr) = child.stderr.take() {
-            let mut reader = tokio::io::BufReader::new(stderr);
-            let task = tokio::spawn(async move {
-                let mut line = String::new();
-                loop {
-                    line.clear();
-                    match reader.read_line(&mut line).await {
-                        Ok(0) => break, // EOF
-                        Ok(_) => {
-                            eprint!("{}", line);
-                        }
-                        Err(_) => break,
-                    }
-                }
+            tokio::spawn(async move {
+                use tokio::io::AsyncReadExt;
+                let mut reader = stderr;
+                let mut buffer = Vec::new();
+                // Read and silently discard all stderr output
+                let _ = reader.read_to_end(&mut buffer).await;
             });
-            self._stderr_task = Some(task);
         }
 
         self.process = Some(child);

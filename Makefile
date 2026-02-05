@@ -12,9 +12,10 @@ CARGO_FLAGS := --workspace
 RELEASE_FLAGS := --release
 
 # Nextest configuration
-NEXTEST_COMMON_ARGS := --no-fail-fast --failure-output=immediate-final --status-level all
+NEXTEST_COMMON_ARGS := --no-fail-fast --failure-output=immediate --status-level all
 NEXTEST_THREADS_SERIAL := 1
 NEXTEST_THREADS_PARALLEL := 4
+E2E_NEXTTEST_ENV := E2E_AUTO_DOCKER_CLEANUP=0
 
 # Colors for help output (optional, disable if not supported)
 COLOR_RESET := \033[0m
@@ -93,42 +94,66 @@ test-nextest:
 ## @e2e: Run all E2E tests (single-threaded to avoid Docker conflicts)
 test-e2e:
 	@cargo nextest --version >/dev/null 2>&1 || (echo "cargo-nextest not found. Install with: cargo install cargo-nextest --locked" && exit 1)
-	cd $(E2E_DIR) && cargo nextest run $(CARGO_FLAGS) $(NEXTEST_COMMON_ARGS) --test-threads=$(NEXTEST_THREADS_SERIAL)
+	@cd $(E2E_DIR) && $(E2E_NEXTTEST_ENV) cargo nextest run $(CARGO_FLAGS) $(NEXTEST_COMMON_ARGS) --test-threads=$(NEXTEST_THREADS_SERIAL); \
+	status=$$?; \
+	docker compose -f docker-compose.yml -p unified-sql-lsp-e2e down >/dev/null 2>&1 || true; \
+	exit $$status
 
 ## @e2e: Run all E2E tests in parallel (3-4x speedup)
 test-e2e-parallel:
 	@cargo nextest --version >/dev/null 2>&1 || (echo "cargo-nextest not found. Install with: cargo install cargo-nextest --locked" && exit 1)
-	cd $(E2E_DIR) && cargo nextest run $(CARGO_FLAGS) $(NEXTEST_COMMON_ARGS) --test-threads=$(NEXTEST_THREADS_PARALLEL)
+	@cd $(E2E_DIR) && $(E2E_NEXTTEST_ENV) cargo nextest run $(CARGO_FLAGS) $(NEXTEST_COMMON_ARGS) --test-threads=$(NEXTEST_THREADS_PARALLEL); \
+	status=$$?; \
+	docker compose -f docker-compose.yml -p unified-sql-lsp-e2e down >/dev/null 2>&1 || true; \
+	exit $$status
 
 ## @e2e: Run MySQL 5.7 E2E tests
 test-e2e-mysql-5.7:
 	@cargo nextest --version >/dev/null 2>&1 || (echo "cargo-nextest not found. Install with: cargo install cargo-nextest --locked" && exit 1)
-	cd $(E2E_DIR) && cargo nextest run --package mysql-5-7-e2e-tests $(NEXTEST_COMMON_ARGS) --test-threads=$(NEXTEST_THREADS_SERIAL)
+	@cd $(E2E_DIR) && $(E2E_NEXTTEST_ENV) cargo nextest run --package mysql-5-7-e2e-tests $(NEXTEST_COMMON_ARGS) --test-threads=$(NEXTEST_THREADS_SERIAL); \
+	status=$$?; \
+	docker compose -f docker-compose.yml -p unified-sql-lsp-e2e down >/dev/null 2>&1 || true; \
+	exit $$status
 
 ## @e2e: Run MySQL 8.0 E2E tests
 test-e2e-mysql-8.0:
 	@cargo nextest --version >/dev/null 2>&1 || (echo "cargo-nextest not found. Install with: cargo install cargo-nextest --locked" && exit 1)
-	cd $(E2E_DIR) && cargo nextest run --package mysql-8-0-e2e-tests $(NEXTEST_COMMON_ARGS) --test-threads=$(NEXTEST_THREADS_SERIAL)
+	@cd $(E2E_DIR) && $(E2E_NEXTTEST_ENV) cargo nextest run --package mysql-8-0-e2e-tests $(NEXTEST_COMMON_ARGS) --test-threads=$(NEXTEST_THREADS_SERIAL); \
+	status=$$?; \
+	docker compose -f docker-compose.yml -p unified-sql-lsp-e2e down >/dev/null 2>&1 || true; \
+	exit $$status
 
 ## @e2e: Run PostgreSQL 12 E2E tests
 test-e2e-postgresql-12:
 	@cargo nextest --version >/dev/null 2>&1 || (echo "cargo-nextest not found. Install with: cargo install cargo-nextest --locked" && exit 1)
-	cd $(E2E_DIR) && cargo nextest run --package postgresql-12-e2e-tests $(NEXTEST_COMMON_ARGS) --test-threads=$(NEXTEST_THREADS_SERIAL)
+	@cd $(E2E_DIR) && $(E2E_NEXTTEST_ENV) cargo nextest run --package postgresql-12-e2e-tests $(NEXTEST_COMMON_ARGS) --test-threads=$(NEXTEST_THREADS_SERIAL); \
+	status=$$?; \
+	docker compose -f docker-compose.yml -p unified-sql-lsp-e2e down >/dev/null 2>&1 || true; \
+	exit $$status
 
 ## @e2e: Run PostgreSQL 16 E2E tests
 test-e2e-postgresql-16:
 	@cargo nextest --version >/dev/null 2>&1 || (echo "cargo-nextest not found. Install with: cargo install cargo-nextest --locked" && exit 1)
-	cd $(E2E_DIR) && cargo nextest run --package postgresql-16-e2e-tests $(NEXTEST_COMMON_ARGS) --test-threads=$(NEXTEST_THREADS_SERIAL)
+	@cd $(E2E_DIR) && $(E2E_NEXTTEST_ENV) cargo nextest run --package postgresql-16-e2e-tests $(NEXTEST_COMMON_ARGS) --test-threads=$(NEXTEST_THREADS_SERIAL); \
+	status=$$?; \
+	docker compose -f docker-compose.yml -p unified-sql-lsp-e2e down >/dev/null 2>&1 || true; \
+	exit $$status
 
 ## @e2e: Run all MySQL E2E tests (5.7 and 8.0)
 test-e2e-mysql:
 	@cargo nextest --version >/dev/null 2>&1 || (echo "cargo-nextest not found. Install with: cargo install cargo-nextest --locked" && exit 1)
-	cd $(E2E_DIR) && cargo nextest run --package mysql-5-7-e2e-tests --package mysql-8-0-e2e-tests $(NEXTEST_COMMON_ARGS) --test-threads=$(NEXTEST_THREADS_SERIAL)
+	@cd $(E2E_DIR) && $(E2E_NEXTTEST_ENV) cargo nextest run --package mysql-5-7-e2e-tests --package mysql-8-0-e2e-tests $(NEXTEST_COMMON_ARGS) --test-threads=$(NEXTEST_THREADS_SERIAL); \
+	status=$$?; \
+	docker compose -f docker-compose.yml -p unified-sql-lsp-e2e down >/dev/null 2>&1 || true; \
+	exit $$status
 
 ## @e2e: Run all PostgreSQL E2E tests (12 and 16)
 test-e2e-postgresql:
 	@cargo nextest --version >/dev/null 2>&1 || (echo "cargo-nextest not found. Install with: cargo install cargo-nextest --locked" && exit 1)
-	cd $(E2E_DIR) && cargo nextest run --package postgresql-12-e2e-tests --package postgresql-16-e2e-tests $(NEXTEST_COMMON_ARGS) --test-threads=$(NEXTEST_THREADS_SERIAL)
+	@cd $(E2E_DIR) && $(E2E_NEXTTEST_ENV) cargo nextest run --package postgresql-12-e2e-tests --package postgresql-16-e2e-tests $(NEXTEST_COMMON_ARGS) --test-threads=$(NEXTEST_THREADS_SERIAL); \
+	status=$$?; \
+	docker compose -f docker-compose.yml -p unified-sql-lsp-e2e down >/dev/null 2>&1 || true; \
+	exit $$status
 
 ## @e2e: Run E2E tests with cargo test (fallback for systems without nextest)
 test-e2e-legacy:

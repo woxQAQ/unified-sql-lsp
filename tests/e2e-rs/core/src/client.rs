@@ -202,7 +202,8 @@ impl LspConnection {
                                     self.client.record_diagnostics(url, diagnostics).await;
                                     debug_log!(
                                         "!!! CLIENT: Recorded {} diagnostics for {}",
-                                        diag_count, uri
+                                        diag_count,
+                                        uri
                                     );
                                 }
                             }
@@ -281,6 +282,16 @@ impl LspConnection {
             .await
     }
 
+    /// Close a document
+    pub async fn did_close(&mut self, uri: Url) -> Result<()> {
+        let params = DidCloseTextDocumentParams {
+            text_document: TextDocumentIdentifier { uri },
+        };
+
+        self.notify("textDocument/didClose".to_string(), params)
+            .await
+    }
+
     /// Send workspace/didChangeConfiguration notification to set engine config
     pub async fn did_change_configuration(
         &mut self,
@@ -289,7 +300,8 @@ impl LspConnection {
     ) -> Result<()> {
         debug_log!(
             "!!! CLIENT: Sending did_change_configuration: dialect={}, connection={}",
-            dialect, connection_string
+            dialect,
+            connection_string
         );
 
         let params = DidChangeConfigurationParams {
@@ -320,7 +332,9 @@ impl LspConnection {
     ) -> Result<Option<Vec<CompletionItem>>> {
         debug_log!(
             "!!! CLIENT: Requesting completion for uri={}, line={}, col={}",
-            uri, position.line, position.character
+            uri,
+            position.line,
+            position.character
         );
 
         let params = CompletionParams {

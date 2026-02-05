@@ -27,3 +27,42 @@ tests:
       contains:
         - "users"
       min_count: 2
+
+  - name: "basic WHERE column completion"
+    description: "Should complete columns after WHERE in single-table query"
+    sql: "SELECT * FROM users WHERE |"
+    expect_completion:
+      contains:
+        - "id"
+        - "username"
+        - "email"
+      min_count: 5
+
+  - name: "alias-qualified completion in SELECT"
+    description: "Should complete alias-qualified columns for single-table alias"
+    sql: "SELECT u.| FROM users AS u"
+    expect_completion:
+      contains:
+        - "u.id"
+        - "u.username"
+        - "u.email"
+      min_count: 5
+
+  - name: "completion after comma in SELECT list"
+    description: "Should keep suggesting remaining projection candidates after comma"
+    sql: "SELECT id, | FROM users"
+    expect_completion:
+      contains:
+        - "username"
+        - "email"
+        - "full_name"
+      min_count: 5
+
+  - name: "basic JOIN ON completion"
+    description: "Should complete join condition columns from both sides"
+    sql: "SELECT * FROM users u JOIN orders o ON |"
+    expect_completion:
+      contains:
+        - "u.id"
+        - "o.user_id"
+      min_count: 5

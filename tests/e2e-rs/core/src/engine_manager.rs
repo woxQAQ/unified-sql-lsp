@@ -151,6 +151,13 @@ static ENGINE_STATES: LazyLock<HashMap<Engine, Arc<EngineState>>> = LazyLock::ne
 static DOCKER_COMPOSE: LazyLock<Arc<tokio::sync::RwLock<Option<DockerCompose>>>> =
     LazyLock::new(|| Arc::new(tokio::sync::RwLock::new(None)));
 
+fn should_cleanup_docker_on_process_exit() -> bool {
+    match std::env::var("E2E_AUTO_DOCKER_CLEANUP") {
+        Ok(value) => value != "0" && !value.eq_ignore_ascii_case("false"),
+        Err(_) => true,
+    }
+}
+
 /// Global cleanup function called when test process exits
 ///
 /// This uses the `ctor` crate to register a destructor that runs when
@@ -163,6 +170,13 @@ fn global_cleanup() {
 
     // Only cleanup once
     if !CLEANED_UP.swap(true, Ordering::SeqCst) {
+        if !should_cleanup_docker_on_process_exit() {
+            debug_log!(
+                "!!! Skipping Docker Compose down on process exit (E2E_AUTO_DOCKER_CLEANUP disabled)"
+            );
+            return;
+        }
+
         // Check if we started Docker Compose services
         let needs_cleanup = DOCKER_COMPOSE
             .try_read()

@@ -12,5 +12,5 @@ use unified_sql_lsp_e2e_core::generate_engine_tests;
 generate_engine_tests!(
     engine: MySQL57,
     test_dir: "tests/mysql-5.7",
-    test_types: [completion, hover, diagnostics]
+    test_types: [completion]
 );

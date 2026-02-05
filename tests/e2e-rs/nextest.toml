@@ -1,0 +1,25 @@
+# Nextest configuration for E2E tests
+# See https://nexte.st/book/configuration.html
+
+[store]
+# Store test results in target/nextest
+dir = "target"
+
+[profile.default]
+# Default test profile
+# Avoid duplicate failure logs (immediate + final)
+failure-output = "immediate"
+status-level = "all"
+test-threads = 1
+
+# Set log level for E2E tests to reduce noise
+# Only show warnings and errors from E2E test framework
+# LSP server process still gets its own RUST_LOG=warn from runner.rs
+[profile.default.env]
+RUST_LOG = "warn"  # Show only warnings and errors
+
+# Optional: For even quieter output, use 'error'
+# RUST_LOG = "error"
+
+# Optional: For more verbose output when debugging
+# RUST_LOG = "info"

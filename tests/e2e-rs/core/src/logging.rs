@@ -8,15 +8,49 @@
 //! Buffers debug output in memory and writes to log file only on test failure.
 //! This keeps terminal output clean while preserving detailed diagnostic information.
 
-use std::fs::{create_dir_all, File};
+use std::fs::{File, create_dir_all};
 use std::io::BufWriter;
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::SystemTime;
 
 const MAX_BUFFER_SIZE: usize = 10_000_000; // 10MB limit
 const LOG_DIR: &str = "target/e2e-logs";
+
+/// Find workspace root by searching upward for a Cargo.toml with [workspace] section
+fn find_workspace_root() -> std::io::Result<PathBuf> {
+    // Start from CARGO_MANIFEST_DIR (the package being tested)
+    let manifest_dir = std::env::var("CARGO_MANIFEST_DIR").map_err(|_| {
+        std::io::Error::new(std::io::ErrorKind::NotFound, "CARGO_MANIFEST_DIR not set")
+    })?;
+    let mut current = PathBuf::from(manifest_dir);
+
+    loop {
+        let cargo_toml = current.join("Cargo.toml");
+        if cargo_toml.exists() {
+            // Check if it has [workspace] section
+            if let Ok(content) = std::fs::read_to_string(&cargo_toml) {
+                if content.contains("[workspace]") {
+                    return Ok(current.to_path_buf());
+                }
+            }
+        }
+
+        // Move to parent directory
+        match current.parent() {
+            Some(parent) if !parent.as_os_str().is_empty() => {
+                current = parent.to_path_buf();
+            }
+            _ => {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::NotFound,
+                    "Workspace root not found",
+                ));
+            }
+        }
+    }
+}
 
 /// Global logging state
 static LOGGING_STATE: OnceLock<LoggingState> = OnceLock::new();
@@ -74,8 +108,11 @@ impl LoggingState {
             return Ok(()); // Already flushed
         }
 
-        // Create log directory
-        let log_dir = PathBuf::from(LOG_DIR);
+        // Find workspace root by searching upward from CARGO_MANIFEST_DIR
+        let workspace_root = find_workspace_root().unwrap_or_else(|_| PathBuf::from("."));
+
+        // Create log directory in workspace root
+        let log_dir = workspace_root.join(LOG_DIR);
         create_dir_all(&log_dir)?;
 
         // Generate timestamped filename
@@ -164,7 +201,8 @@ pub fn record(line: String) {
 /// Flush buffer to file (call this on first test failure)
 pub fn flush_to_file() -> anyhow::Result<()> {
     if let Some(state) = LOGGING_STATE.get() {
-        state.flush_to_file_internal()
+        state
+            .flush_to_file_internal()
             .map_err(|e| anyhow::anyhow!("Failed to flush log to file: {}", e))?;
     }
     Ok(())
