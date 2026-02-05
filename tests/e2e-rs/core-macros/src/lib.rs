@@ -27,17 +27,17 @@ use syn::{DeriveInput, parse_macro_input};
 pub fn generate_engine_tests(input: TokenStream) -> TokenStream {
     let input_str = input.to_string();
 
-    // Parse engine name (keep existing logic)
-    let engine_name = if input_str.contains("MySQL57") {
-        "mysql_57"
+    // Parse engine name and directory name
+    let (engine_name, engine_dir_name) = if input_str.contains("MySQL57") {
+        ("mysql_57", "mysql-5.7")
     } else if input_str.contains("MySQL80") {
-        "mysql_80"
+        ("mysql_80", "mysql-8.0")
     } else if input_str.contains("PostgreSQL12") {
-        "postgresql_12"
+        ("postgresql_12", "postgresql-12")
     } else if input_str.contains("PostgreSQL16") {
-        "postgresql_16"
+        ("postgresql_16", "postgresql-16")
     } else {
-        "unknown"
+        ("unknown", "unknown")
     };
 
     let engine_enum_name = if input_str.contains("MySQL57") {
@@ -68,7 +68,7 @@ pub fn generate_engine_tests(input: TokenStream) -> TokenStream {
         .map(|test_type| {
             let pattern = format!(
                 "tests/{}/{}/*.yaml",
-                format_engine_path(engine_name),
+                engine_dir_name,
                 test_type
             );
             proc_macro2::Literal::string(&pattern)
@@ -97,11 +97,25 @@ pub fn generate_engine_tests(input: TokenStream) -> TokenStream {
                 use unified_sql_lsp_e2e_core::{Engine, ensure_engine_ready};
                 let _guard = ensure_engine_ready(&Engine::#engine_ident).await?;
 
+                // Resolve paths relative to the e2e-rs workspace root
+                // CARGO_MANIFEST_DIR is the package directory (e.g., .../mysql-5.7)
+                // We need to go up one level to get to the e2e-rs workspace root
+                let manifest_dir = std::path::PathBuf::from(std::env::var("CARGO_MANIFEST_DIR")?);
+                let workspace_root = manifest_dir.parent()
+                    .ok_or_else(|| anyhow::anyhow!("Failed to get parent directory of CARGO_MANIFEST_DIR"))?;
+
                 let patterns: &[&str] = #patterns_array;
                 let mut test_count = 0;
 
                 for pattern in patterns {
-                    for entry in glob::glob(pattern).map_err(|e| anyhow::anyhow!("Invalid glob pattern: {}", e))? {
+                    // Convert relative pattern to absolute path
+                    let absolute_pattern = workspace_root.join(pattern);
+
+                    let glob_result = glob::glob(absolute_pattern.to_str()
+                        .ok_or_else(|| anyhow::anyhow!("Invalid path encoding"))?)
+                        .map_err(|e| anyhow::anyhow!("Invalid glob pattern: {}", e))?;
+
+                    for entry in glob_result {
                         let yaml_path = entry.map_err(|e| anyhow::anyhow!("Failed to read path: {}", e))?;
                         println!("Running test: {}", yaml_path.display());
 
@@ -153,9 +167,4 @@ fn get_test_types_for_engine(engine_name: &str) -> Vec<String> {
         "postgresql_16" => vec!["completion".to_string()],
         _ => Vec::new(),
     }
-}
-
-/// Format engine name for use in paths (mysql_57 -> mysql-5.7)
-fn format_engine_path(engine_name: &str) -> String {
-    engine_name.replace("_", "-")
 }
