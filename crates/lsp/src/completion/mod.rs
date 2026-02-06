@@ -458,6 +458,12 @@ impl CompletionEngine {
 
         let mut items = items_result.unwrap_or_default();
 
+        // Wildcard is a projection item, not a SQL keyword.
+        // For bare SELECT contexts (no FROM/scope yet), make sure '*' is available.
+        if qualifier.is_none() && !items.iter().any(|i| i.label == "*") {
+            items.push(CompletionRenderer::wildcard_item());
+        }
+
         // Exclude columns that are already selected in the SELECT clause
         // Pattern: "SELECT id, username, | FROM users" -> exclude "id" and "username"
         if let Some(select_pos) = source.to_uppercase().find("SELECT") {

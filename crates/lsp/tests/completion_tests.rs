@@ -332,6 +332,7 @@ async fn test_keyword_completion_mysql_dialect() {
         let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
         // Should have LIMIT (MySQL style)
         assert!(labels.contains(&"LIMIT"), "Missing LIMIT keyword for MySQL");
+        assert!(labels.contains(&"*"), "Missing wildcard for SELECT projection");
     }
 }
 

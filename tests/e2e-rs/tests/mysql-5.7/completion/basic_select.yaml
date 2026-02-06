@@ -9,6 +9,13 @@ database:
     - "../../../fixtures/data/mysql/02_insert_basic_data.sql"
 
 tests:
+  - name: "bare SELECT"
+    description: "Should complete bare SELECT statement"
+    sql: "SELECT |"
+    expect_completion:
+      contains:
+        - "*"
+
   - name: "basic SELECT completion"
     description: "Should complete basic columns in SELECT - works in MySQL and PostgreSQL"
     sql: "SELECT | FROM users"
