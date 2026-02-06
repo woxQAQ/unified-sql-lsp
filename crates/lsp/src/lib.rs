@@ -161,12 +161,12 @@ pub mod backend;
 pub mod catalog_manager;
 pub mod completion;
 pub mod config;
-pub mod definition;
 pub mod diagnostic;
 pub mod document;
-pub mod hover;
+mod hover;
 pub mod parsing;
-pub mod symbols;
+mod request_context;
+mod symbols;
 pub mod sync;
 pub mod tcp;
 
@@ -178,16 +178,9 @@ pub use backend::{LspBackend, LspError};
 pub use catalog_manager::CatalogManager;
 pub use completion::CompletionEngine;
 pub use config::{ConfigError, ConnectionPoolConfig, DialectVersion, EngineConfig, SchemaFilter};
-pub use definition::{
-    ColumnDefinition, Definition, DefinitionError, DefinitionFinder, TableDefinition,
-};
-pub use diagnostic::{
-    DiagnosticCode, DiagnosticCollector, SqlDiagnostic, node_to_range,
-    publish_diagnostics_for_document,
-};
+pub use diagnostic::{DiagnosticCode, DiagnosticCollector, SqlDiagnostic};
 pub use document::{Document, DocumentError, DocumentMetadata, DocumentStore, ParseMetadata};
 pub use parsing::{ParseError, ParseResult, ParserManager};
-pub use symbols::{SymbolBuilder, SymbolCatalogFetcher, SymbolError, SymbolRenderer};
 pub use sync::DocumentSync;
 
 /// Version information

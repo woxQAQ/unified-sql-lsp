@@ -114,10 +114,13 @@
 
 pub mod alias_resolution;
 pub mod analyzer;
+pub mod completion;
 pub mod error;
+pub mod hover;
 pub mod resolution;
 pub mod scope;
 pub mod symbol;
+pub mod syntax_diagnostics;
 pub mod validator;
 
 // Re-export commonly used types
@@ -125,10 +128,13 @@ pub use alias_resolution::{
     AliasResolutionError, AliasResolver, ResolutionResult, ResolutionStrategy,
 };
 pub use analyzer::SemanticAnalyzer;
+pub use completion::{CompletionService, CompletionTextHeuristics, ContextTableResolution};
 pub use error::{SemanticError, SemanticResult};
+pub use hover::HoverService;
 pub use resolution::{
     ColumnCandidate, ColumnResolutionResult, ColumnResolver, MatchKind, ResolutionConfig,
 };
 pub use scope::{Scope, ScopeManager, ScopeType};
 pub use symbol::{ColumnSymbol, TableSymbol};
+pub use syntax_diagnostics::{SyntaxDiagnostic, SyntaxDiagnosticAnalyzer, SyntaxRange};
 pub use validator::{SemanticValidator, ValidationError, ValidationResult};

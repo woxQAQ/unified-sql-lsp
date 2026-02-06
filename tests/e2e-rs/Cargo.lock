@@ -2239,6 +2239,7 @@ dependencies = [
  "serde",
  "thiserror 2.0.17",
  "tracing",
+ "tree-sitter",
  "unified-sql-lsp-catalog",
  "unified-sql-lsp-ir",
 ]

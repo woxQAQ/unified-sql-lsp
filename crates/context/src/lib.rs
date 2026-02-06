@@ -58,8 +58,10 @@
 
 pub mod completion;
 pub mod cst_utils;
+pub mod definition;
 pub mod keywords;
 pub mod scope_builder;
+pub mod symbols;
 
 // Re-export commonly used types
 pub use completion::{CompletionContext, WindowFunctionPart, detect_completion_context};
@@ -69,5 +71,11 @@ pub use cst_utils::{
     find_node_at_position, find_parent_select, find_select_clause, node_to_range,
     position_to_byte_offset,
 };
+pub use definition::{
+    ColumnDefinition, Definition, DefinitionError, DefinitionFinder, TableDefinition,
+};
 pub use keywords::{KeywordProvider, KeywordSet, SqlKeyword};
 pub use scope_builder::{ScopeBuildError, ScopeBuilder};
+pub use symbols::{
+    QuerySymbol, SymbolBuilder, SymbolError, TableSymbolWithRange as ContextTableSymbolWithRange,
+};

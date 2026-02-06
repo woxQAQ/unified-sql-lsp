@@ -10,6 +10,7 @@ thiserror = { workspace = true }
 tracing = "0.1"
 unified-sql-lsp-catalog = { path = "../catalog" }
 unified-sql-lsp-ir = { path = "../ir" }
+tree-sitter = { workspace = true }
 
 [dev-dependencies]
 serde_json = { workspace = true }

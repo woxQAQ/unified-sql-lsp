@@ -46,6 +46,7 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 use tower_lsp::lsp_types::*;
 use tracing::{debug, info};
+use unified_sql_lsp_semantic::SyntaxDiagnosticAnalyzer;
 
 /// Diagnostic code identifying the type of diagnostic
 ///
@@ -223,12 +224,16 @@ pub fn node_to_range(node: &tree_sitter::Node) -> Range {
 /// Specific diagnostic logic (syntax errors, undefined tables, etc.)
 /// will be implemented in subsequent features (DIAG-002 through DIAG-005).
 #[derive(Debug, Clone, Default)]
-pub struct DiagnosticCollector;
+pub struct DiagnosticCollector {
+    syntax_analyzer: SyntaxDiagnosticAnalyzer,
+}
 
 impl DiagnosticCollector {
     /// Create a new diagnostic collector
     pub fn new() -> Self {
-        Self
+        Self {
+            syntax_analyzer: SyntaxDiagnosticAnalyzer::new(),
+        }
     }
 
     /// Collect diagnostics from a parsed document
@@ -253,45 +258,6 @@ impl DiagnosticCollector {
         source: &str,
         _uri: &Url,
     ) -> Vec<SqlDiagnostic> {
-        let mut diagnostics = Vec::new();
-
-        // Use tree-sitter's root node to check for ERROR nodes
-        // Tree-sitter marks syntax errors with nodes of type "ERROR"
-        let root = tree.root_node();
-
-        // Track if we found any real (non-filtered) ERROR nodes
-        let mut found_real_errors = false;
-
-        // Check if root or any descendants have errors
-        if root.has_error() {
-            self.collect_error_nodes_recursive(
-                &root,
-                source,
-                &mut diagnostics,
-                &mut found_real_errors,
-                0,
-            );
-        }
-
-        // If still no diagnostics found but has_error was true, create a generic error
-        // Only if we didn't filter out all ERROR nodes
-        if diagnostics.is_empty() && root.has_error() && found_real_errors {
-            let diagnostic = SqlDiagnostic::error(
-                "Syntax error in SQL statement".to_string(),
-                Range {
-                    start: Position {
-                        line: 0,
-                        character: 0,
-                    },
-                    end: Position {
-                        line: source.lines().count() as u32,
-                        character: 0,
-                    },
-                },
-            );
-            diagnostics.push(diagnostic);
-        }
-
         // Note: Semantic validation (undefined tables, undefined columns, type mismatches, etc.)
         // should be performed by the SemanticAnalyzer in the semantic crate.
         // The LSP layer is responsible only for syntax error detection and protocol conversion.
@@ -299,225 +265,46 @@ impl DiagnosticCollector {
         // - unified_sql_lsp_semantic::SemanticAnalyzer for analysis
         // - unified_sql_lsp_semantic::SemanticValidator for validation
 
-        diagnostics
+        self.syntax_analyzer
+            .collect_diagnostics(tree, source)
+            .into_iter()
+            .map(|d| {
+                SqlDiagnostic::error(
+                    d.message,
+                    Range {
+                        start: Position {
+                            line: d.range.start_line,
+                            character: d.range.start_character,
+                        },
+                        end: Position {
+                            line: d.range.end_line,
+                            character: d.range.end_character,
+                        },
+                    },
+                )
+                .with_code(DiagnosticCode::SyntaxError)
+            })
+            .collect()
     }
 
-    /// Recursively collect error nodes
-    fn collect_error_nodes_recursive(
-        &self,
-        node: &tree_sitter::Node,
-        source: &str,
-        diagnostics: &mut Vec<SqlDiagnostic>,
-        found_real_errors: &mut bool,
-        depth: usize,
-    ) {
-        // Prevent infinite recursion
-        if depth > 100 {
-            return;
-        }
-
-        let node_kind = node.kind();
-
-        // Check if this is an ERROR node
-        if node_kind == "ERROR" {
-            // Check if this ERROR node should be ignored
-            // Some ERROR nodes are false positives from tree-sitter's incomplete SQL grammar
-            if self.should_ignore_error_node(node, source) {
-                // Continue to check children even if we ignore this ERROR
-            } else {
-                *found_real_errors = true;
-                let diagnostic = self.create_error_diagnostic(node, source);
-                diagnostics.push(diagnostic);
-                return; // Don't recurse into ERROR nodes
-            }
-        }
-
-        // Recurse into children
-        let mut cursor = node.walk();
-        if cursor.goto_first_child() {
-            loop {
-                self.collect_error_nodes_recursive(
-                    &cursor.node(),
-                    source,
-                    diagnostics,
-                    found_real_errors,
-                    depth + 1,
-                );
-                if !cursor.goto_next_sibling() {
-                    break;
-                }
-            }
-        }
-    }
-
-    /// Check if an ERROR node should be ignored (false positive from tree-sitter)
-    ///
-    /// This is a conservative filter - only ignore obvious false positives.
-    /// Most ERROR nodes indicate real syntax errors that should be reported.
-    fn should_ignore_error_node(&self, node: &tree_sitter::Node, source: &str) -> bool {
-        // Get the text around the ERROR
-        let byte_range = node.byte_range();
-        let error_text = &source[byte_range];
-
-        // Ignore errors that are empty or just whitespace
-        let trimmed = error_text.trim();
-        if trimmed.is_empty() {
-            return true;
-        }
-
-        // Ignore single-character errors (likely parser artifacts)
-        if trimmed.len() == 1 {
-            return true;
-        }
-
-        // Don't ignore anything else - let real errors through
-        false
-    }
-
-    /// Create a diagnostic for an ERROR node
-    fn create_error_diagnostic(&self, node: &tree_sitter::Node, source: &str) -> SqlDiagnostic {
-        let start_pos = node.start_position();
-        let end_pos = node.end_position();
-
-        let range = Range {
-            start: Position {
-                line: start_pos.row as u32,
-                character: start_pos.column as u32,
-            },
-            end: Position {
-                line: end_pos.row as u32,
-                character: end_pos.column as u32,
-            },
-        };
-
-        // Extract the error text for better messages
-        let byte_range = node.byte_range();
-        let error_text = &source[byte_range];
-        let message = self.enhance_error_message(node, source, error_text);
-
-        SqlDiagnostic::error(message, range).with_code(DiagnosticCode::SyntaxError)
-    }
-
-    /// Enhance error message with context and suggestions
-    fn enhance_error_message(
-        &self,
-        error_node: &tree_sitter::Node,
-        source: &str,
-        error_text: &str,
-    ) -> String {
-        // Try pattern-based suggestions first
-        if let Some(suggestion) = self.analyze_common_patterns(error_node, source, error_text) {
-            return suggestion;
-        }
-
-        // Fall back to context-aware message
-        if error_text.len() <= 50 {
-            format!("Syntax error near '{}'", error_text)
-        } else {
-            "Syntax error in this region".to_string()
-        }
-    }
-
-    /// Analyze common error patterns and provide specific suggestions
-    fn analyze_common_patterns(
-        &self,
-        node: &tree_sitter::Node,
-        source: &str,
-        error_text: &str,
-    ) -> Option<String> {
-        let trimmed = error_text.trim();
-
-        // Pattern 1: Missing comma (column names without separator)
-        if self.is_missing_comma_pattern(trimmed) {
-            return Some(format!(
-                "Syntax error: missing comma between identifiers. Suggestion: Add comma after '{}'",
-                self.first_identifier(trimmed)
-            ));
-        }
-
-        // Pattern 2: Missing FROM clause
-        if self.is_missing_from_pattern(node, source) {
-            return Some(
-                "Syntax error: SELECT statement missing FROM clause. Expected: 'SELECT ... FROM table ...'".to_string()
-            );
-        }
-
-        // Pattern 3: Unbalanced parentheses
-        if self.is_unmatched_paren_pattern(trimmed) {
-            return Some(
-                "Syntax error: unbalanced parentheses. Check opening/closing pairs".to_string(),
-            );
-        }
-
-        None
-    }
-
-    /// Check if error text matches missing comma pattern
+    #[cfg(test)]
     fn is_missing_comma_pattern(&self, text: &str) -> bool {
-        let parts: Vec<&str> = text.split_whitespace().collect();
-        if parts.len() < 2 {
-            return false;
-        }
-
-        // Check if we have multiple identifiers without comma
-        let has_identifiers = parts.iter().all(|p| self.is_identifier(p));
-        let no_comma = !text.contains(',');
-
-        has_identifiers && no_comma
+        self.syntax_analyzer.is_missing_comma_pattern(text)
     }
 
-    /// Check if the error is due to missing FROM clause
-    fn is_missing_from_pattern(&self, node: &tree_sitter::Node, _source: &str) -> bool {
-        // Check if we're in a SELECT without FROM
-        let mut current = Some(*node);
-        while let Some(n) = current {
-            match n.kind() {
-                "select_statement" | "select" => {
-                    // Check if this node has a from_clause child
-                    let mut cursor = n.walk();
-                    if cursor.goto_first_child() {
-                        loop {
-                            if cursor.node().kind() == "from_clause" {
-                                return false; // Found FROM, not missing
-                            }
-                            if !cursor.goto_next_sibling() {
-                                break;
-                            }
-                        }
-                    }
-                    // In SELECT but no FROM found
-                    return true;
-                }
-                "from_clause" => return false, // Found FROM
-                _ => {}
-            }
-            current = n.parent();
-        }
-        false
-    }
-
-    /// Check if error text has unmatched parentheses
+    #[cfg(test)]
     fn is_unmatched_paren_pattern(&self, text: &str) -> bool {
-        let open_count = text.matches('(').count();
-        let close_count = text.matches(')').count();
-        open_count != close_count
+        self.syntax_analyzer.is_unmatched_paren_pattern(text)
     }
 
-    /// Check if a string looks like an SQL identifier
+    #[cfg(test)]
     fn is_identifier(&self, text: &str) -> bool {
-        !text.is_empty()
-            && (text.chars().next().unwrap().is_alphabetic()
-                || text.starts_with('_')
-                || text.starts_with('\"')
-                || text.starts_with('`'))
-            && text
-                .chars()
-                .all(|c| c.is_alphanumeric() || c == '_' || c == '\"' || c == '`')
+        self.syntax_analyzer.is_identifier(text)
     }
 
-    /// Extract the first identifier from error text
+    #[cfg(test)]
     fn first_identifier(&self, text: &str) -> String {
-        text.split_whitespace().next().unwrap_or("").to_string()
+        self.syntax_analyzer.first_identifier(text)
     }
 
     /// Collect diagnostics from an Arc<Mutex<Tree>>

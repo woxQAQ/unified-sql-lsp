@@ -2243,7 +2243,6 @@ dependencies = [
  "unified-sql-lsp-context",
  "unified-sql-lsp-function-registry",
  "unified-sql-lsp-ir",
- "unified-sql-lsp-lowering",
  "unified-sql-lsp-semantic",
  "unified-sql-lsp-test-utils",
 ]
@@ -2258,6 +2257,7 @@ dependencies = [
  "thiserror 2.0.17",
  "tokio",
  "tracing",
+ "tree-sitter",
  "unified-sql-lsp-catalog",
  "unified-sql-lsp-ir",
  "unified-sql-lsp-test-utils",

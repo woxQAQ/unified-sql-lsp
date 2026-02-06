@@ -39,27 +39,20 @@
 use std::sync::Arc;
 use tower_lsp::lsp_types::{DocumentSymbol, Position, Range, SymbolKind};
 use tracing::debug;
-use tree_sitter::Node;
 use unified_sql_lsp_catalog::{Catalog, CatalogError, format_data_type};
 use unified_sql_lsp_context::{
-    Range as ContextRange, extract_alias, extract_node_text, node_to_range as context_node_to_range,
+    QuerySymbol as ContextQuerySymbol, SymbolBuilder as ContextSymbolBuilder,
 };
 use unified_sql_lsp_semantic::{ColumnSymbol, TableSymbol};
 
 /// Symbol extraction error
 #[derive(Debug, thiserror::Error)]
 pub enum SymbolError {
-    #[error("Document not parsed")]
-    NotParsed,
-
     #[error("Invalid SQL syntax: {0}")]
     InvalidSyntax(String),
 
     #[error("Catalog error: {0}")]
     Catalog(#[from] CatalogError),
-
-    #[error("Scope build error: {0}")]
-    ScopeBuild(String),
 }
 
 /// Table symbol with range information
@@ -114,163 +107,38 @@ impl SymbolBuilder {
     /// # Ok(())
     /// # }
     /// ```
-    pub fn build_from_cst(root_node: &Node, source: &str) -> Result<Vec<QuerySymbol>, SymbolError> {
-        let mut queries = Vec::new();
-
-        // Find all SELECT statements
-        Self::find_select_statements(root_node, source, &mut queries);
-
-        // Extract tables from each SELECT
-        for query in &mut queries {
-            query.tables = Self::extract_tables_from_query(&query.range, root_node, source)?;
-        }
-
-        Ok(queries)
-    }
-
-    /// Find all SELECT statements in the CST
-    fn find_select_statements(node: &Node, source: &str, queries: &mut Vec<QuerySymbol>) {
-        if node.kind() == "select_statement" || node.kind() == "statement" {
-            // Check if this is a SELECT statement
-            if node.kind() == "select_statement" || Self::is_select_statement(node) {
-                let range = Self::node_to_range(node, source);
-                queries.push(QuerySymbol {
-                    range,
-                    tables: Vec::new(),
-                });
-            }
-        }
-
-        // Recurse into children
-        for child in node.children(&mut node.walk()) {
-            Self::find_select_statements(&child, source, queries);
-        }
-    }
-
-    /// Check if a statement node is a SELECT statement
-    fn is_select_statement(node: &Node) -> bool {
-        for child in node.children(&mut node.walk()) {
-            if child.kind() == "select_statement" {
-                return true;
-            }
-        }
-        false
-    }
-
-    /// Extract tables from a query
-    fn extract_tables_from_query(
-        _query_range: &Range,
-        root_node: &Node,
+    pub fn build_from_cst(
+        root_node: &tree_sitter::Node<'_>,
         source: &str,
-    ) -> Result<Vec<TableSymbolWithRange>, SymbolError> {
-        let mut tables = Vec::new();
-
-        // Find all table_reference nodes within the query range
-        Self::find_table_references(root_node, source, &mut tables);
-
-        Ok(tables)
+    ) -> Result<Vec<QuerySymbol>, SymbolError> {
+        let context_queries = ContextSymbolBuilder::build_from_cst(root_node, source)
+            .map_err(|e| SymbolError::InvalidSyntax(e.to_string()))?;
+        Ok(context_queries
+            .into_iter()
+            .map(Self::from_context_query)
+            .collect())
     }
 
-    /// Recursively find table references
-    fn find_table_references(node: &Node, source: &str, tables: &mut Vec<TableSymbolWithRange>) {
-        match node.kind() {
-            "table_reference" => {
-                if let Ok(table) = Self::parse_table_reference(node, source) {
-                    tables.push(table);
-                }
-            }
-            _ => {
-                // Recurse into children
-                for child in node.children(&mut node.walk()) {
-                    Self::find_table_references(&child, source, tables);
-                }
-            }
+    fn from_context_query(query: ContextQuerySymbol) -> QuerySymbol {
+        QuerySymbol {
+            range: Self::context_range_to_lsp_range(query.range),
+            tables: query
+                .tables
+                .into_iter()
+                .map(|t| TableSymbolWithRange {
+                    symbol: t.symbol,
+                    range: Self::context_range_to_lsp_range(t.range),
+                    selection_range: Self::context_range_to_lsp_range(t.selection_range),
+                })
+                .collect(),
         }
     }
 
-    /// Parse a table_reference node
-    fn parse_table_reference(
-        node: &Node,
-        source: &str,
-    ) -> Result<TableSymbolWithRange, SymbolError> {
-        let mut table_name = None;
-        let mut alias = None;
-
-        // Walk through children to find table name and alias
-        for child in node.children(&mut node.walk()) {
-            match child.kind() {
-                "table_name" | "identifier" => {
-                    if table_name.is_none() {
-                        table_name = Some(extract_node_text(&child, source));
-                    }
-                }
-                "alias" => {
-                    if let Some(a) = extract_alias(&child, source) {
-                        alias = Some(a);
-                    }
-                }
-                _ => {
-                    // Check for identifier that might be an implicit alias
-                    if alias.is_none() && child.kind() == "identifier" {
-                        let text = extract_node_text(&child, source);
-                        if let Some(ref name) = table_name
-                            && &text != name
-                        {
-                            alias = Some(text);
-                        }
-                    }
-                }
-            }
-        }
-
-        let table_name = table_name.ok_or_else(|| {
-            SymbolError::InvalidSyntax("Table name not found in table_reference".to_string())
-        })?;
-
-        let mut symbol = TableSymbol::new(&table_name);
-        if let Some(a) = alias {
-            symbol = symbol.with_alias(a);
-        }
-
-        let range = Self::context_range_to_lsp_range(context_node_to_range(node, source));
-        let selection_range = Self::node_to_selection_range(node, source);
-
-        Ok(TableSymbolWithRange {
-            symbol,
-            range,
-            selection_range,
-        })
-    }
-
-    /// Convert context Range to LSP Range
-    fn context_range_to_lsp_range(range: ContextRange) -> Range {
+    fn context_range_to_lsp_range(range: unified_sql_lsp_context::Range) -> Range {
         Range {
-            start: Position {
-                line: range.start.line,
-                character: range.start.character,
-            },
-            end: Position {
-                line: range.end.line,
-                character: range.end.character,
-            },
+            start: Position::new(range.start.line, range.start.character),
+            end: Position::new(range.end.line, range.end.character),
         }
-    }
-
-    /// Convert a tree-sitter node to LSP Range
-    fn node_to_range(node: &Node, source: &str) -> Range {
-        Self::context_range_to_lsp_range(context_node_to_range(node, source))
-    }
-
-    /// Convert a tree-sitter node to LSP selection Range
-    fn node_to_selection_range(node: &Node, source: &str) -> Range {
-        // For selection range, try to find the identifier
-        for child in node.children(&mut node.walk()) {
-            if child.kind() == "table_name" || child.kind() == "identifier" {
-                return Self::node_to_range(&child, source);
-            }
-        }
-        // Fallback to full range
-        Self::node_to_range(node, source)
     }
 }
 

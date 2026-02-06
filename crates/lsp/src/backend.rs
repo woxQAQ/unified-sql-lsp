@@ -57,6 +57,7 @@ use crate::completion::CompletionEngine;
 use crate::config::EngineConfig;
 use crate::diagnostic::{DiagnosticCollector, publish_diagnostics_for_document};
 use crate::document::{Document, DocumentError, DocumentStore, ParseMetadata};
+use crate::request_context::RequestContext;
 use crate::symbols::{SymbolBuilder, SymbolCatalogFetcher, SymbolError, SymbolRenderer};
 use crate::sync::DocumentSync;
 use std::sync::Arc;
@@ -74,7 +75,7 @@ pub struct LspBackend {
     documents: Arc<DocumentStore>,
     config: Arc<RwLock<Option<EngineConfig>>>,
     doc_sync: Arc<DocumentSync>,
-    catalog_manager: Arc<RwLock<CatalogManager>>,
+    request_context: RequestContext,
     diagnostic_collector: DiagnosticCollector,
 }
 
@@ -83,6 +84,8 @@ impl LspBackend {
         debug!("!!! LSP: LspBackend::new() called");
         let config = Arc::new(RwLock::new(None));
         let doc_sync = Arc::new(DocumentSync::new(config.clone()));
+        let catalog_manager = Arc::new(RwLock::new(CatalogManager::new()));
+        let request_context = RequestContext::new(config.clone(), catalog_manager.clone());
 
         debug!("!!! LSP: LspBackend created successfully");
         Self {
@@ -90,7 +93,7 @@ impl LspBackend {
             documents: Arc::new(DocumentStore::new()),
             config,
             doc_sync,
-            catalog_manager: Arc::new(RwLock::new(CatalogManager::new())),
+            request_context,
             diagnostic_collector: DiagnosticCollector::new(),
         }
     }
@@ -236,78 +239,6 @@ impl LspBackend {
                 self.client
                     .publish_diagnostics(uri.clone(), Vec::new(), None)
                     .await;
-            }
-        }
-    }
-
-    /// Parse engine configuration from client settings
-    fn parse_config_from_settings(&self, settings: &serde_json::Value) -> Option<EngineConfig> {
-        info!("Parsing configuration from settings: {:?}", settings);
-
-        // Extract unifiedSqlLsp section
-        let lsp_settings = settings.get("unifiedSqlLsp")?;
-        info!("Found unifiedSqlLsp settings: {:?}", lsp_settings);
-
-        // Parse dialect
-        let dialect_str = lsp_settings.get("dialect")?.as_str()?;
-        info!("Parsed dialect: {}", dialect_str);
-        let dialect = match dialect_str {
-            "mysql" => unified_sql_lsp_ir::Dialect::MySQL,
-            "postgresql" => unified_sql_lsp_ir::Dialect::PostgreSQL,
-            _ => return None,
-        };
-
-        // Parse version with default
-        let version_str = lsp_settings
-            .get("version")
-            .and_then(|v| v.as_str())
-            .unwrap_or("8.0");
-
-        let version = match (dialect, version_str) {
-            (unified_sql_lsp_ir::Dialect::MySQL, "5.7") => crate::config::DialectVersion::MySQL57,
-            (unified_sql_lsp_ir::Dialect::MySQL, _) => crate::config::DialectVersion::MySQL80,
-            (unified_sql_lsp_ir::Dialect::PostgreSQL, "12") => {
-                crate::config::DialectVersion::PostgreSQL12
-            }
-            (unified_sql_lsp_ir::Dialect::PostgreSQL, "14") => {
-                crate::config::DialectVersion::PostgreSQL14
-            }
-            (unified_sql_lsp_ir::Dialect::PostgreSQL, _) => {
-                crate::config::DialectVersion::PostgreSQL16
-            }
-            _ => return None,
-        };
-
-        // Parse connection string
-        let connection_string = lsp_settings.get("connectionString")?.as_str()?.to_string();
-        info!("Parsed connection string: {}", connection_string);
-
-        let config = EngineConfig::new(dialect, version, connection_string);
-        info!(
-            "Successfully parsed engine config: dialect={:?}, version={:?}",
-            dialect, version
-        );
-        Some(config)
-    }
-
-    /// Get or create default engine configuration
-    ///
-    /// Returns the existing config or creates a default one for testing.
-    async fn get_config_or_default(&self) -> EngineConfig {
-        match self.get_config().await {
-            Some(cfg) => cfg,
-            None => {
-                // Use default configuration for testing
-                let default_connection =
-                    std::env::var("E2E_MYSQL_CONNECTION").unwrap_or_else(|_| {
-                        "mysql://test_user:test_password@127.0.0.1:3307/test_db".to_string()
-                    });
-
-                EngineConfig::new(
-                    unified_sql_lsp_ir::Dialect::MySQL,
-                    crate::config::DialectVersion::MySQL57,
-                    default_connection,
-                )
             }
         }
     }
@@ -576,30 +507,20 @@ impl LanguageServer for LspBackend {
             }
         };
 
-        let config = self.get_config_or_default().await;
-        debug!("!!! LSP: Config dialect={:?}", config.dialect);
-
-        // Get catalog
-        let catalog = {
-            debug!("!!! LSP: Getting catalog for config");
-            let mut manager = self.catalog_manager.write().await;
-            match manager.get_catalog(&config).await {
-                Ok(catalog) => {
-                    debug!("!!! LSP: Got catalog successfully");
-                    catalog
-                }
-                Err(e) => {
-                    debug!("!!! LSP: Failed to get catalog: {}", e);
-                    error!("Failed to get catalog: {}", e);
-                    self.log_message(
-                        &format!("Failed to connect to database: {}", e),
-                        MessageType::ERROR,
-                    )
-                    .await;
-                    return Ok(None);
-                }
+        let (config, catalog) = match self.request_context.config_and_catalog().await {
+            Ok(result) => result,
+            Err(e) => {
+                debug!("!!! LSP: Failed to get catalog: {}", e);
+                error!("Failed to get catalog: {}", e);
+                self.log_message(
+                    &format!("Failed to connect to database: {}", e),
+                    MessageType::ERROR,
+                )
+                .await;
+                return Ok(None);
             }
         };
+        debug!("!!! LSP: Config dialect={:?}", config.dialect);
 
         // Create completion engine and perform completion
         debug!("!!! LSP: Creating completion engine");
@@ -663,18 +584,12 @@ impl LanguageServer for LspBackend {
             }
         };
 
-        let config = self.get_config_or_default().await;
-
-        // Get catalog
-        let catalog = {
-            let mut manager = self.catalog_manager.write().await;
-            match manager.get_catalog(&config).await {
-                Ok(catalog) => catalog,
-                Err(e) => {
-                    debug!("!!! LSP: Failed to get catalog for hover: {}", e);
-                    error!("Failed to get catalog for hover: {}", e);
-                    return Ok(None);
-                }
+        let (config, catalog) = match self.request_context.config_and_catalog().await {
+            Ok(result) => result,
+            Err(e) => {
+                debug!("!!! LSP: Failed to get catalog for hover: {}", e);
+                error!("Failed to get catalog for hover: {}", e);
+                return Ok(None);
             }
         };
 
@@ -713,8 +628,7 @@ impl LanguageServer for LspBackend {
         &self,
         params: GotoDefinitionParams,
     ) -> Result<Option<GotoDefinitionResponse>> {
-        use crate::Definition;
-        use crate::definition::DefinitionFinder;
+        use unified_sql_lsp_context::{Definition, DefinitionFinder, Position as ContextPosition};
 
         let uri = params.text_document_position_params.text_document.uri;
         let position = params.text_document_position_params.position;
@@ -753,11 +667,24 @@ impl LanguageServer for LspBackend {
         let root_node = tree_lock.root_node();
         let source = document.get_content();
 
-        match DefinitionFinder::find_at_position(&root_node, source.as_str(), position, &uri) {
+        let ctx_pos = ContextPosition::new(position.line, position.character);
+        match DefinitionFinder::find_at_position(&root_node, source.as_str(), ctx_pos) {
             Ok(Some(definition)) => {
                 let location = match definition {
-                    Definition::Table(def) => def.location,
-                    Definition::Column(def) => def.location,
+                    Definition::Table(def) => Location {
+                        uri: uri.clone(),
+                        range: Range {
+                            start: Position::new(def.range.start.line, def.range.start.character),
+                            end: Position::new(def.range.end.line, def.range.end.character),
+                        },
+                    },
+                    Definition::Column(def) => Location {
+                        uri: uri.clone(),
+                        range: Range {
+                            start: Position::new(def.range.start.line, def.range.start.character),
+                            end: Position::new(def.range.end.line, def.range.end.character),
+                        },
+                    },
                 };
                 info!("Definition found: {:?}", location);
                 Ok(Some(GotoDefinitionResponse::Scalar(location)))
@@ -823,21 +750,13 @@ impl LanguageServer for LspBackend {
 
         // 3. Get catalog (optional for graceful degradation)
         let catalog = match self.get_config().await {
-            Some(config) => {
-                match self
-                    .catalog_manager
-                    .write()
-                    .await
-                    .get_catalog(&config)
-                    .await
-                {
-                    Ok(cat) => Some(cat),
-                    Err(e) => {
-                        warn!("Catalog unavailable for symbols: {}", e);
-                        None
-                    }
+            Some(config) => match self.request_context.catalog_for_config(&config).await {
+                Ok(cat) => Some(cat),
+                Err(e) => {
+                    warn!("Catalog unavailable for symbols: {}", e);
+                    None
                 }
-            }
+            },
             None => None,
         };
 
@@ -858,10 +777,6 @@ impl LanguageServer for LspBackend {
             Ok(queries) => queries,
             Err(SymbolError::InvalidSyntax(e)) => {
                 warn!("Symbol extraction failed due to syntax error: {}", e);
-                return Ok(None);
-            }
-            Err(SymbolError::NotParsed) => {
-                warn!("Symbol extraction failed: document not parsed");
                 return Ok(None);
             }
             Err(e) => {
@@ -904,7 +819,7 @@ impl LanguageServer for LspBackend {
         debug!("!!! LSP: Settings value: {:?}", params.settings);
 
         // Parse configuration from client settings
-        match self.parse_config_from_settings(&params.settings) {
+        match EngineConfig::from_lsp_settings(&params.settings) {
             Some(config) => {
                 debug!(
                     "!!! LSP: Successfully parsed config: dialect={:?}",

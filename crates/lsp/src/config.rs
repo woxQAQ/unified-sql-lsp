@@ -29,6 +29,7 @@
 //! };
 //! ```
 
+use serde_json::Value;
 use std::collections::HashSet;
 use unified_sql_lsp_catalog::CatalogError;
 use unified_sql_lsp_ir::Dialect;
@@ -324,6 +325,53 @@ impl EngineConfig {
         }
 
         Ok(Self::new(Dialect::TiDB, version, connection_string))
+    }
+
+    /// Parse engine config from LSP client settings payload.
+    ///
+    /// Expected shape:
+    /// {
+    ///   "unifiedSqlLsp": {
+    ///     "dialect": "mysql" | "postgresql",
+    ///     "version": "...",
+    ///     "connectionString": "..."
+    ///   }
+    /// }
+    pub fn from_lsp_settings(settings: &Value) -> Option<Self> {
+        let lsp_settings = settings.get("unifiedSqlLsp")?;
+
+        let dialect_str = lsp_settings.get("dialect")?.as_str()?;
+        let dialect = match dialect_str {
+            "mysql" => Dialect::MySQL,
+            "postgresql" => Dialect::PostgreSQL,
+            _ => return None,
+        };
+
+        let version_str = lsp_settings
+            .get("version")
+            .and_then(Value::as_str)
+            .unwrap_or("8.0");
+
+        let version = match (dialect, version_str) {
+            (Dialect::MySQL, "5.7") => DialectVersion::MySQL57,
+            (Dialect::MySQL, _) => DialectVersion::MySQL80,
+            (Dialect::PostgreSQL, "12") => DialectVersion::PostgreSQL12,
+            (Dialect::PostgreSQL, "14") => DialectVersion::PostgreSQL14,
+            (Dialect::PostgreSQL, _) => DialectVersion::PostgreSQL16,
+            _ => return None,
+        };
+
+        let connection_string = lsp_settings.get("connectionString")?.as_str()?.to_string();
+        Some(Self::new(dialect, version, connection_string))
+    }
+
+    /// Default config used when client settings have not arrived yet.
+    pub fn default_runtime_fallback() -> Self {
+        let default_connection = std::env::var("E2E_MYSQL_CONNECTION").unwrap_or_else(|_| {
+            "mysql://test_user:test_password@127.0.0.1:3307/test_db".to_string()
+        });
+
+        Self::new(Dialect::MySQL, DialectVersion::MySQL57, default_connection)
     }
 }
 

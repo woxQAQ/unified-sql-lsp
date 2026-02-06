@@ -47,7 +47,7 @@ use unified_sql_lsp_catalog::{Catalog, FunctionType};
 use unified_sql_lsp_ir::Dialect;
 
 // Import from semantic crate (moved from LSP)
-use unified_sql_lsp_semantic::AliasResolver;
+use unified_sql_lsp_semantic::{CompletionService, CompletionTextHeuristics};
 
 // Import from context crate (moved from LSP)
 use unified_sql_lsp_context::ScopeBuilder;
@@ -212,9 +212,6 @@ impl CompletionEngine {
                     return Ok(None);
                 }
 
-                // Use AliasResolver to resolve table names
-                let resolver = AliasResolver::new(self.catalog_fetcher.catalog());
-
                 // Collect table names to resolve
                 let table_names: Vec<_> = left_table
                     .iter()
@@ -224,54 +221,35 @@ impl CompletionEngine {
 
                 debug!(?table_names, "Resolving table aliases for JOIN");
 
-                // Resolve all tables
-                let tables_with_columns = resolver.resolve_multiple(table_names).await?;
+                let completion_service = CompletionService::new(self.catalog_fetcher.catalog());
+                let resolution = match completion_service
+                    .resolve_join_tables(table_names, qualifier.as_deref())
+                    .await?
+                {
+                    Some(resolution) => resolution,
+                    None => return Ok(None),
+                };
+                let tables_with_columns = resolution.resolved_tables;
+                let tables_to_render = resolution.tables_to_render;
 
                 debug!(
                     table_count = tables_with_columns.len(),
                     "Resolved tables for JOIN"
                 );
 
-                if tables_with_columns.is_empty() {
-                    debug!("No tables loaded for JOIN condition");
-                    return Ok(None);
-                }
-
-                // Determine if we should force qualification
-                // Force qualification when multiple tables are in the JOIN
-                // BUT: For USING clause, never force qualification (USING syntax doesn't use qualifiers)
-                let is_using_clause = source.to_uppercase().contains("USING");
-                let force_qualifier = if is_using_clause {
-                    false // USING clause doesn't use table qualifiers
-                } else {
-                    tables_with_columns.len() > 1
-                };
+                // Determine if we should force qualification.
+                let force_qualifier = CompletionTextHeuristics::should_force_join_qualifier(
+                    &source,
+                    tables_with_columns.len(),
+                );
 
                 // Fetch functions from catalog (scalar functions only for JOINs)
                 let functions = self.catalog_fetcher.list_functions().await?;
-
-                // Filter tables based on qualifier if provided
-                let tables_to_render = if let Some(ref q) = qualifier {
-                    // Only show columns from the table matching the qualifier
-                    tables_with_columns
-                        .into_iter()
-                        .filter(|t| {
-                            t.alias.as_ref().map(|a| a == q).unwrap_or(false) || t.table_name == *q
-                        })
-                        .collect()
-                } else {
-                    tables_with_columns
-                };
 
                 debug!(
                     tables_count = tables_to_render.len(),
                     "Filtered tables for rendering"
                 );
-
-                if tables_to_render.is_empty() {
-                    debug!("No tables after qualifier filtering");
-                    return Ok(None);
-                }
 
                 // Render with PK/FK prioritization
                 let mut items =
@@ -466,46 +444,9 @@ impl CompletionEngine {
 
         // Exclude columns that are already selected in the SELECT clause
         // Pattern: "SELECT id, username, | FROM users" -> exclude "id" and "username"
-        if let Some(select_pos) = source.to_uppercase().find("SELECT") {
-            // Get text between SELECT and FROM
-            let after_select = &source[select_pos + 6..]; // +6 for "SELECT"
-            if let Some(from_pos) = after_select.to_uppercase().find("FROM") {
-                let select_clause = &after_select[..from_pos];
-                debug!(select_clause = %select_clause, "Processing SELECT clause");
-
-                // Extract selected column names
-                let mut selected_columns = std::collections::HashSet::new();
-                for part in select_clause.split(',') {
-                    let part = part.trim();
-                    if !part.is_empty() && !part.starts_with('(') {
-                        // Simple column name (not a function call)
-                        // Remove any alias (AS xxx)
-                        let col_name = if let Some(as_pos) = part.to_uppercase().find(" AS ") {
-                            &part[..as_pos]
-                        } else {
-                            part
-                        }
-                        .trim();
-
-                        // Extract just the column name (without table qualifier)
-                        let final_col = if let Some(dot_pos) = col_name.find('.') {
-                            &col_name[dot_pos + 1..]
-                        } else {
-                            col_name
-                        };
-
-                        if !final_col.is_empty() && !final_col.ends_with('*') {
-                            selected_columns.insert(final_col.to_uppercase());
-                            debug!(column = %final_col, "Excluding already selected column");
-                        }
-                    }
-                }
-
-                // Filter out selected columns
-                if !selected_columns.is_empty() {
-                    items.retain(|item| !selected_columns.contains(&item.label.to_uppercase()));
-                }
-            }
+        let selected_columns = CompletionTextHeuristics::selected_projection_columns_upper(source);
+        if !selected_columns.is_empty() {
+            items.retain(|item| !selected_columns.contains(&item.label.to_uppercase()));
         }
 
         // Add SELECT clause keywords (DISTINCT, ALL, etc.)
@@ -520,14 +461,7 @@ impl CompletionEngine {
         items.extend(keyword_items);
 
         // Add expression keywords (WHEN, THEN, ELSE, etc.) if we're in a CASE expression
-        // Check if source text ends with "CASE " (or CASE followed by whitespace)
-        let text_upper = source.to_uppercase();
-        let ends_with_case = text_upper.ends_with("CASE ")
-            || text_upper.ends_with("CASE\t")
-            || text_upper.ends_with(" CASE ")
-            || text_upper.ends_with(" CASE\t");
-
-        if ends_with_case {
+        if CompletionTextHeuristics::ends_with_case_expression(source) {
             debug!("Detected CASE expression, adding expression keywords");
             let expr_keywords = provider.expression_keywords().keywords;
             let expr_items = CompletionRenderer::render_keywords(&expr_keywords);
@@ -656,133 +590,22 @@ impl CompletionEngine {
 
             // Store a copy of CTE names for later use
             let context_tables_copy = context_tables.clone();
-
-            // Build alias-to-table mapping from context_tables
-            // When context_tables contains both table names and aliases (e.g., ["users", "u", "orders", "o"]),
-            // we need to identify which are aliases and filter them out before resolution.
-            // Heuristic: if a short string is a prefix of a longer string, it's likely an alias.
-            let mut table_names_only = Vec::new();
-            let mut alias_to_table: std::collections::HashMap<String, String> =
-                std::collections::HashMap::new();
-
-            // Sort by length (longer first) to identify aliases
-            let mut sorted_tables = context_tables.clone();
-            sorted_tables.sort_by_key(|a| std::cmp::Reverse(a.len()));
-            sorted_tables.dedup(); // Remove duplicates
-
-            for (i, table) in sorted_tables.iter().enumerate() {
-                // Check if any longer string starts with this shorter string
-                // If "users" starts with "u", then "u" is an alias for "users"
-                let mut is_alias = false;
-                if table.len() < 6 {
-                    // Only check short strings (likely aliases) against longer ones
-                    for other in sorted_tables.iter().take(i) {
-                        // Only check against longer strings that come before us
-                        if other.len() > table.len()
-                            && other.to_lowercase().starts_with(&table.to_lowercase())
-                        {
-                            // 'table' is a prefix of 'other', so 'table' is likely an alias
-                            alias_to_table.insert(table.clone(), other.clone());
-                            is_alias = true;
-                            break;
-                        }
-                    }
-                }
-
-                if !is_alias {
-                    table_names_only.push(table.clone());
-                }
-            }
-
-            debug!(
-                ?table_names_only,
-                ?alias_to_table,
-                "Filtered table names and built alias mapping"
-            );
-
-            // Use AliasResolver to resolve only table names (not aliases)
-            let resolver = AliasResolver::new(self.catalog_fetcher.catalog());
-            let mut tables_with_columns = resolver.resolve_multiple(table_names_only).await?;
-
-            debug!(
-                table_count = tables_with_columns.len(),
-                "Resolved tables from context"
-            );
-
-            // Set aliases on resolved tables using our mapping
-            for table in &mut tables_with_columns {
-                if let Some(alias) = alias_to_table
-                    .iter()
-                    .find(|(_, table_name)| table_name.eq_ignore_ascii_case(&table.table_name))
-                    .map(|(alias, _)| alias.clone())
-                {
-                    *table = table.clone().with_alias(alias);
-                }
-            }
-
-            // Also check if the qualifier is an alias, and if so, add it to the mapping
-            if let Some(ref q) = qualifier
-                && let Some(table_name) = alias_to_table.get(q)
+            let completion_service = CompletionService::new(self.catalog_fetcher.catalog());
+            let resolution = match completion_service
+                .resolve_context_tables(context_tables, qualifier.as_deref())
+                .await?
             {
-                // Qualifier is an alias, make sure it maps to a table
-                debug!("Qualifier '{}' is an alias for table '{}'", q, table_name);
-            }
-
-            // Clone tables_with_columns for later use (after potential move in match)
-            let tables_with_columns_clone = tables_with_columns.clone();
+                Some(resolution) => resolution,
+                None => {
+                    debug!("Qualifier doesn't match any table or CTE");
+                    return Ok(None);
+                }
+            };
+            let tables_with_columns = resolution.resolved_tables;
+            let tables_to_render = resolution.tables_to_render;
 
             // Fetch functions from catalog
             let functions = self.catalog_fetcher.list_functions().await?;
-
-            // Resolve qualifier if present to filter tables
-            let tables_to_render = match &qualifier {
-                Some(q) => {
-                    // The qualifier could be:
-                    // 1. An actual table name (e.g., "users")
-                    // 2. A table alias (e.g., "u" for "users")
-                    debug!(qualifier = %q, "Filtering tables by qualifier");
-
-                    // First try to match by exact table name
-                    let exact_match: Vec<_> = tables_with_columns
-                        .iter()
-                        .filter(|t| t.table_name.eq_ignore_ascii_case(q))
-                        .cloned()
-                        .collect();
-
-                    if !exact_match.is_empty() {
-                        debug!("Found exact match for qualifier");
-                        exact_match
-                    } else {
-                        // Try to match by alias
-                        let alias_match: Vec<_> = tables_with_columns
-                            .iter()
-                            .filter(|t| t.alias.as_ref().is_some_and(|a| a.eq_ignore_ascii_case(q)))
-                            .cloned()
-                            .collect();
-
-                        if !alias_match.is_empty() {
-                            debug!("Found alias match for qualifier");
-                            alias_match
-                        } else {
-                            // Qualifier doesn't match any resolved table - might be a CTE
-                            // Check if qualifier matches any name in context_tables (which includes CTEs)
-                            let qualifier_matches_cte = context_tables_copy
-                                .iter()
-                                .any(|name| name.eq_ignore_ascii_case(q));
-
-                            if qualifier_matches_cte {
-                                debug!("Qualifier matches a CTE name, continuing to CTE rendering");
-                                vec![] // Return empty list so CTE rendering logic can handle it
-                            } else {
-                                // Qualifier doesn't match any table or CTE - return empty
-                                debug!("Qualifier doesn't match any table or CTE");
-                                return Ok(None);
-                            }
-                        }
-                    }
-                }
-                None => tables_with_columns,
-            };
 
             debug!(tables_count = tables_to_render.len(), "Tables to render");
 
@@ -795,7 +618,7 @@ impl CompletionEngine {
 
             // Check if context_tables contains names that weren't resolved from catalog (likely CTEs)
             // Get the set of resolved table names
-            let resolved_table_names: std::collections::HashSet<String> = tables_with_columns_clone
+            let resolved_table_names: std::collections::HashSet<String> = tables_with_columns
                 .iter()
                 .map(|t| t.table_name.clone())
                 .collect();
@@ -849,32 +672,22 @@ impl CompletionEngine {
         };
 
         let scope_id = 0; // Main query scope
-
-        // Populate all tables with columns from catalog
-        {
-            let scope = scope_manager.get_scope_mut(scope_id).unwrap();
-            self.catalog_fetcher
-                .populate_all_tables(&mut scope.tables)
-                .await?;
-        }
+        let completion_service = CompletionService::new(self.catalog_fetcher.catalog());
 
         // Fetch functions from catalog
         let functions = self.catalog_fetcher.list_functions().await?;
 
         // Resolve qualifier if present to filter tables
-        let tables_to_render = match &qualifier {
-            Some(q) => {
-                let scope = scope_manager.get_scope(scope_id).unwrap();
-                match scope.find_table(q) {
-                    Some(qualified_table) => vec![qualified_table.clone()],
-                    None => return Ok(Some(vec![])), // Invalid qualifier
-                }
-            }
-            None => {
-                let scope = scope_manager.get_scope(scope_id).unwrap();
-                scope.tables.clone()
-            }
+        let tables_to_render = match completion_service
+            .resolve_scope_tables(&mut scope_manager, scope_id, qualifier.as_deref())
+            .await
+        {
+            Some(tables) => tables,
+            None => return Ok(None),
         };
+        if qualifier.is_some() && tables_to_render.is_empty() {
+            return Ok(Some(vec![])); // Invalid qualifier
+        }
 
         // Render completion items
         let force_qualifier = qualifier.is_some();
